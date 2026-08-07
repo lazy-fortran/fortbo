@@ -436,8 +436,20 @@ and belongs to FortML's parameter registry, not to FortBO.
 
 ### BO4: experiment and decision policies
 
-- [ ] Implement multi-objective Pareto archives, hypervolume improvement,
-  scalarization policies, preference learning, and noisy dominance.
+- [x] Implement multi-objective Pareto archives, hypervolume improvement, and
+  scalarization policies. `src/fortbo_pareto.f90` keeps exactly the
+  non-dominated set and computes hypervolume *exactly* by recursive dimension
+  sweep rather than by sampling: an approximate indicator inside an acquisition
+  turns a tie into a coin flip and breaks replay. `test_pareto` validates the
+  sweep against Monte Carlo integration in three and four dimensions, with the
+  tolerance taken from the binomial standard error, and against a hand-computed
+  staircase area in two. Monotonicity is checked as the property that makes
+  hypervolume a sound objective at all — a non-dominated addition strictly
+  increases it, a dominated one leaves it exactly unchanged. The augmented
+  Chebyshev scalarization's augmentation term is checked by the case it exists
+  for: without it a weakly dominated point scores identically to the point that
+  dominates it.
+- [ ] Implement preference learning and noisy dominance.
 - [ ] Implement active learning, level-set estimation, contour finding,
   feasibility search, and Bayesian calibration/design of experiments.
 - [ ] Add stopping rules based on regret, hypervolume, posterior uncertainty,
