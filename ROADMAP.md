@@ -418,9 +418,18 @@ and belongs to FortML's parameter registry, not to FortBO.
 - [ ] Verify every generated derivative kernel against a complex-step or
   Richardson-extrapolated finite-difference oracle and against FortAD, with
   the symmetry of the Hessian checked exactly.
-- [ ] Solve the bound-constrained quadratic subproblem through FortOpt with a
+- [x] Solve the bound-constrained quadratic subproblem through FortOpt with a
   documented fallback when the Hessian is indefinite; do not silently project
-  to a positive-definite surrogate.
+  to a positive-definite surrogate. `src/fortbo_quadratic.f90` minimizes
+  `g'.s + 0.5 s'.H.s` over the box and leaves an indefinite `H` alone: negative
+  curvature is information, and the right response is to follow it to the
+  boundary, which the bound-constrained solve does. Indefiniteness is detected
+  by a Cholesky attempt and reported through a flag; it never changes what is
+  solved. A nonsymmetric Hessian is refused rather than averaged, because it
+  means two derivations disagree. `test_quadratic` uses `-H^{-1} g` computed
+  independently as the interior oracle, a dense grid when the box binds, and
+  for the saddle case checks that the step reaches the exact boundary minimum —
+  the value a positive-definite repair would fall short of.
 - [ ] Benchmark all three modes plus their combinations against TuRBO on
   matched budgets, counting adjoint cost honestly, and report where derivative
   information does *not* pay for itself.
