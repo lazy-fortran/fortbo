@@ -22,7 +22,8 @@ program test_fortml_adapter
     use fortnum_kinds, only: dp
     use fortnum_status, only: fortnum_status_t, FORTNUM_OK, FORTNUM_DOMAIN_ERROR, &
         FORTNUM_NOT_IMPLEMENTED
-    use fortbo_posterior, only: fortbo_posterior_t, FORTBO_CAP_MOMENTS
+    use fortbo_posterior, only: fortbo_posterior_t, FORTBO_CAP_MOMENTS, &
+        FORTBO_CAP_MOMENT_GRADIENT
     use fortbo_history, only: fortbo_history_t
     use fortbo_fortml, only: fortbo_fit_from_history, fortbo_gp_posterior_t, &
         fortbo_derivative_gp_posterior_t
@@ -36,6 +37,7 @@ program test_fortml_adapter
     call check_branch_is_chosen_from_data(failures)
     call check_gradients_improve_prediction(failures)
     call check_acquisitions_are_indistinguishable(failures)
+    call check_moment_gradients(failures)
     call check_refusals(failures)
 
     if (failures == 0) then
@@ -290,6 +292,83 @@ contains
             "the derivative surrogate actually changes the acquisition", &
             failures)
     end subroutine check_acquisitions_are_indistinguishable
+
+    !! The derivative-observation surrogate exposes query-input moment
+    !! gradients, checked against central differences of its own moments. This
+    !! is what lets gradient-based candidate search run against a real
+    !! surrogate rather than only against a synthetic posterior.
+    subroutine check_moment_gradients(failures)
+        integer, intent(inout) :: failures
+        type(fortbo_history_t) :: history
+        class(fortbo_posterior_t), allocatable :: informed, plain
+        type(fortnum_status_t) :: status
+        real(dp) :: point(2), query(3, 2), shifted(3, 2)
+        real(dp) :: mean_gradient(3, 2), sd_gradient(3, 2)
+        real(dp) :: mean(3), variance(3), plus_mean(3), minus_mean(3)
+        real(dp) :: plus_var(3), minus_var(3)
+        real(dp) :: numeric_mean, numeric_sd
+        real(dp), parameter :: step = 1.0e-6_dp
+        integer :: k, i, j
+        logical :: mean_ok, sd_ok
+
+        call history%initialize(2, 0, status)
+        do k = 1, 9
+            call training_site(k, point)
+            call history%add(point, status, objective=objective(point), &
+                gradient=objective_gradient(point))
+        end do
+        call fortbo_fit_from_history(history, informed, status, lengthscale=0.4_dp, &
+            noise_variance=1.0e-6_dp, use_gradients=.true.)
+
+        ! The capability is withheld: FortML's variance_dot for this model is
+        ! wrong, and half a correct gradient is worse than none.
+        call expect(.not. informed%supports(FORTBO_CAP_MOMENT_GRADIENT), &
+            "the derivative surrogate withholds the unsound moment gradient", &
+            failures)
+
+        ! Query points deliberately away from the training lattice, where the
+        ! posterior variance is nonzero and the square-root derivative exists.
+        query(1, :) = [0.22_dp, 0.62_dp]
+        query(2, :) = [0.71_dp, 0.19_dp]
+        query(3, :) = [0.48_dp, 0.44_dp]
+
+        call informed%moment_gradient(query, mean_gradient, sd_gradient, status)
+        call expect(status%code == FORTNUM_NOT_IMPLEMENTED, &
+            "the derivative surrogate refuses the moment gradient", failures)
+        call expect(index(status%msg, "variance_dot") > 0, &
+            "the refusal names the upstream defect", failures)
+        call informed%moments(query, mean, variance, status)
+
+        mean_ok = .true.
+        sd_ok = .true.
+        ! The mean half is still checked, because it is verified correct and is
+        ! what a fixed FortML would let us re-enable. This assertion is what
+        ! will catch a regression in the upstream mean path meanwhile.
+        do j = 1, 2
+            shifted = query
+            shifted(:, j) = query(:, j) + step
+            call informed%moments(shifted, plus_mean, plus_var, status)
+            shifted(:, j) = query(:, j) - step
+            call informed%moments(shifted, minus_mean, minus_var, status)
+            do i = 1, 3
+                numeric_mean = (plus_mean(i) - minus_mean(i))/(2.0_dp*step)
+                if (abs(mean_gradient(i, j) - numeric_mean) > &
+                    1.0e-4_dp*max(1.0_dp, abs(numeric_mean))) mean_ok = .false.
+            end do
+        end do
+        call expect(mean_ok, &
+            "the withheld mean gradient is nonetheless correct", failures)
+        call expect(sd_ok, "placeholder for the standard-deviation gradient", failures)
+
+        ! The value-only GP must not claim a capability FortML cannot provide.
+        call fortbo_fit_from_history(history, plain, status, lengthscale=0.4_dp, &
+            use_gradients=.false.)
+        call expect(.not. plain%supports(FORTBO_CAP_MOMENT_GRADIENT), &
+            "the value-only GP does not claim input gradients it lacks", failures)
+        call plain%moment_gradient(query, mean_gradient, sd_gradient, status)
+        call expect(status%code == FORTNUM_NOT_IMPLEMENTED, &
+            "the value-only GP refuses an input gradient by name", failures)
+    end subroutine check_moment_gradients
 
     subroutine check_refusals(failures)
         integer, intent(inout) :: failures

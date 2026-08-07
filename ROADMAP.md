@@ -78,6 +78,40 @@ Binding rules:
 - Numerical evaluation, quadrature, and root finding belong to FortNum, not to
   FortSym. FortSym contributes the expression and the emitted callable.
 
+## Open upstream defects
+
+**FortML `gp_derivative_predict_input_jvp` returns an incorrect
+`variance_dot`.** Found by the central-difference oracle in
+`test_fortml_adapter`. The `mean_dot` half of the same call is correct to eight
+digits; only the variance derivative is wrong.
+
+Reproduction: fit the derivative-observation GP on the nine-point lattice
+`x_i = 0.1 + 0.26 k`, `k = 0..3` in each coordinate, with a Matern-5/2 kernel,
+lengthscale 0.4, noise variance 1e-6, on
+`f(x) = sin(3 x1) cos(2 x2) + 0.5 x1 x2` and its exact gradient. Query at
+`(0.22, 0.62)` in the unit direction `e_1`:
+
+| quantity | value |
+| --- | --- |
+| predictive variance | 0.0146435 |
+| true dVar/dx1 (central differences) | 0.3579459 |
+| reported `variance_dot` | 0.0433152 |
+
+Suspect region: the `variance_dot = prior_dot - 2 * sum(cross_dot * work)`
+assembly in `gp_derivative_predict_input_jvp`, and the `derivative_covariance_
+query_direction` call that fills `prior_dot` while also being passed
+`variance(j)`.
+
+Consequence here: `fortbo_derivative_gp_posterior_t` does **not** declare
+`FORTBO_CAP_MOMENT_GRADIENT` and `moment_gradient` refuses by name. Half a
+correct gradient is worse than none — the standard deviation's derivative feeds
+every acquisition gradient through the chain rule, so exporting it would make
+expected improvement's gradient quietly wrong and let an L-BFGS-B run converge
+confidently to the wrong point. This blocks gradient-based candidate search
+against real surrogates, and therefore DTuRBO modes 2 and 3, until it is fixed
+upstream. The mean-gradient assembly is already written and verified, so the
+re-enable is a one-line capability change.
+
 ## Derivative observations are universal
 
 Derivative information is not a feature of one policy. If a run can measure
