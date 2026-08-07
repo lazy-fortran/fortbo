@@ -78,6 +78,51 @@ Binding rules:
 - Numerical evaluation, quadrature, and root finding belong to FortNum, not to
   FortSym. FortSym contributes the expression and the emitted callable.
 
+## Derivative observations are universal
+
+Derivative information is not a feature of one policy. If a run can measure
+gradients — an adjoint from the simulation, a FortAD-differentiated objective,
+a FortSym-generated kernel — then **every** method in FortBO must be able to
+use them. DTuRBO is where derivative information is exploited most
+aggressively, but it is not where it is *allowed*.
+
+The invariant that makes this true is that derivative observations enter at the
+history and leave at the posterior, and nothing in between is policy-specific:
+
+```
+objective + gradient  ->  history  ->  surrogate  ->  posterior  ->  any policy
+```
+
+Concretely, and binding on every work package below:
+
+- The observation history stores gradients as first-class per-row data with
+  per-coordinate presence flags, so a row may carry a full gradient, a partial
+  gradient, or none. A partially measured gradient never masquerades as a
+  complete one.
+- Any surrogate that declares the derivative-observation capability consumes
+  those rows. The choice of surrogate is independent of the choice of policy.
+- Acquisitions and policies see only `posterior_t`. They cannot tell whether
+  the posterior was conditioned on values alone or on values and gradients, and
+  they must not try to: EI, qNEI, UCB, KG, entropy search, hypervolume
+  improvement, active learning, and plain global BO all become
+  derivative-informed for free the moment the surrogate is.
+- Separately from *observing* derivatives, a policy may *use* posterior
+  derivatives (`moment_gradient`, `moment_hessian`) to optimize its
+  acquisition. These are two independent axes, and every combination of the
+  four is a supported configuration:
+
+  | | value-only surrogate | derivative-observation surrogate |
+  | --- | --- | --- |
+  | **sampling candidate search** | plain TuRBO, random/Sobol BO | derivative-informed model, sampled search |
+  | **gradient candidate search** | gradient-based acquisition optimization | DTuRBO, full derivative use |
+
+- A method that genuinely cannot accept derivative observations issues a typed
+  refusal naming the reason. Silently discarding measured gradients is a defect,
+  not a design choice: the run paid for that information.
+- Benchmarks report the value-only and derivative-informed variants of the same
+  method as separate rows, and charge the true adjoint cost rather than
+  counting a gradient as one free evaluation.
+
 ## Work packages
 
 ### BO0: package and posterior foundations
@@ -92,8 +137,15 @@ Binding rules:
   Monte Carlo moment oracle and the log density against the closed-form scalar
   normal and the explicit two-by-two inverse, neither of which touches the
   factorization path; that oracle caught a `log(4*pi)` normalization bug.
-- [ ] Add observation history with input/output/cost/constraint metadata,
-  missing-observation policy, duplicate handling, and checkpoint/resume.
+- [x] Add observation history with input/output/cost/constraint metadata,
+  gradient observations, missing-observation policy, duplicate handling, and
+  checkpoint/resume. `src/fortbo_history.f90` keeps insertion order as the
+  replay order, refuses to invent values for failed evaluations, treats an
+  unmeasured constraint as unknown rather than satisfied, and stores gradients
+  with per-coordinate presence flags so a partial gradient cannot pass as a
+  complete one. `test_history` checks the incumbent against a brute-force
+  feasible scan and re-derives incumbent, feasibility, cost, and gradient set
+  from the restored checkpoint.
 - [ ] Add normalized search-space objects for continuous, integer,
   categorical, mixed, constrained, and conditional variables.
 
