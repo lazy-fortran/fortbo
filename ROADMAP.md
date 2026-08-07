@@ -410,9 +410,19 @@ and belongs to FortML's parameter registry, not to FortBO.
 
 ### BO6: evidence and release
 
-- [ ] Add analytic one-dimensional functions, Branin, Hartmann, Ackley,
-  constrained synthetic functions, noisy objectives, and multi-objective
-  fixtures with known optima or dense reference grids.
+- [x] Add Branin, Hartmann-3, Hartmann-6, Ackley, Rosenbrock, Levy, and the
+  sphere with known optima and exact gradients. `src/fortbo_benchmarks.f90`
+  carries each optimizer and optimal value as literature data, and every
+  function supplies an analytic gradient so the derivative-observation path is
+  exercised against a true adjoint rather than against differencing error.
+  `test_benchmarks` refuses to take the recorded constants on trust: a dense
+  grid over Branin's box and a local sweep around every other optimizer must
+  fail to beat the recorded value, the gradient must vanish at each interior
+  optimum, and Ackley's gradient is checked at the origin, which is
+  simultaneously its optimum and the removable singularity where the natural
+  expression divides by zero.
+- [ ] Add constrained synthetic functions, noisy objectives, and
+  multi-objective fixtures with known Pareto fronts or dense reference grids.
 - [ ] Add the high-dimensional trust-region fixtures with exact gradients:
   Ackley-200 on `[-5,10]^200`, Levy and Rosenbrock at `d = 100..500`, the 60D
   rover trajectory problem, and the 14D robot pushing problem. Gradients come
