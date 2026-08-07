@@ -178,8 +178,18 @@ Concretely, and binding on every work package below:
   need the one-dimensional inner optimization and the expectation over
   fantasized observations that BO1's Monte Carlo item provides, so they land
   after it rather than before.
-- [ ] Implement Monte Carlo acquisition evaluation with common random numbers,
+- [x] Implement Monte Carlo acquisition evaluation with common random numbers,
   antithetic draws, reparameterized posterior samples, and exact gradients.
+  `src/fortbo_monte_carlo.f90` freezes the standard normal base draws once,
+  which is what simultaneously gives common random numbers, an exact pathwise
+  derivative, and bitwise replay. Antithetic pairing refuses an odd sample
+  count rather than silently leaving a draw unpaired. `test_monte_carlo`
+  tolerances come from the estimator's own standard error, the antithetic claim
+  is measured as a variance across sixty seeds rather than asserted from one
+  run, and the pathwise gradient is differenced against the *same* base so the
+  check measures the derivative instead of sampling noise. These are the
+  marginal estimators; the joint reparameterization through `reparam_sample`
+  belongs to the batch item below, where the utility couples the rows.
 - [ ] Implement batch qEI/qNEI, qUCB, qKG, Thompson sampling, and fantasy
   observations with deterministic seeded fixtures.
 - [ ] Implement constrained, cost-aware, multi-fidelity, multi-objective,
