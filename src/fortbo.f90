@@ -1,7 +1,11 @@
 module fortbo
     !! Public package boundary for differentiable Bayesian optimization.
     use fortnum_kinds, only: dp
-    use fortnum_status, only: fortnum_status_t
+    use fortbo_posterior, only: fortbo_posterior_t, fortbo_capability_name, &
+        FORTBO_POSTERIOR_CONTRACT_VERSION, FORTBO_CAP_NONE, FORTBO_CAP_MOMENTS, &
+        FORTBO_CAP_COVARIANCE, FORTBO_CAP_JOINT_SAMPLE, FORTBO_CAP_REPARAM_SAMPLE, &
+        FORTBO_CAP_LOG_DENSITY, FORTBO_CAP_MOMENT_GRADIENT, &
+        FORTBO_CAP_MOMENT_HESSIAN, FORTBO_CAP_NOISY_MOMENTS
     implicit none
     private
 
@@ -9,32 +13,16 @@ module fortbo
     integer, parameter, public :: FORTBO_VERSION_MINOR = 1
 
     public :: fortbo_posterior_t
-
-    type, abstract, public :: fortbo_posterior_t
-    contains
-        procedure(fortbo_sample_interface), deferred, public :: sample
-        procedure(fortbo_mean_variance_interface), deferred, public :: mean_variance
-    end type fortbo_posterior_t
-
-    abstract interface
-        subroutine fortbo_sample_interface(self, points, samples, status)
-            import :: dp, fortbo_posterior_t
-            import :: fortnum_status_t
-            class(fortbo_posterior_t), intent(in) :: self
-            real(dp), intent(in) :: points(:, :)
-            real(dp), intent(out) :: samples(:, :, :)
-            type(fortnum_status_t), intent(out) :: status
-        end subroutine fortbo_sample_interface
-
-        subroutine fortbo_mean_variance_interface(self, points, mean, variance, status)
-            import :: dp, fortbo_posterior_t
-            import :: fortnum_status_t
-            class(fortbo_posterior_t), intent(in) :: self
-            real(dp), intent(in) :: points(:, :)
-            real(dp), intent(out) :: mean(:)
-            real(dp), intent(out) :: variance(:)
-            type(fortnum_status_t), intent(out) :: status
-        end subroutine fortbo_mean_variance_interface
-    end interface
+    public :: fortbo_capability_name
+    public :: FORTBO_POSTERIOR_CONTRACT_VERSION
+    public :: FORTBO_CAP_NONE
+    public :: FORTBO_CAP_MOMENTS
+    public :: FORTBO_CAP_COVARIANCE
+    public :: FORTBO_CAP_JOINT_SAMPLE
+    public :: FORTBO_CAP_REPARAM_SAMPLE
+    public :: FORTBO_CAP_LOG_DENSITY
+    public :: FORTBO_CAP_MOMENT_GRADIENT
+    public :: FORTBO_CAP_MOMENT_HESSIAN
+    public :: FORTBO_CAP_NOISY_MOMENTS
 
 end module fortbo

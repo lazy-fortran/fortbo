@@ -84,8 +84,14 @@ Binding rules:
 
 - [x] Create the MIT-licensed package boundary and model-agnostic posterior
   protocol.
-- [ ] Define a versioned `posterior_t` contract for analytic moments, joint
+- [x] Define a versioned `posterior_t` contract for analytic moments, joint
   samples, reparameterized samples, covariance, and predictive log density.
+  `src/fortbo_posterior.f90` carries `FORTBO_POSTERIOR_CONTRACT_VERSION`, a
+  capability bitmask, and a typed refusal per undeclared operation that names
+  the missing operation. `test_posterior_contract` checks the sampler against a
+  Monte Carlo moment oracle and the log density against the closed-form scalar
+  normal and the explicit two-by-two inverse, neither of which touches the
+  factorization path; that oracle caught a `log(4*pi)` normalization bug.
 - [ ] Add observation history with input/output/cost/constraint metadata,
   missing-observation policy, duplicate handling, and checkpoint/resume.
 - [ ] Add normalized search-space objects for continuous, integer,
