@@ -27,6 +27,7 @@ program test_end_to_end
     use fortbo_acquisition, only: fortbo_ei_t
     use fortbo_trust_region, only: fortbo_trust_region_t
     use fortbo_turbo, only: fortbo_turbo_candidates
+    use fortbo_optimize, only: fortbo_optimize_acquisition
     use fortbo_fortml, only: fortbo_fit_from_history
     use fortbo_benchmarks, only: fortbo_benchmark_t, FORTBO_BENCH_BRANIN
     implicit none
@@ -75,8 +76,8 @@ contains
         integer, intent(inout) :: failures
         type(fortbo_benchmark_t) :: benchmark
         real(dp) :: lower(2), upper(2)
-        real(dp) :: regret_plain, regret_informed, regret_random
-        integer :: evaluations_plain, evaluations_random
+        real(dp) :: regret_plain, regret_informed, regret_random, regret_gradient
+        integer :: evaluations_plain, evaluations_random, evaluations_gradient
 
         benchmark%kind = FORTBO_BENCH_BRANIN
         benchmark%dimension = 2
@@ -88,6 +89,8 @@ contains
             evaluations_plain)
         call run_random(benchmark, lower, upper, evaluations_plain, regret_random, &
             evaluations_random)
+        call run_dturbo_gradient_search(benchmark, lower, upper, regret_gradient, &
+            evaluations_gradient)
 
         call expect(evaluations_random == evaluations_plain, &
             "both methods spend the same evaluation budget", failures)
@@ -97,10 +100,15 @@ contains
             "TuRBO reaches small simple regret on Branin", failures)
         call expect(regret_informed < regret_random, &
             "the derivative-informed run also beats random search", failures)
+        call expect(evaluations_gradient == evaluations_plain, &
+            "the gradient-search run spends the same budget", failures)
+        call expect(regret_gradient < regret_random, &
+            "DTuRBO gradient search beats random search", failures)
 
         print *, "    simple regret  turbo(value-only):", regret_plain
         print *, "    simple regret  turbo(derivative):", regret_informed
         print *, "    simple regret  random search    :", regret_random
+        print *, "    simple regret  dturbo(gradient) :", regret_gradient
         print *, "    evaluations                     :", evaluations_plain
     end subroutine check_turbo_beats_random_search
 
@@ -237,6 +245,88 @@ contains
         call history%incumbent(incumbent, incumbent_value, status)
         regret = incumbent_value - benchmark%optimal_value()
     end subroutine run_random
+
+    !! DTuRBO mode 3: the acquisition is optimized inside the trust region by
+    !! bound-constrained L-BFGS-B on exact posterior-moment gradients, instead
+    !! of being scored over a sampled candidate cloud. This is the path the
+    !! FortML variance-JVP fix unblocked; before it, the surrogate could not
+    !! supply a sound `moment_gradient` and this configuration was unreachable.
+    subroutine run_dturbo_gradient_search(benchmark, lower, upper, regret, evaluations)
+        type(fortbo_benchmark_t), intent(in) :: benchmark
+        real(dp), intent(in) :: lower(:), upper(:)
+        real(dp), intent(out) :: regret
+        integer, intent(out) :: evaluations
+        type(fortbo_history_t) :: history
+        type(fortbo_trust_region_t) :: region
+        type(fortbo_ei_t) :: ei
+        class(fortbo_posterior_t), allocatable :: posterior
+        type(sobol_t) :: sequence
+        type(rng_t) :: generator
+        type(fortnum_status_t) :: status
+        integer, parameter :: n_initial = 8
+        integer, parameter :: n_iterations = 40
+        integer, parameter :: n_starts = 8
+        real(dp) :: unit(2), value, gradient(2), lengthscales(2)
+        real(dp) :: region_lower(2), region_upper(2)
+        real(dp) :: starts(n_starts, 2), best_point(2), best_value
+        real(dp) :: incumbent(2), incumbent_value
+        real(dp) :: batch_inputs(1, 2), batch_values(1)
+        integer :: iteration, k
+
+        call history%initialize(2, 0, status)
+        call sobol_initialize(sequence, 2, status)
+        call rng_seed(generator, int(12345, int64), status)
+        lengthscales = [1.0_dp, 1.0_dp]
+
+        call sobol_next(sequence, unit, status)
+        do k = 1, n_initial
+            call sobol_next(sequence, unit, status)
+            call evaluate(benchmark, lower, upper, unit, value, gradient, status)
+            call history%add(unit, status, objective=value, gradient=gradient)
+        end do
+        evaluations = n_initial
+
+        call region%initialize(2, 1, status)
+        call history%incumbent(incumbent, incumbent_value, status)
+        call region%restart(incumbent, incumbent_value, status)
+
+        do iteration = 1, n_iterations
+            call fortbo_fit_from_history(history, posterior, status, &
+                lengthscale=0.25_dp, noise_variance=1.0e-6_dp, use_gradients=.true.)
+            if (status%code /= FORTNUM_OK) exit
+
+            if (.not. region%active) then
+                call history%incumbent(incumbent, incumbent_value, status)
+                call region%restart(incumbent, incumbent_value, status)
+            end if
+
+            call region%bounds(lengthscales, region_lower, region_upper, status)
+            if (status%code /= FORTNUM_OK) exit
+
+            ! Sobol starts inside the region, so the multistart cover is
+            ! designed rather than drawn.
+            do k = 1, n_starts
+                call sobol_next(sequence, unit, status)
+                starts(k, :) = region_lower + unit*(region_upper - region_lower)
+            end do
+
+            ei%best = region%center_value
+            call fortbo_optimize_acquisition(ei, posterior, region_lower, &
+                region_upper, starts, best_point, best_value, status)
+            if (status%code /= FORTNUM_OK) exit
+
+            call evaluate(benchmark, lower, upper, best_point, value, gradient, status)
+            call history%add(best_point, status, objective=value, gradient=gradient)
+            evaluations = evaluations + 1
+
+            batch_inputs(1, :) = best_point
+            batch_values(1) = value
+            call region%observe_batch(batch_inputs, batch_values, status)
+        end do
+
+        call history%incumbent(incumbent, incumbent_value, status)
+        regret = incumbent_value - benchmark%optimal_value()
+    end subroutine run_dturbo_gradient_search
 
     subroutine expect(condition, description, failures)
         logical, intent(in) :: condition

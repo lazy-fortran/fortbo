@@ -381,7 +381,12 @@ benchmarked against each other and against plain TuRBO:
 3. **Gradient-based in-region acquisition.** Optimize the acquisition inside
    the region with FortOpt L-BFGS-B on exact FortAD/FortSym products instead of
    sampling `n_cand` candidates, keeping Thompson sampling available as the
-   batch and bandit rule.
+   batch and bandit rule. **Working end to end** — `test_end_to_end` runs this
+   configuration on Branin against a real derivative-observation GP, with Sobol
+   multistart inside the region bounds, and beats random search at equal
+   budget. Reaching it required fixing the FortML variance-JVP defect recorded
+   above; before that the surrogate could not supply a sound `moment_gradient`
+   and this path was unreachable.
 
 Mode 2 depends on a lengthscale prior that keeps posterior gradients from
 vanishing in high dimension; the dimension-scaled log-normal prior
