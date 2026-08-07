@@ -410,6 +410,16 @@ and belongs to FortML's parameter registry, not to FortBO.
 
 ### BO6: evidence and release
 
+`test_end_to_end` is the integration evidence for everything assembled so far:
+a full Branin run over the search space, the gradient-carrying history, the
+FortML surrogate chosen from the data, FortSym-derived expected improvement,
+the TuRBO region and its candidate generator, and the benchmark's verified
+optimum. Its oracle is the one that cannot be faked by a component test —
+simple regret against a known optimum, beaten against random search from an
+identical Sobol initial design on an identical evaluation budget. The
+derivative-informed variant runs as a separate row rather than being folded
+into the headline number.
+
 - [x] Add Branin, Hartmann-3, Hartmann-6, Ackley, Rosenbrock, Levy, and the
   sphere with known optima and exact gradients. `src/fortbo_benchmarks.f90`
   carries each optimizer and optimal value as literature data, and every
