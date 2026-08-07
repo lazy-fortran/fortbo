@@ -264,8 +264,23 @@ across-region bandit; it must not be split into two heuristics.
 
 - [ ] Derive and generate the lengthscale-rescaling and volume-invariant
   kernels through FortSym, with an independent oracle for the invariant.
-- [ ] Implement the trust-region state machine with deterministic replay:
+  **Blocked on a FortSym gap, not deferred by choice**: the rescaling is a
+  reduction over the dimension, and the kernel emitter currently lowers scalar
+  expression graphs only — it has no way to express a loop or a reduction. The
+  invariant itself is already checked independently in `test_trust_region`.
+  Fix belongs in FortSym alongside M9/M13, and the interim Fortran computes the
+  geometric mean in log space so it survives the few hundred dimensions this
+  algorithm exists for.
+- [x] Implement the trust-region state machine with deterministic replay:
   identical seed, identical batch, identical resize history.
+  `src/fortbo_trust_region.f90` carries the reference constants with their
+  provenance, adapts by the counter rule, and records every resize event for
+  the evidence trace. `test_trust_region` checks the length history against an
+  independent counter model driven by a scripted outcome sequence, pins the
+  reference constants so a future "tuning" edit has to argue with a test, and
+  verifies the volume invariant at four hundred dimensions where a direct
+  product of lengthscales would underflow. It caught a real defect: restarting
+  an exhausted region — the canonical TuRBO restart — was not being counted.
 - [ ] Implement Thompson selection over `m` regions on seeded, splittable
   FortNum streams with common random numbers across regions.
 - [ ] Record a typed refusal for derivative products of the discrete Thompson
