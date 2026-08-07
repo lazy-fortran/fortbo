@@ -210,8 +210,16 @@ Concretely, and binding on every work package below:
 - [ ] Use FortOpt L-BFGS-B and multistart as the default local acquisition
   optimizer, with explicit bounds, fixed categorical choices, and constraint
   penalties or feasible-region parameterizations.
-- [ ] Add Sobol/random/quasi-random initialization, cyclic restarts, and
-  deterministic tie handling.
+- [x] Add Sobol/random/quasi-random initialization, cyclic restarts, and
+  deterministic tie handling. Sobol did not exist in FortNum and was added
+  there rather than reimplemented here: `fortnum_sobol` builds Joe-Kuo
+  direction numbers and generates points by the Antonov-Saleev Gray-code
+  recurrence with caller-owned state. Its tests check the defining properties
+  rather than a stored table — exact one-dimensional equidistribution across
+  all 21 tabulated dimensions, the (0,2)-net property on the leading pair over
+  every elementary split, and a measured star-discrepancy advantage over
+  pseudorandom points. A wrong direction-number table passes a range check and
+  fails those.
 - [ ] Implement **TuRBO** to the specification below: lengthscale-rescaled
   hyperrectangle trust regions, success/failure counters, halve/double radius
   adaptation, restart on collapse, Thompson-sampling candidate selection, and
@@ -281,10 +289,23 @@ across-region bandit; it must not be split into two heuristics.
   verifies the volume invariant at four hundred dimensions where a direct
   product of lengthscales would underflow. It caught a real defect: restarting
   an exhausted region — the canonical TuRBO restart — was not being counted.
-- [ ] Implement Thompson selection over `m` regions on seeded, splittable
+- [x] Implement Thompson selection over `m` regions on seeded, splittable
   FortNum streams with common random numbers across regions.
-- [ ] Record a typed refusal for derivative products of the discrete Thompson
+  `src/fortbo_turbo.f90` generates candidates by perturbing the region center
+  with probability `min(1, 20/d)` — Sobol supplies the magnitudes, the
+  pseudorandom stream supplies the mask — and selects the batch by one arg-min
+  per posterior realization across the concatenated regions, which is the
+  bandit and the acquisition at once. `test_turbo` measures the sparsity
+  claim directly (about twenty coordinates move per candidate at `d = 200`),
+  checks selection against a brute-force arg-min, and checks the bandit
+  behavior by consequence. The discrete arg-min carries an explicit derivative
+  refusal. Above dimension 21 the quasi-random path refuses by name rather than
+  silently substituting pseudorandom points, naming `fortnum_sobol` as the
+  table to extend.
+- [x] Record a typed refusal for derivative products of the discrete Thompson
   argmin — it is not differentiable and must not pretend to be.
+  `fortbo_thompson_gradient_refusal` explains that perturbing the candidates
+  and reselecting measures which candidate happened to win, not a derivative.
 - [ ] Reproduce the paper's qualitative ordering on Ackley-200, the 60D rover
   trajectory problem, and the 14D robot pushing problem against a pinned
   `uber-research/TuRBO` and the BoTorch `turbo_1` tutorial.
