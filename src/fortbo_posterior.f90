@@ -22,7 +22,7 @@ module fortbo_posterior
     !! boundary, not here.
 
     use fortnum_kinds, only: dp
-    use fortnum_status, only: fortnum_status_t, status_set, FORTNUM_OK, &
+    use fortnum_status, only: fortnum_status_t, status_set, &
         FORTNUM_NOT_IMPLEMENTED, FORTNUM_DOMAIN_ERROR
     implicit none
     private
@@ -183,7 +183,7 @@ contains
     !! query point. `mean_gradient(i, j)` is d mean(i) / d points(i, j); the
     !! marginals depend only on their own row, so no cross-row block exists.
     subroutine posterior_moment_gradient_refuse(self, points, mean_gradient, &
-                                                sd_gradient, status)
+            sd_gradient, status)
         class(fortbo_posterior_t), intent(in) :: self
         real(dp), intent(in) :: points(:, :)
         real(dp), intent(out) :: mean_gradient(:, :)
@@ -198,7 +198,7 @@ contains
     !! Hessians of the marginal mean and standard deviation at a single query
     !! point. DTuRBO's local quadratic model consumes exactly this pair.
     subroutine posterior_moment_hessian_refuse(self, point, mean_hessian, &
-                                               sd_hessian, status)
+            sd_hessian, status)
         class(fortbo_posterior_t), intent(in) :: self
         real(dp), intent(in) :: point(:)
         real(dp), intent(out) :: mean_hessian(:, :)
@@ -218,11 +218,11 @@ contains
 
         if (n_points < 0) then
             call status_set(status, FORTNUM_DOMAIN_ERROR, &
-                            "fortbo posterior: negative query count")
+                "fortbo posterior: negative query count")
             return
         end if
         call status_set(status, FORTNUM_NOT_IMPLEMENTED, &
-                        "fortbo posterior: surrogate does not implement "//operation)
+            "fortbo posterior: surrogate does not implement "//operation)
     end subroutine refuse
 
 end module fortbo_posterior

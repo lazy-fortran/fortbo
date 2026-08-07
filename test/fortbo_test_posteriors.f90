@@ -77,7 +77,7 @@ contains
         class(demo_posterior_t), intent(in) :: self
 
         caps = FORTBO_CAP_MOMENTS + FORTBO_CAP_COVARIANCE + FORTBO_CAP_JOINT_SAMPLE &
-               + FORTBO_CAP_REPARAM_SAMPLE + FORTBO_CAP_LOG_DENSITY
+            + FORTBO_CAP_REPARAM_SAMPLE + FORTBO_CAP_LOG_DENSITY
         if (self%dimension < 1) caps = 0
     end function demo_capabilities
 
@@ -187,7 +187,7 @@ contains
         call factorization%log_determinant(log_det, status)
         if (status%code /= FORTNUM_OK) return
         log_density = -0.5_dp*dot_product(residual, solved) - 0.5_dp*log_det &
-                      - 0.5_dp*real(n, dp)*LOG_TWO_PI
+            - 0.5_dp*real(n, dp)*LOG_TWO_PI
         call status_set(status, FORTNUM_OK, "")
     end subroutine demo_log_density
 
@@ -229,12 +229,12 @@ contains
 
         if (size(points, 2) /= dimension) then
             call status_set(status, FORTNUM_DOMAIN_ERROR, &
-                            "demo posterior: query width does not match dimension")
+                "demo posterior: query width does not match dimension")
             return
         end if
         if (n_out /= size(points, 1)) then
             call status_set(status, FORTNUM_DOMAIN_ERROR, &
-                            "demo posterior: output length does not match query count")
+                "demo posterior: output length does not match query count")
             return
         end if
         call status_set(status, FORTNUM_OK, "")

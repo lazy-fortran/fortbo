@@ -105,12 +105,12 @@ contains
 
         if (n_inputs < 1) then
             call status_set(status, FORTNUM_DOMAIN_ERROR, &
-                            "fortbo history: n_inputs must be positive")
+                "fortbo history: n_inputs must be positive")
             return
         end if
         if (n_constraints < 0) then
             call status_set(status, FORTNUM_DOMAIN_ERROR, &
-                            "fortbo history: n_constraints must not be negative")
+                "fortbo history: n_constraints must not be negative")
             return
         end if
         self%n_inputs = n_inputs
@@ -144,7 +144,7 @@ contains
     !! Append one evaluated row. `objective` absent means the evaluation
     !! produced no usable value; the missing policy then decides what happens.
     subroutine history_add(self, input, status, objective, cost, constraints, &
-                           batch, outcome, gradient, gradient_mask)
+            batch, outcome, gradient, gradient_mask)
         class(fortbo_history_t), intent(inout) :: self
         real(dp), intent(in) :: input(:)
         type(fortnum_status_t), intent(out) :: status
@@ -163,18 +163,18 @@ contains
 
         if (self%n_inputs == 0) then
             call status_set(status, FORTNUM_DOMAIN_ERROR, &
-                            "fortbo history: not initialized")
+                "fortbo history: not initialized")
             return
         end if
         if (size(input) /= self%n_inputs) then
             call status_set(status, FORTNUM_DOMAIN_ERROR, &
-                            "fortbo history: input width does not match n_inputs")
+                "fortbo history: input width does not match n_inputs")
             return
         end if
         if (present(constraints)) then
             if (size(constraints) /= self%n_constraints) then
                 call status_set(status, FORTNUM_DOMAIN_ERROR, &
-                             "fortbo history: constraint count does not match")
+                    "fortbo history: constraint count does not match")
                 return
             end if
         end if
@@ -186,7 +186,7 @@ contains
             select case (self%missing_policy)
             case (FORTBO_MISSING_REFUSE)
                 call status_set(status, FORTNUM_NOT_IMPLEMENTED, &
-                     "fortbo history: missing objective refused by policy")
+                    "fortbo history: missing objective refused by policy")
                 return
             case (FORTBO_MISSING_SKIP)
                 call status_set(status, FORTNUM_OK, "")
@@ -195,7 +195,7 @@ contains
                 continue
             case default
                 call status_set(status, FORTNUM_DOMAIN_ERROR, &
-                                "fortbo history: unknown missing-observation policy")
+                    "fortbo history: unknown missing-observation policy")
                 return
             end select
         end if
@@ -205,7 +205,7 @@ contains
             select case (self%duplicate_policy)
             case (FORTBO_DUPLICATE_REJECT)
                 call status_set(status, FORTNUM_DOMAIN_ERROR, &
-                                "fortbo history: duplicate query rejected by policy")
+                    "fortbo history: duplicate query rejected by policy")
                 return
             case (FORTBO_DUPLICATE_REPLACE)
                 row = duplicate
@@ -213,7 +213,7 @@ contains
                 row = 0
             case default
                 call status_set(status, FORTNUM_DOMAIN_ERROR, &
-                                "fortbo history: unknown duplicate policy")
+                    "fortbo history: unknown duplicate policy")
                 return
             end select
         else
@@ -268,7 +268,7 @@ contains
         row = 0
         if (size(input) /= self%n_inputs .or. self%n_inputs == 0) then
             call status_set(status, FORTNUM_DOMAIN_ERROR, &
-                            "fortbo history: input width does not match n_inputs")
+                "fortbo history: input width does not match n_inputs")
             return
         end if
         call grow_if_needed(self)
@@ -293,7 +293,7 @@ contains
     !! second answer to the same dispatch means the bookkeeping has lost track
     !! of which worker produced which value.
     subroutine history_complete(self, row, status, objective, cost, constraints, &
-                                outcome, gradient, gradient_mask)
+            outcome, gradient, gradient_mask)
         class(fortbo_history_t), intent(inout) :: self
         integer, intent(in) :: row
         type(fortnum_status_t), intent(out) :: status
@@ -306,12 +306,12 @@ contains
 
         if (row < 1 .or. row > self%count) then
             call status_set(status, FORTNUM_DOMAIN_ERROR, &
-                            "fortbo history: completion row out of range")
+                "fortbo history: completion row out of range")
             return
         end if
         if (self%outcome(row) /= FORTBO_OUTCOME_PENDING) then
             call status_set(status, FORTNUM_DOMAIN_ERROR, &
-                            "fortbo history: row is not pending")
+                "fortbo history: row is not pending")
             return
         end if
         call check_gradient_shapes(self%n_inputs, gradient, gradient_mask, status)
@@ -332,7 +332,7 @@ contains
         if (present(constraints) .and. self%n_constraints > 0) then
             if (size(constraints) /= self%n_constraints) then
                 call status_set(status, FORTNUM_DOMAIN_ERROR, &
-                                "fortbo history: constraint count does not match")
+                    "fortbo history: constraint count does not match")
                 return
             end if
             self%constraints(row, 1:self%n_constraints) = constraints
@@ -412,19 +412,19 @@ contains
         if (present(gradient)) then
             if (size(gradient) /= n_inputs) then
                 call status_set(status, FORTNUM_DOMAIN_ERROR, &
-                                "fortbo history: gradient width does not match n_inputs")
+                    "fortbo history: gradient width does not match n_inputs")
                 return
             end if
         end if
         if (present(gradient_mask)) then
             if (.not. present(gradient)) then
                 call status_set(status, FORTNUM_DOMAIN_ERROR, &
-                                "fortbo history: gradient mask without a gradient")
+                    "fortbo history: gradient mask without a gradient")
                 return
             end if
             if (size(gradient_mask) /= n_inputs) then
                 call status_set(status, FORTNUM_DOMAIN_ERROR, &
-                                "fortbo history: gradient mask width does not match")
+                    "fortbo history: gradient mask width does not match")
                 return
             end if
         end if
@@ -518,12 +518,12 @@ contains
         best = self%best_index()
         if (best == 0) then
             call status_set(status, FORTNUM_DOMAIN_ERROR, &
-                            "fortbo history: no feasible observation yet")
+                "fortbo history: no feasible observation yet")
             return
         end if
         if (size(input) /= self%n_inputs) then
             call status_set(status, FORTNUM_DOMAIN_ERROR, &
-                            "fortbo history: incumbent output width does not match")
+                "fortbo history: incumbent output width does not match")
             return
         end if
         input = self%inputs(best, :)
@@ -587,10 +587,10 @@ contains
         integer :: unit, io_status, row, j
 
         open (newunit=unit, file=path, status="replace", action="write", &
-              form="formatted", iostat=io_status)
+            form="formatted", iostat=io_status)
         if (io_status /= 0) then
             call status_set(status, FORTNUM_DOMAIN_ERROR, &
-                            "fortbo history: cannot open checkpoint for writing")
+                "fortbo history: cannot open checkpoint for writing")
             return
         end if
         write (unit, *) FORTBO_HISTORY_FORMAT_VERSION
@@ -607,7 +607,7 @@ contains
             if (self%n_constraints > 0) then
                 write (unit, *) (self%constraints(row, j), j=1, self%n_constraints)
                 write (unit, *) (self%constraint_present(row, j), &
-                                 j=1, self%n_constraints)
+                    j=1, self%n_constraints)
             end if
         end do
         close (unit)
@@ -623,24 +623,24 @@ contains
         integer :: unit, io_status, row, j, version, n_inputs, n_constraints, stored
 
         open (newunit=unit, file=path, status="old", action="read", &
-              form="formatted", iostat=io_status)
+            form="formatted", iostat=io_status)
         if (io_status /= 0) then
             call status_set(status, FORTNUM_DOMAIN_ERROR, &
-                            "fortbo history: cannot open checkpoint for reading")
+                "fortbo history: cannot open checkpoint for reading")
             return
         end if
         read (unit, *, iostat=io_status) version
         if (io_status /= 0 .or. version /= FORTBO_HISTORY_FORMAT_VERSION) then
             close (unit)
             call status_set(status, FORTNUM_NOT_IMPLEMENTED, &
-                            "fortbo history: unsupported checkpoint format version")
+                "fortbo history: unsupported checkpoint format version")
             return
         end if
         read (unit, *, iostat=io_status) n_inputs, n_constraints, stored
         if (io_status /= 0) then
             close (unit)
             call status_set(status, FORTNUM_DOMAIN_ERROR, &
-                            "fortbo history: malformed checkpoint header")
+                "fortbo history: malformed checkpoint header")
             return
         end if
         call history_initialize(self, n_inputs, n_constraints, status)

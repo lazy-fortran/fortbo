@@ -15,7 +15,7 @@ program test_posterior_contract
     use fortnum_kinds, only: dp
     use fortnum_status, only: fortnum_status_t, FORTNUM_OK, FORTNUM_NOT_IMPLEMENTED
     use fortnum_rng, only: rng_t, rng_seed
-    use fortbo_posterior, only: fortbo_posterior_t, fortbo_capability_name, &
+    use fortbo_posterior, only: fortbo_capability_name, &
         FORTBO_POSTERIOR_CONTRACT_VERSION, FORTBO_CAP_MOMENTS, FORTBO_CAP_COVARIANCE, &
         FORTBO_CAP_JOINT_SAMPLE, FORTBO_CAP_REPARAM_SAMPLE, FORTBO_CAP_LOG_DENSITY, &
         FORTBO_CAP_MOMENT_GRADIENT
@@ -51,11 +51,11 @@ contains
 
         posterior%dimension = 2
         call expect(FORTBO_POSTERIOR_CONTRACT_VERSION == 1, &
-                    "contract version is 1", failures)
+            "contract version is 1", failures)
         call expect(posterior%contract_version == 1, &
-                    "implementations default to the current contract version", failures)
+            "implementations default to the current contract version", failures)
         call expect(posterior%n_inputs() == 2, "n_inputs reports the input width", &
-                    failures)
+            failures)
     end subroutine check_version
 
     subroutine check_capability_bits(failures)
@@ -66,15 +66,15 @@ contains
         full%dimension = 1
         partial%dimension = 1
         call expect(full%supports(FORTBO_CAP_MOMENTS), "declared bit is supported", &
-                    failures)
+            failures)
         call expect(full%supports(FORTBO_CAP_MOMENTS + FORTBO_CAP_JOINT_SAMPLE), &
-                    "a conjunction of declared bits is supported", failures)
+            "a conjunction of declared bits is supported", failures)
         call expect(.not. full%supports(FORTBO_CAP_MOMENT_GRADIENT), &
-                    "an undeclared bit is not supported", failures)
+            "an undeclared bit is not supported", failures)
         call expect(.not. partial%supports(FORTBO_CAP_MOMENTS + FORTBO_CAP_COVARIANCE), &
-                    "a conjunction with one missing bit is not supported", failures)
+            "a conjunction with one missing bit is not supported", failures)
         call expect(fortbo_capability_name(FORTBO_CAP_JOINT_SAMPLE) == "joint_sample", &
-                    "capability names are reported", failures)
+            "capability names are reported", failures)
     end subroutine check_capability_bits
 
     !! Every operation a model does not declare must refuse by name.
@@ -122,7 +122,7 @@ contains
         call expect_close(mean(2), 0.0_dp, 1.0e-14_dp, "mean at second query", failures)
         call expect_close(mean(3), 0.75_dp, 1.0e-14_dp, "mean at third query", failures)
         call expect_close(variance(1), DEMO_SIGNAL, 1.0e-14_dp, &
-                          "prior variance is the signal variance", failures)
+            "prior variance is the signal variance", failures)
     end subroutine check_moments_against_closed_form
 
     !! The joint covariance must be symmetric and its diagonal must agree with
@@ -150,10 +150,10 @@ contains
         call expect(asymmetry == 0.0_dp, "covariance is exactly symmetric", failures)
         do i = 1, 4
             call expect_close(covariance(i, i), variance(i), 1.0e-8_dp, &
-                              "covariance diagonal matches marginal variance", failures)
+                "covariance diagonal matches marginal variance", failures)
         end do
         call expect_close(covariance(1, 2), demo_kernel([-1.0_dp], [-0.25_dp]), &
-                          1.0e-14_dp, "off-diagonal matches the kernel", failures)
+            1.0e-14_dp, "off-diagonal matches the kernel", failures)
     end subroutine check_covariance_structure
 
     !! With the base samples held fixed the reparameterized map is a
@@ -174,13 +174,13 @@ contains
         call expect(status%code == FORTNUM_OK, "reparam sampling succeeds", failures)
         call posterior%reparam_sample(points, base, second, status)
         call expect(maxval(abs(first - second)) == 0.0_dp, &
-                    "reparam sampling is bitwise reproducible", failures)
+            "reparam sampling is bitwise reproducible", failures)
 
         zero_base = 0.0_dp
         call posterior%reparam_sample(points, zero_base, at_mean, status)
         call posterior%moments(points, mean, variance, status)
         call expect(maxval(abs(at_mean(:, 1) - mean)) < 1.0e-14_dp, &
-                    "a zero base reproduces the posterior mean", failures)
+            "a zero base reproduces the posterior mean", failures)
     end subroutine check_reparam_is_deterministic
 
     !! Monte Carlo oracle: the empirical first and second moments of the joint
@@ -217,8 +217,8 @@ contains
         do j = 1, n_points
             do i = 1, n_points
                 empirical_cov(i, j) = sum((samples(i, :) - empirical_mean(i))* &
-                                          (samples(j, :) - empirical_mean(j))) &
-                                      /real(n_draws - 1, dp)
+                    (samples(j, :) - empirical_mean(j))) &
+                    /real(n_draws - 1, dp)
             end do
         end do
 
@@ -226,16 +226,16 @@ contains
             standard_error = sqrt(variance(i)/real(n_draws, dp))
             deviation = abs(empirical_mean(i) - mean(i))
             call expect(deviation < 5.0_dp*standard_error, &
-                        "empirical mean matches the analytic mean", failures)
+                "empirical mean matches the analytic mean", failures)
         end do
         do j = 1, n_points
             do i = 1, n_points
                 standard_error = sqrt((variance(i)*variance(j) + covariance(i, j)**2) &
-                                      /real(n_draws, dp))
+                    /real(n_draws, dp))
                 deviation = abs(empirical_cov(i, j) - covariance(i, j))
                 call expect(deviation < 5.0_dp*standard_error, &
-                            "empirical covariance matches the analytic covariance", &
-                            failures)
+                    "empirical covariance matches the analytic covariance", &
+                    failures)
             end do
         end do
     end subroutine check_sample_moments
@@ -258,9 +258,9 @@ contains
         mu = demo_mean([0.35_dp])
         sigma_squared = demo_kernel([0.35_dp], [0.35_dp])
         expected = -0.5_dp*log(2.0_dp*acos(-1.0_dp)*sigma_squared) &
-                   - 0.5_dp*(values(1) - mu)**2/sigma_squared
+            - 0.5_dp*(values(1) - mu)**2/sigma_squared
         call expect_close(density, expected, 1.0e-8_dp, &
-                          "log density matches the scalar normal", failures)
+            "log density matches the scalar normal", failures)
     end subroutine check_log_density_scalar
 
     !! Two query points, checked against the explicit two-by-two inverse and
@@ -286,9 +286,9 @@ contains
         r2 = values(2) - demo_mean([0.9_dp])
         quadratic = (c*r1*r1 - 2.0_dp*b*r1*r2 + a*r2*r2)/determinant
         expected = -0.5_dp*quadratic - 0.5_dp*log(determinant) &
-                   - log(2.0_dp*acos(-1.0_dp))
+            - log(2.0_dp*acos(-1.0_dp))
         call expect_close(density, expected, 1.0e-7_dp, &
-                          "log density matches the explicit two-by-two form", failures)
+            "log density matches the explicit two-by-two form", failures)
     end subroutine check_log_density_pair
 
     subroutine expect(condition, description, failures)

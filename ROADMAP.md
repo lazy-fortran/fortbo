@@ -146,8 +146,17 @@ Concretely, and binding on every work package below:
   complete one. `test_history` checks the incumbent against a brute-force
   feasible scan and re-derives incumbent, feasibility, cost, and gradient set
   from the restored checkpoint.
-- [ ] Add normalized search-space objects for continuous, integer,
+- [x] Add normalized search-space objects for continuous, integer,
   categorical, mixed, constrained, and conditional variables.
+  `src/fortbo_space.f90` owns the only translation between user variables and
+  the unit hypercube: log-scaled continuous variables are uniform in the
+  exponent, integers use an affine map with deterministic rounding,
+  categoricals occupy a one-hot block decoded by arg-max with the lowest index
+  winning ties, and `differentiable_mask` marks exactly the continuous
+  coordinates so a relaxed integer never yields a derivative that means
+  nothing. Conditional variables pin to declared defaults when inactive, which
+  `test_space` checks by the observable rule that an inactive coordinate cannot
+  change the decoded point.
 
 ### BO1: acquisition catalog
 
