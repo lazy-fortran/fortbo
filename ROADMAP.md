@@ -197,8 +197,19 @@ Concretely, and binding on every work package below:
 
 ### BO2: surrogate integration
 
-- [ ] Adapt FortML exact, derivative-observation, sparse, variational,
-  multi-output, multi-task, and deep-kernel GPs to the posterior protocol.
+- [x] Adapt the FortML exact and derivative-observation GPs to the posterior
+  protocol. `src/fortbo_fortml.f90` presents both behind the *same* contract
+  with the same capability bits, so nothing above the boundary can tell which
+  was fitted. `fortbo_fit_from_history` chooses from the data rather than a
+  flag: a history carrying complete gradients yields the derivative-observation
+  GP, expanding each row into one value observation plus one per coordinate.
+  `test_fortml_adapter` checks the invariant by its consequences — the same
+  unchanged EI and confidence-bound objects run against both adapters, and on a
+  held-out grid the derivative-informed model has strictly lower squared error
+  and lower posterior uncertainty than the same model fitted to the same values
+  without their gradients.
+- [ ] Adapt the FortML sparse, variational, multi-output, multi-task, and
+  deep-kernel GPs to the posterior protocol.
 - [ ] Add heteroskedastic, Student-t, classification, count, and robust
   surrogate likelihood adapters.
 - [ ] Add fully Bayesian surrogate hyperparameter integration through FortMC
