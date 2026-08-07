@@ -1,0 +1,21 @@
+name = "fortbo"
+version = "0.1.0"
+description = "Differentiable Bayesian optimization for modern Fortran"
+author = "lazy-fortran"
+maintainer = "lazy-fortran"
+license = "MIT"
+copyright = "Copyright 2026 lazy-fortran"
+
+[dependencies]
+fortnum = { path = "../fortnum" }
+fortopt = { path = "../fortopt" }
+fortad = { path = "../fortad" }
+fortsym = { path = "../fortsym" }
+fortml = { path = "../fortml" }
+
+[build]
+auto-tests = true
+
+[fortran]
+implicit-typing = false
+source-form = "free"
