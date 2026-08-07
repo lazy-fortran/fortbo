@@ -109,32 +109,31 @@ contains
         n = self%dimension
     end function derivative_gp_n_inputs
 
-    !! Moment gradients are deliberately **not** declared, despite FortML
-    !! exposing a query-input JVP for this model. Its `mean_dot` is correct —
-    !! it matches central differences to eight digits — but its `variance_dot`
-    !! is not the query-input derivative of the predictive variance. On a
-    !! nine-point Matern-5/2 fit with lengthscale 0.4 and noise 1e-6, queried
-    !! at (0.22, 0.62), the true dVar/dx1 is 0.35794592 while the reported
-    !! `variance_dot` is 0.04331521.
-    !!
-    !! Half a correct gradient is worse than none: the standard deviation's
-    !! derivative feeds directly into every acquisition gradient through the
-    !! chain rule, so exporting it would make expected improvement's gradient
-    !! quietly wrong and an L-BFGS-B run would converge confidently to the
-    !! wrong point. The capability stays undeclared and `moment_gradient`
-    !! refuses by name until the FortML defect is fixed.
+    !! The derivative-observation model declares moment gradients; the
+    !! value-only GP does not. That asymmetry is not a design preference:
+    !! FortML's `gp_predict_jvp` differentiates with respect to the *parameters*
+    !! rather than the query, so the plain GP has no input-gradient path and
+    !! claiming one would be a lie. A run that measures gradients therefore
+    !! unlocks gradient-based candidate search as well as a sharper posterior.
     pure integer function derivative_gp_capabilities(self) result(caps)
         class(fortbo_derivative_gp_posterior_t), intent(in) :: self
 
         caps = 0
-        if (self%fitted) caps = FORTBO_CAP_MOMENTS + FORTBO_CAP_NOISY_MOMENTS
+        if (self%fitted) then
+            caps = FORTBO_CAP_MOMENTS + FORTBO_CAP_NOISY_MOMENTS &
+                + FORTBO_CAP_MOMENT_GRADIENT
+        end if
     end function derivative_gp_capabilities
 
-    !! Refused. See the note on `derivative_gp_capabilities`: FortML's
-    !! query-input JVP returns a correct `mean_dot` and an incorrect
-    !! `variance_dot` for this model, and the acquisition chain rule needs both.
-    !! The mean-gradient half of the assembly is kept below so that fixing the
-    !! upstream variance term is a one-line re-enable rather than a rewrite.
+    !! Gradients of the predictive mean and standard deviation with respect to
+    !! the query, assembled from one query-input JVP per coordinate.
+    !!
+    !! The standard deviation's gradient follows from the variance's by the
+    !! chain rule, which divides by the standard deviation. At a training site
+    !! the posterior variance collapses and that derivative genuinely does not
+    !! exist — the square root has a cusp there. Zero is reported, being the
+    !! subgradient of least magnitude, rather than an infinity that would wreck
+    !! a line search.
     subroutine derivative_gp_moment_gradient(self, points, mean_gradient, &
             sd_gradient, status)
         class(fortbo_derivative_gp_posterior_t), intent(in) :: self
@@ -183,10 +182,7 @@ contains
                 end if
             end do
         end do
-        sd_gradient = 0.0_dp
-        call status_set(status, FORTNUM_NOT_IMPLEMENTED, &
-            "fortbo fortml: moment_gradient withheld; FortML derivative-GP "// &
-            "predict_input_jvp variance_dot is wrong (mean_dot is correct)")
+        call status_set(status, FORTNUM_OK, "")
     end subroutine derivative_gp_moment_gradient
 
     !! Predict the function value, not a derivative, at each query row. The

@@ -320,11 +320,8 @@ contains
         call fortbo_fit_from_history(history, informed, status, lengthscale=0.4_dp, &
             noise_variance=1.0e-6_dp, use_gradients=.true.)
 
-        ! The capability is withheld: FortML's variance_dot for this model is
-        ! wrong, and half a correct gradient is worse than none.
-        call expect(.not. informed%supports(FORTBO_CAP_MOMENT_GRADIENT), &
-            "the derivative surrogate withholds the unsound moment gradient", &
-            failures)
+        call expect(informed%supports(FORTBO_CAP_MOMENT_GRADIENT), &
+            "the derivative surrogate declares moment gradients", failures)
 
         ! Query points deliberately away from the training lattice, where the
         ! posterior variance is nonzero and the square-root derivative exists.
@@ -333,17 +330,11 @@ contains
         query(3, :) = [0.48_dp, 0.44_dp]
 
         call informed%moment_gradient(query, mean_gradient, sd_gradient, status)
-        call expect(status%code == FORTNUM_NOT_IMPLEMENTED, &
-            "the derivative surrogate refuses the moment gradient", failures)
-        call expect(index(status%msg, "variance_dot") > 0, &
-            "the refusal names the upstream defect", failures)
+        call expect(status%code == FORTNUM_OK, "moment gradients evaluate", failures)
         call informed%moments(query, mean, variance, status)
 
         mean_ok = .true.
         sd_ok = .true.
-        ! The mean half is still checked, because it is verified correct and is
-        ! what a fixed FortML would let us re-enable. This assertion is what
-        ! will catch a regression in the upstream mean path meanwhile.
         do j = 1, 2
             shifted = query
             shifted(:, j) = query(:, j) + step
@@ -354,11 +345,15 @@ contains
                 numeric_mean = (plus_mean(i) - minus_mean(i))/(2.0_dp*step)
                 if (abs(mean_gradient(i, j) - numeric_mean) > &
                     1.0e-4_dp*max(1.0_dp, abs(numeric_mean))) mean_ok = .false.
+                numeric_sd = (sqrt(max(plus_var(i), 0.0_dp)) &
+                    - sqrt(max(minus_var(i), 0.0_dp)))/(2.0_dp*step)
+                if (abs(sd_gradient(i, j) - numeric_sd) > &
+                    1.0e-4_dp*max(1.0_dp, abs(numeric_sd))) sd_ok = .false.
             end do
         end do
-        call expect(mean_ok, &
-            "the withheld mean gradient is nonetheless correct", failures)
-        call expect(sd_ok, "placeholder for the standard-deviation gradient", failures)
+        call expect(mean_ok, "the mean gradient matches central differences", failures)
+        call expect(sd_ok, &
+            "the standard-deviation gradient matches central differences", failures)
 
         ! The value-only GP must not claim a capability FortML cannot provide.
         call fortbo_fit_from_history(history, plain, status, lengthscale=0.4_dp, &

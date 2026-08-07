@@ -78,39 +78,20 @@ Binding rules:
 - Numerical evaluation, quadrature, and root finding belong to FortNum, not to
   FortSym. FortSym contributes the expression and the emitted callable.
 
-## Open upstream defects
+## Resolved upstream defects
 
-**FortML `gp_derivative_predict_input_jvp` returns an incorrect
-`variance_dot`.** Found by the central-difference oracle in
-`test_fortml_adapter`. The `mean_dot` half of the same call is correct to eight
-digits; only the variance derivative is wrong.
+**FortML `gp_derivative_predict_input_jvp` overwrote the posterior variance
+with the prior.** Found by the central-difference oracle in
+`test_fortml_adapter`: `mean_dot` and `variance_dot` were both correct, but the
+routine's `variance` output had been clobbered with `k(x,x)`, because the prior
+covariance was written straight into `variance(j)` instead of a scratch scalar.
+Chain-ruling the standard deviation with that value silently scaled every
+acquisition gradient.
 
-Reproduction: fit the derivative-observation GP on the nine-point lattice
-`x_i = 0.1 + 0.26 k`, `k = 0..3` in each coordinate, with a Matern-5/2 kernel,
-lengthscale 0.4, noise variance 1e-6, on
-`f(x) = sin(3 x1) cos(2 x2) + 0.5 x1 x2` and its exact gradient. Query at
-`(0.22, 0.62)` in the unit direction `e_1`:
-
-| quantity | value |
-| --- | --- |
-| predictive variance | 0.0146435 |
-| true dVar/dx1 (central differences) | 0.3579459 |
-| reported `variance_dot` | 0.0433152 |
-
-Suspect region: the `variance_dot = prior_dot - 2 * sum(cross_dot * work)`
-assembly in `gp_derivative_predict_input_jvp`, and the `derivative_covariance_
-query_direction` call that fills `prior_dot` while also being passed
-`variance(j)`.
-
-Consequence here: `fortbo_derivative_gp_posterior_t` does **not** declare
-`FORTBO_CAP_MOMENT_GRADIENT` and `moment_gradient` refuses by name. Half a
-correct gradient is worse than none — the standard deviation's derivative feeds
-every acquisition gradient through the chain rule, so exporting it would make
-expected improvement's gradient quietly wrong and let an L-BFGS-B run converge
-confidently to the wrong point. This blocks gradient-based candidate search
-against real surrogates, and therefore DTuRBO modes 2 and 3, until it is fixed
-upstream. The mean-gradient assembly is already written and verified, so the
-re-enable is a one-line capability change.
+Fixed upstream (`f56cdcd`), with a regression test in
+`test_derivative_gp_products` asserting that a JVP's primal outputs equal what
+`predict` returns. The pre-existing tests checked only the tangents, which is
+exactly how the defect survived; reverting the fix now fails that test.
 
 ## Derivative observations are universal
 
@@ -407,9 +388,17 @@ vanishing in high dimension; the dimension-scaled log-normal prior
 `log lambda_i ~ Normal(-4 + log(d)/2, 1)` (Hvarfner et al., 2024) is the default
 and belongs to FortML's parameter registry, not to FortBO.
 
-- [ ] Define the derivative-observation posterior contract against FortML and
+- [x] Define the derivative-observation posterior contract against FortML and
   fail loudly when a surrogate cannot supply `grad mu`, `grad sigma`,
-  `hess mu`, `hess sigma`, or their device residency.
+  `hess mu`, `hess sigma`, or their device residency. The
+  derivative-observation adapter declares and supplies `moment_gradient`,
+  assembled from one query-input JVP per coordinate and checked against central
+  differences of its own moments; the standard deviation's cusp at a training
+  site reports the least-magnitude subgradient rather than an infinity. The
+  value-only GP does **not** declare the capability and refuses by name,
+  because FortML's `gp_predict_jvp` differentiates with respect to the
+  parameters rather than the query — a recorded gap, not a choice. Hessians
+  remain unsupplied and refuse; they are what DTuRBO mode 2 still needs.
 - [ ] Derive the posterior gradient and Hessian expressions for each supported
   kernel through FortSym and emit them; block-matrix work blocks on FortSym M9
   and must be fixed there.
