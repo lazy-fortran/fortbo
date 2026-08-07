@@ -10,8 +10,10 @@ copyright = "Copyright 2026 lazy-fortran"
 fortnum = { path = "../fortnum" }
 fortopt = { path = "../fortopt" }
 fortad = { path = "../fortad" }
-fortsym = { path = "../fortsym" }
 fortml = { path = "../fortml" }
+
+# FortSym is a generation-time tool. Generated kernels are committed or
+# consumed through the FortSym CLI and are not a runtime Fortran dependency.
 
 [build]
 auto-tests = true
