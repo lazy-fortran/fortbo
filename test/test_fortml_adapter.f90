@@ -23,7 +23,7 @@ program test_fortml_adapter
     use fortnum_status, only: fortnum_status_t, FORTNUM_OK, FORTNUM_DOMAIN_ERROR, &
         FORTNUM_NOT_IMPLEMENTED
     use fortbo_posterior, only: fortbo_posterior_t, FORTBO_CAP_MOMENTS, &
-        FORTBO_CAP_MOMENT_GRADIENT
+        FORTBO_CAP_MOMENT_GRADIENT, FORTBO_CAP_MEAN_HESSIAN
     use fortbo_history, only: fortbo_history_t
     use fortbo_fortml, only: fortbo_fit_from_history, fortbo_gp_posterior_t, &
         fortbo_derivative_gp_posterior_t
@@ -38,6 +38,7 @@ program test_fortml_adapter
     call check_gradients_improve_prediction(failures)
     call check_acquisitions_are_indistinguishable(failures)
     call check_moment_gradients(failures)
+    call check_mean_hessian(failures)
     call check_refusals(failures)
 
     if (failures == 0) then
@@ -364,6 +365,70 @@ contains
         call expect(status%code == FORTNUM_NOT_IMPLEMENTED, &
             "the value-only GP refuses an input gradient by name", failures)
     end subroutine check_moment_gradients
+
+    !! The mean's Hessian is checked two independent ways: against central
+    !! differences of the *gradient* the same model reports, and for exact
+    !! symmetry. A Hessian assembled from the wrong component index passes
+    !! neither.
+    subroutine check_mean_hessian(failures)
+        integer, intent(inout) :: failures
+        type(fortbo_history_t) :: history
+        class(fortbo_posterior_t), allocatable :: informed, plain
+        type(fortnum_status_t) :: status
+        real(dp) :: point(2), query(1, 2), shifted(1, 2)
+        real(dp) :: hessian(2, 2)
+        real(dp) :: gradient_plus(1, 2), gradient_minus(1, 2)
+        real(dp) :: sd_plus(1, 2), sd_minus(1, 2)
+        real(dp) :: numeric, asymmetry
+        real(dp), parameter :: step = 1.0e-5_dp
+        integer :: k, j, c
+        logical :: matches
+
+        call history%initialize(2, 0, status)
+        do k = 1, 16
+            call training_site(k, point)
+            call history%add(point, status, objective=objective(point), &
+                gradient=objective_gradient(point))
+        end do
+        call fortbo_fit_from_history(history, informed, status, lengthscale=0.4_dp, &
+            noise_variance=1.0e-6_dp, use_gradients=.true.)
+
+        call expect(informed%supports(FORTBO_CAP_MEAN_HESSIAN), &
+            "the derivative surrogate declares the mean Hessian", failures)
+
+        query(1, :) = [0.33_dp, 0.51_dp]
+        call informed%mean_hessian(query(1, :), hessian, status)
+        call expect(status%code == FORTNUM_OK, "the mean Hessian evaluates", failures)
+
+        asymmetry = maxval(abs(hessian - transpose(hessian)))
+        call expect(asymmetry == 0.0_dp, "the mean Hessian is exactly symmetric", &
+            failures)
+
+        ! Differencing the reported gradient recovers the Hessian columns.
+        matches = .true.
+        do c = 1, 2
+            shifted = query
+            shifted(1, c) = query(1, c) + step
+            call informed%moment_gradient(shifted, gradient_plus, sd_plus, status)
+            shifted(1, c) = query(1, c) - step
+            call informed%moment_gradient(shifted, gradient_minus, sd_minus, status)
+            do j = 1, 2
+                numeric = (gradient_plus(1, j) - gradient_minus(1, j))/(2.0_dp*step)
+                if (abs(hessian(j, c) - numeric) > &
+                    2.0e-3_dp*max(1.0_dp, abs(numeric))) matches = .false.
+            end do
+        end do
+        call expect(matches, &
+            "the mean Hessian matches differences of the reported gradient", failures)
+
+        call fortbo_fit_from_history(history, plain, status, lengthscale=0.4_dp, &
+            use_gradients=.false.)
+        call expect(.not. plain%supports(FORTBO_CAP_MEAN_HESSIAN), &
+            "the value-only GP claims no mean Hessian", failures)
+        call plain%mean_hessian(query(1, :), hessian, status)
+        call expect(status%code == FORTNUM_NOT_IMPLEMENTED, &
+            "the value-only GP refuses the mean Hessian by name", failures)
+    end subroutine check_mean_hessian
 
     subroutine check_refusals(failures)
         integer, intent(inout) :: failures

@@ -29,7 +29,8 @@ module fortbo_fortml
     use fortml_gaussian_process, only: gp_regression_t
     use fortml_derivative_gaussian_process, only: gp_derivative_regression_t
     use fortbo_posterior, only: fortbo_posterior_t, FORTBO_CAP_MOMENTS, &
-        FORTBO_CAP_NOISY_MOMENTS, FORTBO_CAP_MOMENT_GRADIENT
+        FORTBO_CAP_NOISY_MOMENTS, FORTBO_CAP_MOMENT_GRADIENT, &
+        FORTBO_CAP_MEAN_HESSIAN
     use fortbo_history, only: fortbo_history_t
     implicit none
     private
@@ -60,6 +61,7 @@ module fortbo_fortml
         procedure, public :: capabilities => derivative_gp_capabilities
         procedure, public :: moments => derivative_gp_moments
         procedure, public :: moment_gradient => derivative_gp_moment_gradient
+        procedure, public :: mean_hessian => derivative_gp_mean_hessian
     end type fortbo_derivative_gp_posterior_t
 
 contains
@@ -121,7 +123,7 @@ contains
         caps = 0
         if (self%fitted) then
             caps = FORTBO_CAP_MOMENTS + FORTBO_CAP_NOISY_MOMENTS &
-                + FORTBO_CAP_MOMENT_GRADIENT
+                + FORTBO_CAP_MOMENT_GRADIENT + FORTBO_CAP_MEAN_HESSIAN
         end if
     end function derivative_gp_capabilities
 
@@ -217,6 +219,67 @@ contains
         if (status%code /= FORTNUM_OK) return
         mean = model_mean(:, 1)
     end subroutine derivative_gp_moments
+
+    !! Hessian of the predictive mean, exactly.
+    !!
+    !! The trick is that a derivative-observation GP can *predict a derivative
+    !! component*: asking it for component `j` returns the posterior mean of
+    !! df/dx_j. Differentiating that prediction with respect to the query, which
+    !! is the same query-input JVP used for the gradient, gives
+    !!
+    !!     H(j,k) = d/dx_k E[ df/dx_j ]
+    !!
+    !! so the mean's second derivatives fall out of machinery the model already
+    !! has. No finite differences, no separate Hessian kernel, and no wait for
+    !! FortSym's matrix milestone.
+    !!
+    !! The result is symmetrized. The two triangles are computed by different
+    !! routes through the kernel and agree to rounding rather than to the last
+    !! bit; a Newton step wants an exactly symmetric matrix, and averaging is
+    !! the projection onto the symmetric matrices in the Frobenius norm.
+    subroutine derivative_gp_mean_hessian(self, point, hessian, status)
+        class(fortbo_derivative_gp_posterior_t), intent(in) :: self
+        real(dp), intent(in) :: point(:)
+        real(dp), intent(out) :: hessian(:, :)
+        type(fortnum_status_t), intent(out) :: status
+        real(dp), allocatable :: query(:, :), direction(:, :)
+        real(dp), allocatable :: mean(:, :), mean_dot(:, :)
+        real(dp), allocatable :: variance(:), variance_dot(:)
+        integer, allocatable :: components(:)
+        real(dp), allocatable :: raw(:, :)
+        integer :: d, j, k
+
+        hessian = 0.0_dp
+        d = self%dimension
+        if (.not. self%fitted) then
+            call status_set(status, FORTNUM_DOMAIN_ERROR, &
+                "fortbo fortml: surrogate has not been fitted")
+            return
+        end if
+        if (size(point) /= d .or. size(hessian, 1) /= d .or. size(hessian, 2) /= d) then
+            call status_set(status, FORTNUM_DOMAIN_ERROR, &
+                "fortbo fortml: hessian width does not match the surrogate")
+            return
+        end if
+
+        allocate (query(1, d), direction(1, d), mean(1, 1), mean_dot(1, 1))
+        allocate (variance(1), variance_dot(1), components(1), raw(d, d))
+        query(1, :) = point
+        do j = 1, d
+            components(1) = j
+            do k = 1, d
+                direction = 0.0_dp
+                direction(1, k) = 1.0_dp
+                call self%model%predict_input_jvp(query, components, direction, mean, &
+                    mean_dot, variance, variance_dot, &
+                    status)
+                if (status%code /= FORTNUM_OK) return
+                raw(j, k) = mean_dot(1, 1)
+            end do
+        end do
+        hessian = 0.5_dp*(raw + transpose(raw))
+        call status_set(status, FORTNUM_OK, "")
+    end subroutine derivative_gp_mean_hessian
 
     !! Fit whichever surrogate the history's contents justify, and return it as
     !! an allocatable posterior. The caller receives `fortbo_posterior_t` and

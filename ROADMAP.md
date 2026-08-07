@@ -402,8 +402,16 @@ and belongs to FortML's parameter registry, not to FortBO.
   site reports the least-magnitude subgradient rather than an infinity. The
   value-only GP does **not** declare the capability and refuses by name,
   because FortML's `gp_predict_jvp` differentiates with respect to the
-  parameters rather than the query — a recorded gap, not a choice. Hessians
-  remain unsupplied and refuse; they are what DTuRBO mode 2 still needs.
+  parameters rather than the query — a recorded gap, not a choice.
+  The mean's Hessian is also supplied, exactly and without waiting for
+  FortSym's matrix milestone: a derivative-observation GP can *predict a
+  derivative component*, so differentiating the prediction of `df/dx_j` with
+  respect to the query gives `H(j,k)` from the same JVP the gradient uses. It
+  is checked against central differences of the model's own reported gradient
+  and symmetrized exactly. `FORTBO_CAP_MEAN_HESSIAN` is a separate bit from
+  `FORTBO_CAP_MOMENT_HESSIAN` because a model can honestly have the mean's
+  curvature and not the standard deviation's, and that is exactly the situation
+  here — the standard deviation's second derivative is still refused.
 - [ ] Derive the posterior gradient and Hessian expressions for each supported
   kernel through FortSym and emit them; block-matrix work blocks on FortSym M9
   and must be fixed there.

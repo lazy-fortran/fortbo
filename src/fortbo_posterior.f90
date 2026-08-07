@@ -41,6 +41,13 @@ module fortbo_posterior
     integer, parameter, public :: FORTBO_CAP_MOMENT_GRADIENT = 32
     integer, parameter, public :: FORTBO_CAP_MOMENT_HESSIAN = 64
     integer, parameter, public :: FORTBO_CAP_NOISY_MOMENTS = 128
+    !! The mean's Hessian alone. Separate from FORTBO_CAP_MOMENT_HESSIAN
+    !! because a model can very reasonably have one and not the other: the
+    !! second derivative of the predictive *mean* is a first derivative of a
+    !! predicted derivative component and falls out of machinery a
+    !! derivative-observation GP already has, while the second derivative of the
+    !! predictive *standard deviation* does not.
+    integer, parameter, public :: FORTBO_CAP_MEAN_HESSIAN = 256
 
     public :: fortbo_posterior_t
     public :: fortbo_capability_name
@@ -60,6 +67,7 @@ module fortbo_posterior
         procedure, public :: log_density => posterior_log_density_refuse
         procedure, public :: moment_gradient => posterior_moment_gradient_refuse
         procedure, public :: moment_hessian => posterior_moment_hessian_refuse
+        procedure, public :: mean_hessian => posterior_mean_hessian_refuse
     end type fortbo_posterior_t
 
     abstract interface
@@ -108,6 +116,8 @@ contains
             name = "moment_hessian"
         case (FORTBO_CAP_NOISY_MOMENTS)
             name = "noisy_moments"
+        case (FORTBO_CAP_MEAN_HESSIAN)
+            name = "mean_hessian"
         case default
             name = "unknown"
         end select
@@ -209,6 +219,20 @@ contains
         sd_hessian = 0.0_dp
         call refuse(status, "moment_hessian", size(point))
     end subroutine posterior_moment_hessian_refuse
+
+    !! Hessian of the predictive mean at a single query point. Offered
+    !! separately from `moment_hessian` so a model that has this and not the
+    !! standard deviation's curvature can say so precisely instead of refusing
+    !! both.
+    subroutine posterior_mean_hessian_refuse(self, point, hessian, status)
+        class(fortbo_posterior_t), intent(in) :: self
+        real(dp), intent(in) :: point(:)
+        real(dp), intent(out) :: hessian(:, :)
+        type(fortnum_status_t), intent(out) :: status
+
+        hessian = 0.0_dp
+        call refuse(status, "mean_hessian", size(point))
+    end subroutine posterior_mean_hessian_refuse
 
     !! Typed refusal shared by every undeclared operation.
     pure subroutine refuse(status, operation, n_points)
