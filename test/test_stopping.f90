@@ -8,7 +8,7 @@ program test_stopping
     !! is what tells a caller whether to trust the answer.
 
     use fortnum_kinds, only: dp
-    use fortnum_status, only: fortnum_status_t, FORTNUM_OK, FORTNUM_DOMAIN_ERROR
+    use fortnum_status, only: fortnum_status_t, FORTNUM_DOMAIN_ERROR
     use fortbo_stopping, only: fortbo_stopping_rule_t, fortbo_stopping_state_t, &
         fortbo_stop_reason_name, FORTBO_CONTINUE, FORTBO_STOP_BUDGET, &
         FORTBO_STOP_COST, FORTBO_STOP_WALL_TIME, FORTBO_STOP_TARGET_REACHED, &
