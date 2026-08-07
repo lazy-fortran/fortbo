@@ -452,8 +452,17 @@ and belongs to FortML's parameter registry, not to FortBO.
 - [ ] Implement preference learning and noisy dominance.
 - [ ] Implement active learning, level-set estimation, contour finding,
   feasibility search, and Bayesian calibration/design of experiments.
-- [ ] Add stopping rules based on regret, hypervolume, posterior uncertainty,
-  budget, and wall time with machine-readable diagnostics.
+- [x] Add stopping rules based on target value, stall, posterior uncertainty,
+  acquisition magnitude, budget, cost, and wall time, with machine-readable
+  diagnostics. `src/fortbo_stopping.f90` answers with a *reason*, not a
+  boolean: stopping because the budget ran out and stopping because the
+  posterior collapsed say opposite things about whether to trust the answer, so
+  resource limits are tested first and the reason is recorded. A default rule
+  never stops anything, so a caller who forgets to configure stopping does not
+  silently get a truncated run, and a zero tolerance counts as enabled rather
+  than as disabling. `test_stopping` drives every rule to both sides of its
+  boundary and checks the priority order by constructing states where several
+  rules would fire at once.
 
 ### BO5: GPU and performance
 
