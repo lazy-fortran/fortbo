@@ -218,9 +218,19 @@ Concretely, and binding on every work package below:
 
 ### BO3: candidate optimization and trust regions
 
-- [ ] Use FortOpt L-BFGS-B and multistart as the default local acquisition
-  optimizer, with explicit bounds, fixed categorical choices, and constraint
-  penalties or feasible-region parameterizations.
+- [x] Use FortOpt L-BFGS-B and multistart as the default local acquisition
+  optimizer, with explicit bounds. `src/fortbo_optimize.f90` negates once at
+  the boundary — the acquisition is maximized, L-BFGS-B minimizes — so every
+  acquisition can state its own sign convention and forget the optimizer. A
+  start that stalls is tolerated because acquisition surfaces really are flat
+  far from the data; a run where *no* start converges is an error naming that
+  cause. `test_optimize` checks the result against a dense grid search over the
+  same box, verifies the first-order conditions from the acquisition's own
+  gradient, and confirms that adding starts never worsens the answer and that
+  reordering them does not change it. A surrogate without moment gradients is
+  refused with a pointer to the sampling search rather than differenced.
+- [ ] Add fixed categorical choices and constraint penalties or feasible-region
+  parameterizations to the candidate optimizer.
 - [x] Add Sobol/random/quasi-random initialization, cyclic restarts, and
   deterministic tie handling. Sobol did not exist in FortNum and was added
   there rather than reimplemented here: `fortnum_sobol` builds Joe-Kuo
