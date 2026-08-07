@@ -72,11 +72,12 @@ contains
     !!
     !! `quasi_random` selects the source of the perturbation magnitudes. The
     !! default is the Sobol sequence, which is what the reference implementation
-    !! uses. FortNum's tabulated direction numbers stop at dimension 21, so
-    !! above that this refuses by name instead of quietly substituting
-    !! pseudorandom points: substituting would change the method's sampling
-    !! properties invisibly, in exactly the regime the method was built for. A
-    !! caller who accepts pseudorandom perturbations says so explicitly.
+    !! uses, and it now reaches the dimensions this method exists for: FortNum
+    !! computes its primitive polynomials rather than tabulating them, so
+    !! dimensions into the hundreds are covered. Past the enumeration limit this
+    !! still refuses by name instead of quietly substituting pseudorandom
+    !! points, because substituting would change the sampling properties
+    !! invisibly in exactly the regime that matters.
     subroutine fortbo_turbo_candidates(region, lengthscales, generator, candidates, &
             status, quasi_random, sequence)
         type(fortbo_trust_region_t), intent(in) :: region
@@ -112,10 +113,11 @@ contains
 
         use_quasi = .true.
         if (present(quasi_random)) use_quasi = quasi_random
-        if (use_quasi .and. n_inputs > SOBOL_MAX_DIMENSION .and. .not. present(sequence)) then
+        if (use_quasi .and. n_inputs > SOBOL_MAX_DIMENSION) then
             call status_set(status, FORTNUM_NOT_IMPLEMENTED, &
-                "fortbo turbo: Sobol direction numbers stop at dimension 21; "// &
-                "extend fortnum_sobol or pass quasi_random=.false. explicitly")
+                "fortbo turbo: fortnum_sobol enumerates primitive polynomials "// &
+                "only to degree 13; pass quasi_random=.false. explicitly to "// &
+                "accept pseudorandom perturbations")
             return
         end if
 

@@ -283,6 +283,7 @@ contains
         type(rng_t) :: generator
         type(fortnum_status_t) :: status
         real(dp) :: lengthscales(30), candidates(10, 30), narrow(10, 2)
+        real(dp) :: wide_lengthscales(1200), wide_candidates(4, 1200)
         real(dp) :: samples(5, 2)
         integer :: selected(2), oversized(9)
 
@@ -292,10 +293,29 @@ contains
         call region%initialize(30, 4, status)
         call region%restart(spread(0.5_dp, 1, 30), 1.0_dp, status)
         call fortbo_turbo_candidates(region, lengthscales, generator, candidates, status)
-        call expect(status%code == FORTNUM_NOT_IMPLEMENTED, &
-            "quasi-random beyond the Sobol table is refused", failures)
-        call expect(index(status%msg, "fortnum_sobol") > 0, &
-            "the refusal names the upstream table to extend", failures)
+        call expect(status%code == FORTNUM_OK, &
+            "thirty dimensions are now within the Sobol construction", failures)
+
+        ! Past the enumeration limit the refusal must still be explicit rather
+        ! than a silent substitution.
+        block
+            type(fortbo_trust_region_t) :: huge_region
+            real(dp) :: wide_lengthscales(1200), wide_candidates(4, 1200)
+
+            wide_lengthscales = 1.0_dp
+            call huge_region%initialize(1200, 4, status)
+            call huge_region%restart(spread(0.5_dp, 1, 1200), 1.0_dp, status)
+            call fortbo_turbo_candidates(huge_region, wide_lengthscales, generator, &
+                wide_candidates, status)
+            call expect(status%code == FORTNUM_NOT_IMPLEMENTED, &
+                "quasi-random beyond the enumeration limit is refused", failures)
+            call expect(index(status%msg, "fortnum_sobol") > 0, &
+                "the refusal names the upstream limit", failures)
+            call fortbo_turbo_candidates(huge_region, wide_lengthscales, generator, &
+                wide_candidates, status, quasi_random=.false.)
+            call expect(status%code == FORTNUM_OK, &
+                "an explicit pseudorandom opt-in still works there", failures)
+        end block
 
         call fortbo_turbo_candidates(region, lengthscales, generator, narrow, status)
         call expect(status%code == FORTNUM_DOMAIN_ERROR, &

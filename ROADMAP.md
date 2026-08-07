@@ -320,16 +320,21 @@ across-region bandit; it must not be split into two heuristics.
   claim directly (about twenty coordinates move per candidate at `d = 200`),
   checks selection against a brute-force arg-min, and checks the bandit
   behavior by consequence. The discrete arg-min carries an explicit derivative
-  refusal. Above dimension 21 the quasi-random path refuses by name rather than
-  silently substituting pseudorandom points, naming `fortnum_sobol` as the
-  table to extend.
+  refusal. The quasi-random path now reaches the dimensions the method exists
+  for: FortNum computes its Sobol primitive polynomials rather than tabulating
+  them, so `d = 200` uses genuine low-discrepancy perturbations. Past the
+  degree-13 enumeration limit it still refuses by name instead of silently
+  substituting pseudorandom points.
 - [x] Record a typed refusal for derivative products of the discrete Thompson
   argmin — it is not differentiable and must not pretend to be.
   `fortbo_thompson_gradient_refusal` explains that perturbing the candidates
   and reselecting measures which candidate happened to win, not a derivative.
 - [ ] Reproduce the paper's qualitative ordering on Ackley-200, the 60D rover
   trajectory problem, and the 14D robot pushing problem against a pinned
-  `uber-research/TuRBO` and the BoTorch `turbo_1` tutorial.
+  `uber-research/TuRBO` and the BoTorch `turbo_1` tutorial. The Sobol blocker
+  is cleared — `fortnum_sobol` now covers dimensions into the hundreds with
+  computed primitive polynomials, checked by exact equidistribution in all 200
+  coordinates — so what remains is the harness and the pinned baselines.
 
 #### DTuRBO (derivative-enabled TuRBO)
 
