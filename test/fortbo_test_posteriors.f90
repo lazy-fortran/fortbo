@@ -15,7 +15,7 @@ module fortbo_test_posteriors
     use fortnum_rng, only: rng_t, rng_normal
     use fortbo_posterior, only: fortbo_posterior_t, FORTBO_CAP_MOMENTS, &
         FORTBO_CAP_COVARIANCE, FORTBO_CAP_JOINT_SAMPLE, FORTBO_CAP_REPARAM_SAMPLE, &
-        FORTBO_CAP_LOG_DENSITY
+        FORTBO_CAP_LOG_DENSITY, FORTBO_CAP_MOMENT_GRADIENT
     implicit none
     private
 
@@ -26,6 +26,7 @@ module fortbo_test_posteriors
 
     public :: demo_posterior_t
     public :: moments_only_posterior_t
+    public :: curved_posterior_t
     public :: demo_mean
     public :: demo_kernel
 
@@ -40,6 +41,19 @@ module fortbo_test_posteriors
         procedure, public :: reparam_sample => demo_reparam_sample
         procedure, public :: log_density => demo_log_density
     end type demo_posterior_t
+
+    !! A posterior whose mean and standard deviation both curve with the query,
+    !! so a chain-rule gradient through it is not trivially constant. Both
+    !! moments and their gradients are elementary closed forms, which makes the
+    !! finite-difference oracle in the acquisition test meaningful.
+    type, extends(fortbo_posterior_t), public :: curved_posterior_t
+        integer :: dimension = 1
+    contains
+        procedure, public :: n_inputs => curved_n_inputs
+        procedure, public :: capabilities => curved_capabilities
+        procedure, public :: moments => curved_moments
+        procedure, public :: moment_gradient => curved_moment_gradient
+    end type curved_posterior_t
 
     type, extends(fortbo_posterior_t), public :: moments_only_posterior_t
         integer :: dimension = 1
@@ -190,6 +204,57 @@ contains
             - 0.5_dp*real(n, dp)*LOG_TWO_PI
         call status_set(status, FORTNUM_OK, "")
     end subroutine demo_log_density
+
+    pure integer function curved_n_inputs(self) result(n)
+        class(curved_posterior_t), intent(in) :: self
+
+        n = self%dimension
+    end function curved_n_inputs
+
+    pure integer function curved_capabilities(self) result(caps)
+        class(curved_posterior_t), intent(in) :: self
+
+        caps = FORTBO_CAP_MOMENTS + FORTBO_CAP_MOMENT_GRADIENT
+        if (self%dimension < 1) caps = 0
+    end function curved_capabilities
+
+    !! mean(x) = sum(x_j^2),  sd(x) = sqrt(1 + (sum x_j)^2).
+    subroutine curved_moments(self, points, mean, variance, status)
+        class(curved_posterior_t), intent(in) :: self
+        real(dp), intent(in) :: points(:, :)
+        real(dp), intent(out) :: mean(:)
+        real(dp), intent(out) :: variance(:)
+        type(fortnum_status_t), intent(out) :: status
+        integer :: i
+
+        call check_points(self%dimension, points, size(mean), status)
+        if (status%code /= FORTNUM_OK) return
+        do i = 1, size(points, 1)
+            mean(i) = sum(points(i, :)**2)
+            variance(i) = 1.0_dp + sum(points(i, :))**2
+        end do
+        call status_set(status, FORTNUM_OK, "")
+    end subroutine curved_moments
+
+    subroutine curved_moment_gradient(self, points, mean_gradient, sd_gradient, status)
+        class(curved_posterior_t), intent(in) :: self
+        real(dp), intent(in) :: points(:, :)
+        real(dp), intent(out) :: mean_gradient(:, :)
+        real(dp), intent(out) :: sd_gradient(:, :)
+        type(fortnum_status_t), intent(out) :: status
+        real(dp) :: total, standard_deviation
+        integer :: i
+
+        call check_points(self%dimension, points, size(mean_gradient, 1), status)
+        if (status%code /= FORTNUM_OK) return
+        do i = 1, size(points, 1)
+            total = sum(points(i, :))
+            standard_deviation = sqrt(1.0_dp + total**2)
+            mean_gradient(i, :) = 2.0_dp*points(i, :)
+            sd_gradient(i, :) = total/standard_deviation
+        end do
+        call status_set(status, FORTNUM_OK, "")
+    end subroutine curved_moment_gradient
 
     pure integer function moments_only_n_inputs(self) result(n)
         class(moments_only_posterior_t), intent(in) :: self

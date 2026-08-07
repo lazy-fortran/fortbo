@@ -160,9 +160,24 @@ Concretely, and binding on every work package below:
 
 ### BO1: acquisition catalog
 
-- [ ] Implement expected improvement, probability of improvement, upper
-  confidence bound, knowledge gradient, entropy search, predictive entropy,
-  and noisy/ log expected improvement.
+- [x] Implement the analytic family: expected improvement, log expected
+  improvement, probability of improvement, and the confidence bound, each with
+  its moment derivatives and chain-rule input gradients.
+  `app/gen_acquisition_leaf.f90` in FortSym states Phi and phi once and derives
+  EI, PI, and all four first-order products; `src/generated` carries the
+  emitted leaf with its FortSym revision. `src/fortbo_acquisition.f90` owns
+  only what the symbolic form cannot express: the deterministic limit at zero
+  variance, and the Mills-ratio asymptotic branch that keeps log EI finite and
+  accurate where EI itself underflows. `test_acquisition` checks the values
+  against Simpson quadrature of their defining integrals and every gradient
+  against central differences. Emitting a `pure` leaf required an additive
+  `pure_procedure` option in the FortSym kernel emitter, fixed upstream rather
+  than worked around here.
+- [ ] Implement knowledge gradient, entropy search, predictive entropy search,
+  and noisy expected improvement. Knowledge gradient and the entropy family
+  need the one-dimensional inner optimization and the expectation over
+  fantasized observations that BO1's Monte Carlo item provides, so they land
+  after it rather than before.
 - [ ] Implement Monte Carlo acquisition evaluation with common random numbers,
   antithetic draws, reparameterized posterior samples, and exact gradients.
 - [ ] Implement batch qEI/qNEI, qUCB, qKG, Thompson sampling, and fantasy
