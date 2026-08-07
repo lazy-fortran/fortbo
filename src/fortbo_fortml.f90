@@ -25,7 +25,7 @@ module fortbo_fortml
     use fortnum_kinds, only: dp
     use fortnum_status, only: fortnum_status_t, status_set, FORTNUM_OK, &
         FORTNUM_DOMAIN_ERROR, FORTNUM_NOT_IMPLEMENTED
-    use fortml_kernels, only: kernel_t, KERNEL_MATERN52, KERNEL_RBF
+    use fortml_kernels, only: kernel_t, KERNEL_MATERN52
     use fortml_gaussian_process, only: gp_regression_t
     use fortml_derivative_gaussian_process, only: gp_derivative_regression_t
     use fortbo_posterior, only: fortbo_posterior_t, FORTBO_CAP_MOMENTS, &
