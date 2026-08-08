@@ -472,8 +472,33 @@ Concretely, and binding on every work package below:
   because restricting the real joint to one output's rows is exact — the test
   requires the covariance diagonal to equal the reported marginals, which is
   what catches a wrong stride where symmetry alone would not.
-- [ ] Adapt the FortML multi-task and deep-kernel GPs, which have no posterior
-  contract route yet.
+- [x] Adapt the FortML multi-task and deep-kernel GPs, which have no posterior
+  contract route yet. `fortbo_structured.f90` is that route; the modelling
+  stays in FortML where it is generic.
+
+  The deep-kernel GP did not exist upstream at all, so it was written first:
+  `fortml_deep_kernel_gp.f90`, from Wilson et al., *Deep Kernel Learning*
+  (arXiv:1511.02222), fetched into fortml-bench provenance and read. Equation
+  (5) composes a base kernel with a neural feature map; the weights are
+  learned jointly with the base hyperparameters through the marginal
+  likelihood, and `weight_gradient` implements the paper's own factorization
+  -- equation (7) contracted with dK/dg, then backpropagated -- rather than
+  differencing. The finite-difference oracle immediately caught a real error:
+  the first version accumulated only the first-argument derivative, on the
+  wrong reasoning that the transposed pair would supply the rest, and was
+  exactly half the true gradient. KISS-GP is deliberately not implemented, so
+  the model is exact and carries a dense GP's cubic cost.
+
+  **Multi-task needs a decision the model does not make.** A multi-output GP
+  is a posterior over a vector and an acquisition is a function of a scalar,
+  so `target_output` is required rather than defaulted -- a default would
+  silently optimize the first output of a three-output model and look
+  entirely normal. The variance reported is that output's own marginal from
+  the joint covariance diagonal; what multi-task buys is a sharper posterior
+  on the target from the other tasks' data, not a different notion of
+  uncertainty. Neither adapter claims moment gradients, so a gradient-based
+  search gets a refusal by name and can fall back to
+  `fortbo_search_acquisition`.
 - [x] Add heteroskedastic, Student-t, and classification surrogate likelihood
   adapters. As with the sparse family, the *models* live in FortML —
   `fortml_heteroskedastic_gp.f90` is new generic code, written there rather than
