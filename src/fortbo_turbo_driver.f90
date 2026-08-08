@@ -88,6 +88,10 @@ module fortbo_turbo_driver
         real(dp) :: improvement_tolerance = 0.0_dp
         !! Draw candidates from a Sobol sequence rather than the generator.
         logical :: quasi_random = .true.
+        !! Optional caller-owned candidate pool for cross-language replay. The
+        !! rows are unit-cube candidates and are scored by the normal posterior
+        !! and acquisition path; supplying them does not bypass selection.
+        real(dp), allocatable :: frozen_candidates(:, :)
     end type fortbo_turbo_config_t
 
     type :: fortbo_turbo_driver_t
@@ -145,6 +149,16 @@ contains
                     any(config%lengthscales <= 0.0_dp)) then
                 call status_set(status, FORTNUM_DOMAIN_ERROR, &
                     "fortbo turbo driver: ARD lengthscales must match inputs")
+                return
+            end if
+        end if
+        if (allocated(config%frozen_candidates)) then
+            if (size(config%frozen_candidates, 1) < config%batch_size .or. &
+                    size(config%frozen_candidates, 2) /= n_inputs .or. &
+                    any(config%frozen_candidates < 0.0_dp) .or. &
+                    any(config%frozen_candidates > 1.0_dp)) then
+                call status_set(status, FORTNUM_DOMAIN_ERROR, &
+                    "fortbo turbo driver: frozen candidate pool is invalid")
                 return
             end if
         end if
@@ -269,6 +283,9 @@ contains
 
         ! Every remaining slot goes through the pooled Thompson bandit.
         per_region = fortbo_candidate_count(self%n_inputs)
+        if (allocated(self%config%frozen_candidates)) then
+            per_region = size(self%config%frozen_candidates, 1)
+        end if
         allocate (lengthscales(self%n_inputs))
         if (self%config%use_ard) then
             lengthscales = self%config%lengthscales
@@ -298,9 +315,21 @@ contains
                 call place_region(self, k, status)
                 if (status%code /= FORTNUM_OK) return
             end if
-            call fortbo_turbo_candidates(self%regions(k), lengthscales, &
-                self%generator, candidates, status, &
-                quasi_random=self%config%quasi_random)
+            if (allocated(self%config%frozen_candidates)) then
+                candidates = self%config%frozen_candidates
+                do i = 1, per_region
+                    if (.not. self%regions(k)%contains_point(candidates(i, :), &
+                            lengthscales)) then
+                        call status_set(status, FORTNUM_DOMAIN_ERROR, &
+                            "fortbo turbo driver: frozen candidate lies outside trust region")
+                        return
+                    end if
+                end do
+            else
+                call fortbo_turbo_candidates(self%regions(k), lengthscales, &
+                    self%generator, candidates, status, &
+                    quasi_random=self%config%quasi_random)
+            end if
             if (status%code /= FORTNUM_OK) return
             ! Standardize the region's observations before fitting, then map
             ! the moments back. This is not cosmetic. A GP with a zero mean

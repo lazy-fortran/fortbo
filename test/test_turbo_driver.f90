@@ -32,6 +32,7 @@ program test_turbo_driver
     call check_bandit_reallocates(failures)
     call check_restart_clears_history(failures)
     call check_replayable(failures)
+    call check_frozen_candidate_pool(failures)
     call check_refusals(failures)
 
     if (failures == 0) then
@@ -331,6 +332,48 @@ contains
         call expect(maxval(abs(points_a - points_b)) > 0.0_dp, &
             "a different seed gives a different run", failures)
     end subroutine check_replayable
+
+    !! A caller-supplied candidate pool is the cross-language replay escape
+    !! hatch: the posterior and selection still run, but the candidate bits
+    !! come from the frozen pool rather than from FortNum's Sobol stream.
+    subroutine check_frozen_candidate_pool(failures)
+        integer, intent(inout) :: failures
+        type(fortbo_turbo_config_t) :: config
+        type(fortbo_turbo_driver_t) :: driver
+        type(fortnum_status_t) :: status
+        real(dp) :: point(1, 2), value(1), pool(4, 2)
+        integer :: region(1), i
+        logical :: found
+
+        config%n_regions = 1
+        config%batch_size = 1
+        config%n_initial = 1
+        allocate (config%frozen_candidates(4, 2))
+        pool(1, :) = [0.45_dp, 0.45_dp]
+        pool(2, :) = [0.45_dp, 0.55_dp]
+        pool(3, :) = [0.55_dp, 0.45_dp]
+        pool(4, :) = [0.55_dp, 0.55_dp]
+        config%frozen_candidates = pool
+
+        call driver%initialize(2, config, 7, status)
+        call expect(status%code == FORTNUM_OK, &
+            "a frozen candidate pool is accepted", failures)
+        point(1, :) = [0.5_dp, 0.5_dp]
+        region = 1
+        value = 0.0_dp
+        call driver%tell(point, region, value, status)
+        call expect(status%code == FORTNUM_OK, &
+            "the frozen-pool initial observation is recorded", failures)
+        call driver%ask(point, region, status)
+        call expect(status%code == FORTNUM_OK, &
+            "selection from a frozen pool succeeds", failures)
+
+        found = .false.
+        do i = 1, size(pool, 1)
+            if (maxval(abs(point(1, :) - pool(i, :))) == 0.0_dp) found = .true.
+        end do
+        call expect(found, "selection returns one of the frozen candidates", failures)
+    end subroutine check_frozen_candidate_pool
 
     subroutine check_refusals(failures)
         integer, intent(inout) :: failures
