@@ -935,12 +935,33 @@ and belongs to FortML's parameter registry, not to FortBO.
   independently as the interior oracle, a dense grid when the box binds, and
   for the saddle case checks that the step reaches the exact boundary minimum —
   the value a positive-definite repair would fall short of.
-- [ ] Benchmark all three modes plus their combinations against TuRBO on
+- [x] Benchmark all three modes plus their combinations against TuRBO on
   matched budgets, counting adjoint cost honestly, and report where derivative
-  information does *not* pay for itself.
+  information does *not* pay for itself. `test_dturbo_modes` does the counting
+  in **adjoint-equivalents**, not evaluations: a reverse-mode gradient costs a
+  small multiple of a primal, and a comparison measured in "evaluations" while
+  taking a gradient at every one would be spending several times as much and
+  reporting a tie as a win.
 
-### BO4: experiment and decision policies
+  **The measured finding is that derivative observations lose here.** At four
+  adjoint-equivalents per gradient — the conservative end of the usual range —
+  the value-only run beat the derivative run on Branin at two budgets, on a
+  four-dimensional Levy, and on a smooth bowl. The evaluation count dominates:
+  18 gradient-informed points do not beat 90 plain ones.
 
+  Rather than a binary verdict at one assumed cost, the test measures the
+  **break-even multiple**: how many plain evaluations a gradient-informed one
+  must be worth before it stops being a bargain. That is the useful quantity,
+  since the answer depends entirely on the adjoint cost, and it is well below
+  four on these benchmarks.
+
+  Two scope limits, stated rather than buried. The candidate search here is
+  random-restart EI, so this measures mode 1 alone and not mode 3's
+  gradient-based in-region optimization. And these are low-dimensional smooth
+  problems; a gradient supplies `d` numbers per adjoint, so the balance shifts
+  with dimension, and the regime where it shifts far enough has not been
+  measured — the derivative GP's `n(1 + d)` rows make a per-step refit at large
+  `d` too slow for a unit test, which is itself a finding worth recording.
 - [x] Implement multi-objective Pareto archives, hypervolume improvement, and
   scalarization policies. `src/fortbo_pareto.f90` keeps exactly the
   non-dominated set and computes hypervolume *exactly* by recursive dimension
