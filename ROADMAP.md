@@ -108,7 +108,7 @@ external FortAD `fortad_reverse.f90` with an nvfortran internal compiler error
    published stochastic training and paired action are still unchecked; until
    those gates pass, label the result `fortbo-exact-derivative` or
    `fortbo-variational-derivative` as appropriate.
-4. The current audit host has nvfortran/nvc and two allocated RTX 5060 Ti
+4. The current audit host has nvfortran/nvc and two visible RTX 5060 Ti
    devices, and the standalone FortBO device probe now has captured identity
    and kernel-residency evidence. A whole-package OpenACC build is still
    blocked by the external FortAD nvfortran compiler error recorded above, so
