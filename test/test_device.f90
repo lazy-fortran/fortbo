@@ -235,6 +235,16 @@ contains
         call expect(status%code == FORTNUM_DOMAIN_ERROR, &
             "masking every candidate is refused rather than returning nothing", &
             failures)
+
+        call fortbo_device_turbo_select(mean, sd, draw, mask, region_of, &
+            device_chosen, device_region, device_value, executed, status)
+        if (fortbo_device_available()) then
+            call expect(status%code == FORTNUM_DOMAIN_ERROR, &
+                "the device path refuses an all-masked candidate pool", failures)
+            call expect(executed == FORTBO_EXECUTED_HOST, &
+                "an all-masked device request does not claim device execution", &
+                failures)
+        end if
     end subroutine check_resident_inner_loop
 
     subroutine check_refusals(failures)
