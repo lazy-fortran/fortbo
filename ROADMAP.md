@@ -1116,9 +1116,32 @@ into the headline number.
   at the centre of its box — the `[-5,10]` domain is deliberately asymmetric,
   and a fixture that silently recentred would place the answer exactly where a
   search starts.
-- [ ] Add the 60D rover trajectory and 14D robot pushing fixtures. Both are
-  simulator-backed rather than closed form, so their gradients need FortAD
-  through the simulator rather than a written expression.
+- [x] Add the 60D rover trajectory fixture. `src/fortbo_rover.f90` implements
+  the reward the TuRBO paper states in appendix F.2 — a B-spline through 30
+  planar control points, `-20` per collision, `-10` times the L1 endpoint
+  distances, plus `5` — read from the paper rather than recalled.
+
+  **The obstacle map is ours, and that is stated rather than glossed.** The
+  paper gives the reward and cites Wang et al. for the terrain; the layout is
+  not in the paper, so reproducing the published *numbers* is not possible from
+  it. Inventing a map and calling the result "the rover problem" would produce
+  scores that look comparable to the literature and are not. What is reproduced
+  is the structure, which is what makes it a useful 60-dimensional test, and any
+  claim against published numbers has to say which map it used.
+
+  The fixture **refuses a gradient by name**. Its collision term is piecewise
+  constant, so the derivative is zero almost everywhere and undefined on the
+  obstacle boundaries; a finite difference would return zero across most of the
+  domain and something enormous at a crossing, neither of which is a gradient.
+
+  `test_rover` verifies the reward against the formula on trajectories whose
+  terms are known by hand, and pins two properties a weaker fixture would fail:
+  the straight line from start to goal must collide, or the obstacle map is
+  decorative and the problem reduces to writing two endpoints in sixty numbers;
+  and moving the *interior* control points must change the objective, which an
+  implementation reading only its endpoints would not do.
+- [ ] Add the 14D robot pushing fixture, which needs a rigid-body physics
+  simulator rather than a closed-form reward.
 - [x] Record simple regret, cumulative regret, best feasible value, constraint
   violations, acquisition evaluations, gradient evaluations, ESS for sampled
   policies, memory, transfers, and wall time. `src/fortbo_metrics.f90` keeps one
