@@ -67,7 +67,8 @@ def check(manifest_path: Path) -> None:
              f"harvest digest mismatch: expected {archive_pin.get('sha256')}, "
              f"got {actual_digest}")
 
-    missing_inputs = manifest.get("missing_inputs", [])
+    missing_inputs = manifest.get(
+        "harvest_missing_inputs", manifest.get("missing_inputs", []))
     _require(len(missing_inputs) == 4,
              "manifest must keep the four declared Glas missing-input classes")
     source_names = _executable_input_names(names)

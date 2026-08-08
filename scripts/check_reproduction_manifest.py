@@ -7,6 +7,7 @@ import argparse
 import hashlib
 import json
 import re
+import subprocess
 import sys
 import tarfile
 from pathlib import Path
@@ -14,7 +15,8 @@ from typing import Any, Dict, Iterable, List, Mapping, Optional, Tuple
 
 
 SHA256 = re.compile(r"^[0-9a-f]{64}$")
-KINDS = {"file", "archive_member"}
+GIT_REVISION = re.compile(r"^[0-9a-f]{40}$")
+KINDS = {"file", "archive_member", "git"}
 STATUSES = {"ready-for-replay", "ready-for-control-audit", "literature-only"}
 RESULT_LABELS = {
     "fortbo-value-only",
@@ -71,14 +73,24 @@ def load_manifest(path: Path) -> Mapping[str, Any]:
                  f"duplicate source id: {artifact_id}")
         source_ids.add(artifact_id)
         kind = artifact.get("kind")
-        _require(kind in KINDS, f"{prefix}.kind must be file or archive_member")
+        _require(kind in KINDS,
+                 f"{prefix}.kind must be file, archive_member, or git")
         digest = artifact.get("sha256")
         _require(isinstance(digest, str) and SHA256.fullmatch(digest),
                  f"{prefix}.sha256 must be a lowercase SHA-256 digest")
-        if kind == "file":
+        if kind in {"file", "git"}:
             _require(isinstance(artifact.get("path"), str) and artifact["path"],
                      f"{prefix}.path is required")
-        else:
+        if kind == "git":
+            _require(isinstance(artifact.get("revision"), str)
+                     and GIT_REVISION.fullmatch(artifact["revision"]),
+                     f"{prefix}.revision must be a full Git object id")
+            required_paths = artifact.get("required_paths", [])
+            _require(isinstance(required_paths, list)
+                     and all(isinstance(item, str) and item
+                             for item in required_paths),
+                     f"{prefix}.required_paths must be a list of paths")
+        elif kind == "archive_member":
             _require(isinstance(artifact.get("archive"), str) and artifact["archive"],
                      f"{prefix}.archive is required")
             _require(isinstance(artifact.get("member"), str) and artifact["member"],
@@ -108,9 +120,30 @@ def _hash_stream(stream: Any) -> str:
     return digest.hexdigest()
 
 
+def _git_output(path: Path, *arguments: str) -> bytes:
+    try:
+        result = subprocess.run(
+            ["git", "-C", str(path), *arguments],
+            check=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+    except (OSError, subprocess.CalledProcessError) as error:
+        detail = getattr(error, "stderr", b"").decode(errors="replace").strip()
+        raise ManifestError(
+            f"cannot inspect Git source {path}: {detail or error}") from error
+    return result.stdout
+
+
+def _hash_git_tree(path: Path) -> str:
+    return hashlib.sha256(
+        _git_output(path, "ls-tree", "-r", "--full-tree", "HEAD")
+    ).hexdigest()
+
+
 def _source_path(artifact: Mapping[str, Any], by_id: Mapping[str, Mapping[str, Any]],
                  root: Optional[Path]) -> Path:
-    if artifact["kind"] == "file":
+    if artifact["kind"] in {"file", "git"}:
         return _resolve(artifact["path"], root)
     archive = by_id[artifact["archive"]]
     return _resolve(archive["path"], root)
@@ -127,7 +160,8 @@ def verify_sources(manifest: Mapping[str, Any], root: Optional[Path],
 
     for artifact in manifest["source"]:
         path = _source_path(artifact, by_id, root)
-        if not path.is_file():
+        available = path.is_dir() if artifact["kind"] == "git" else path.is_file()
+        if not available:
             print(f"MISSING {artifact['id']}: {path}")
             missing += 1
             continue
@@ -135,7 +169,7 @@ def verify_sources(manifest: Mapping[str, Any], root: Optional[Path],
             if artifact["kind"] == "file":
                 with path.open("rb") as stream:
                     actual = _hash_stream(stream)
-            else:
+            elif artifact["kind"] == "archive_member":
                 with tarfile.open(path, mode="r:") as archive:
                     try:
                         member = archive.getmember(artifact["member"])
@@ -149,6 +183,24 @@ def verify_sources(manifest: Mapping[str, Any], root: Optional[Path],
                             f"{artifact['id']}: archive member is not a regular file")
                     with extracted:
                         actual = _hash_stream(extracted)
+            else:
+                revision = _git_output(path, "rev-parse", "HEAD").decode().strip()
+                if revision != artifact["revision"]:
+                    print(f"MISMATCH {artifact['id']}: expected revision "
+                          f"{artifact['revision']}, got {revision}")
+                    failures += 1
+                    continue
+                if _git_output(path, "status", "--porcelain",
+                                "--untracked-files=all"):
+                    print(f"MISMATCH {artifact['id']}: Git checkout is dirty")
+                    failures += 1
+                    continue
+                for required_path in artifact.get("required_paths", []):
+                    if not (path / required_path).is_file():
+                        raise ManifestError(
+                            f"{artifact['id']}: required path is absent: "
+                            f"{required_path}")
+                actual = _hash_git_tree(path)
         except (OSError, tarfile.TarError, ManifestError) as error:
             print(f"ERROR {artifact['id']}: {error}")
             failures += 1

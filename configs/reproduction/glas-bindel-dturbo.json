@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "config_id": "glas-bindel-dturbo-adamcv",
-  "config_revision": "2026-08-08",
+  "config_revision": "2026-08-09",
   "status": "literature-only",
   "fortbo_result_label": "fortbo-exact-derivative",
   "published_derivative_parity": "blocked",
@@ -17,10 +17,27 @@
       "kind": "file",
       "path": "/home/ert/data/simsopt-dfo-harvest/coil-dturbo-paper-2110.07464/2110.07464.tar",
       "sha256": "61e1dc8912ddb4825b6ac5ad5d26c2a0d86280fb71d86f2ef3991dfb5c40a693"
+    },
+    {
+      "id": "focus_source",
+      "kind": "git",
+      "path": "/home/ert/code/focus",
+      "revision": "e4bb49b0632c650e326616912e274feb7781a60d",
+      "sha256": "de28fd32e76c4deb5baddee2369696c6a085c97ed54d7343aa27c809fdd1ad97",
+      "required_paths": [
+        "sources/stochastic.f90",
+        "examples/w7x_high_mirror/w7x_high_mirror.input",
+        "examples/w7x_high_mirror/w7x_high_mirror.boundary"
+      ]
     }
   ],
-  "missing_inputs": [
+  "harvest_missing_inputs": [
     "FOCUS source",
+    "W7-X input",
+    "periodic GP/Fourier perturbation covariance",
+    "optimizer source and experiment seed ledger"
+  ],
+  "missing_inputs": [
     "W7-X input",
     "periodic GP/Fourier perturbation covariance",
     "optimizer source and experiment seed ledger"

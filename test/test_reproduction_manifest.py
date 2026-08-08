@@ -148,6 +148,79 @@ class ReproductionManifestTests(unittest.TestCase):
             result = self.run_checker(manifest, "--metadata-only")
             self.assertEqual(result.returncode, 0, result.stderr)
 
+    def test_git_checkout_pin_passes_and_requires_clean_required_files(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            directory = Path(temporary) / "source"
+            directory.mkdir()
+            subprocess.run(["git", "init", "--quiet", str(directory)], check=True)
+            subprocess.run(["git", "-C", str(directory), "config", "user.email",
+                            "test@example.invalid"], check=True)
+            subprocess.run(["git", "-C", str(directory), "config", "user.name",
+                            "Manifest Test"], check=True)
+            (directory / "required.txt").write_text("source\n", encoding="utf-8")
+            subprocess.run(["git", "-C", str(directory), "add", "required.txt"],
+                           check=True)
+            subprocess.run(["git", "-C", str(directory), "commit", "--quiet",
+                            "-m", "source"], check=True)
+            revision = subprocess.check_output(
+                ["git", "-C", str(directory), "rev-parse", "HEAD"], text=True).strip()
+            tree = subprocess.check_output(
+                ["git", "-C", str(directory), "ls-tree", "-r", "--full-tree", "HEAD"])
+            manifest = {
+                "schema_version": 1,
+                "config_id": "git-fixture",
+                "config_revision": "test",
+                "source": [{
+                    "id": "git-source",
+                    "kind": "git",
+                    "path": str(directory),
+                    "revision": revision,
+                    "sha256": digest(tree),
+                    "required_paths": ["required.txt"],
+                }],
+                "parameters": {},
+            }
+            manifest_path = Path(temporary) / "manifest.json"
+            manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+            result = self.run_checker(manifest_path)
+            self.assertEqual(result.returncode, 0, result.stderr + result.stdout)
+            self.assertIn("OK git-source", result.stdout)
+
+    def test_git_checkout_revision_mismatch_fails(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            directory = Path(temporary) / "source"
+            directory.mkdir()
+            subprocess.run(["git", "init", "--quiet", str(directory)], check=True)
+            subprocess.run(["git", "-C", str(directory), "config", "user.email",
+                            "test@example.invalid"], check=True)
+            subprocess.run(["git", "-C", str(directory), "config", "user.name",
+                            "Manifest Test"], check=True)
+            (directory / "required.txt").write_text("source\n", encoding="utf-8")
+            subprocess.run(["git", "-C", str(directory), "add", "required.txt"],
+                           check=True)
+            subprocess.run(["git", "-C", str(directory), "commit", "--quiet",
+                            "-m", "source"], check=True)
+            tree = subprocess.check_output(
+                ["git", "-C", str(directory), "ls-tree", "-r", "--full-tree", "HEAD"])
+            manifest = {
+                "schema_version": 1,
+                "config_id": "git-fixture",
+                "config_revision": "test",
+                "source": [{
+                    "id": "git-source",
+                    "kind": "git",
+                    "path": str(directory),
+                    "revision": "0" * 40,
+                    "sha256": digest(tree),
+                }],
+                "parameters": {},
+            }
+            manifest_path = Path(temporary) / "manifest.json"
+            manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+            result = self.run_checker(manifest_path)
+            self.assertEqual(result.returncode, 1)
+            self.assertIn("MISMATCH git-source", result.stdout)
+
 
 if __name__ == "__main__":
     unittest.main()

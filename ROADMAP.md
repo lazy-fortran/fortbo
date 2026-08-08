@@ -64,6 +64,14 @@ data-informed smoke produced eight successful calls in about 275 seconds on
 this host. These are bridge checks, not F3 rows; the full 256-call paired
 campaign remains an explicitly scheduled external computation.
 
+The FOCUS source was recovered from its public Git repository and pinned at
+`e4bb49b0632c650e326616912e274feb7781a60d`, with the stochastic source and
+W7-X high-mirror example files present. An isolated GNU Fortran/OpenMPI/HDF5
+build produced `xfocus`; a bounded W7-X initialization reached surface
+initialization but then failed in an upstream GNU Fortran format string. This
+recovers source/build evidence, not the paper's exact W7-X input, perturbation
+covariance, optimizer implementation, or seed ledger.
+
 ## Active blockers
 
 1. The Landreman archive and its historical Slurm job are now pinned in the
@@ -71,9 +79,13 @@ campaign remains an explicitly scheduled external computation.
    and four GPUs. The archived driver still names an absolute `/pscratch` data
    path, so a live exact replay requires a declared path remap and an allocated
    equivalent environment; the deviation is recorded rather than hidden.
-2. The Glas et al. harvest contains manuscript and figures, but no FOCUS
-   source, W7-X input, perturbation covariance, or optimizer ledger. Its
-   reproduction is literature-only until those artifacts are recovered.
+2. The Glas et al. harvest contains manuscript and figures, but no paper-
+   specific W7-X input, perturbation covariance, or optimizer ledger. FOCUS
+   source is now pinned separately and builds in isolation; its bundled
+   high-mirror example is not evidence of the paper's exact inputs, and its
+   GNU Fortran initialization smoke currently hits an upstream format-string
+   failure. The reproduction remains literature-only until the remaining
+   artifacts and runtime parity are recovered.
 3. Published DTuRBO uses an inducing-point stochastic variational GP with
    paired function and gradient observations. FortBO now has a checked local
    fixed-hyperparameter inducing derivative posterior, plus an exact dense
@@ -105,6 +117,7 @@ Frozen artifacts:
 | Landreman VMEC input inside the archive | 88318d8b2ab17741110a11bc5141ecfbbd862eb5ff02b47f808bc527c6bf263e |
 | Glas/Bindel paper | 24cc2600e8b20b74b80b96ce294286c66bea19c2e96808e516abae5f960f8d0b |
 | Glas/Bindel harvest | 61e1dc8912ddb4825b6ac5ad5d26c2a0d86280fb71d86f2ef3991dfb5c40a693 |
+| FOCUS source tree at develop/e4bb49b | de28fd32e76c4deb5baddee2369696c6a085c97ed54d7343aa27c809fdd1ad97 |
 | B5 TuRBO-1 control comparison | f22030f45d8c6e98e247a6f63a5af0bc812d18cb3ee4205462376f55c170c4b9 |
 | B5 TuRBO-m control comparison | 4d6f2df3785f350a8b87fb1cfed443225109e1c657b1b9b139bffc65768d1dcd |
 | B5 data-informed transform JSON | 951c2b6f8e0f8dd1dee0297aca91645900ce4044f104e3f5132fbad523e68340 |
@@ -183,8 +196,10 @@ Preserve the W7-X-like setup:
 - local control: 50,000 gradient calls, ten gradients per step, eta=0.04,
   gamma=0.1, beta1=beta2=0.95, epsilon=1e-10.
 
-The paper-level command becomes executable after the missing FOCUS artifacts
-are recovered:
+The paper-level command remains non-executable because the paper-specific
+W7-X input, perturbation covariance, optimizer source, and seed ledger are
+still missing. The recovered FOCUS checkout is a source/build reference, not
+those missing artifacts:
 
 ~~~
 cd /home/ert/data/simsopt-dfo-harvest/coil-dturbo-paper-2110.07464/recovered-focus
@@ -298,9 +313,9 @@ device identity and kernel-residency evidence.
   then a labeled resource-matched GPU scaling row.
 - [ ] F5: recover FOCUS artifacts and implement/check the inducing variational
   derivative model and paired action. The local fixed-hyperparameter model,
-  adapter/driver path, and independent oracle are shipped; FOCUS recovery,
-  stochastic training parity, and the published paired-action gate remain
-  open.
+  adapter/driver path, independent oracle, and pinned/build-checked FOCUS
+  source are shipped; the paper-specific inputs, stochastic training parity,
+  and published paired-action gate remain open.
 - [ ] F6: run both Glas/Bindel perturbation amplitudes, global/local stages,
   SAA/BFGS control, and out-of-sample validation.
 - [ ] F7: publish ledgers, parity tables, utilization, cost breakdowns,
