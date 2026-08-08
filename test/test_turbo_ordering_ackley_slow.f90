@@ -13,7 +13,7 @@ program test_turbo_ordering_ackley_slow
 
     failures = 0
     call check_ordering(PROBLEM_ACKLEY, "ackley-200", failures, &
-        single_region_only=.true., report_only=.true., &
+        single_region_only=.true., &
         single_median=fortbo_best)
     call check_against_pinned_reference(fortbo_best, failures)
 

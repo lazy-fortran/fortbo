@@ -869,7 +869,7 @@ Concretely, and binding on every work package below:
   argmin — it is not differentiable and must not pretend to be.
   `fortbo_thompson_gradient_refusal` explains that perturbing the candidates
   and reselecting measures which candidate happened to win, not a derivative.
-- [x] Reproduce the paper's qualitative ordering on Ackley-200, the 60D rover
+- [ ] Reproduce the paper's qualitative ordering on Ackley-200, the 60D rover
   trajectory problem, and the 14D robot pushing problem against a pinned
   `uber-research/TuRBO` and the BoTorch `turbo_1` tutorial. The Sobol blocker
   is cleared — `fortnum_sobol` now covers dimensions into the hundreds with
