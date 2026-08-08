@@ -31,6 +31,12 @@ region-partitioned candidate pools, with independent coordinate and trust-state
 gates. These are local parity prerequisites, not evidence that the archived
 Landreman runtime or published DTuRBO model has been reproduced.
 
+FortBO now also has a fixed-hyperparameter inducing variational derivative
+posterior. It retains all usable value rows, appends every complete gradient
+row, exposes covariance/joint-sample/moment-gradient capabilities, and is
+checked against an independent scalar variational oracle. The published
+stochastic training procedure and paired DTuRBO action remain unchecked.
+
 The external B5 control ledgers are now materialized from Git LFS and pass the
 FortBO-side audit: ten TuRBO-1 ledgers (raw and data-informed) plus ten
 data-informed four-region TuRBO-m ledgers, all at 256 calls and eight workers.
@@ -47,10 +53,12 @@ FortBO B5 rows are still pending, so this closes control evidence only.
    source, W7-X input, perturbation covariance, or optimizer ledger. Its
    reproduction is literature-only until those artifacts are recovered.
 3. Published DTuRBO uses an inducing-point stochastic variational GP with
-   paired function and gradient observations. FortBO currently has an exact
-   dense derivative GP and a Newton-BO-style derivative trust-region policy.
-   Until the published model is implemented and checked, label the result
-   fortbo-exact-derivative.
+   paired function and gradient observations. FortBO now has a checked local
+   fixed-hyperparameter inducing derivative posterior, plus an exact dense
+   derivative GP and Newton-BO-style derivative trust-region policy. The
+   published stochastic training and paired action are still unchecked; until
+   those gates pass, label the result `fortbo-exact-derivative` or
+   `fortbo-variational-derivative` as appropriate.
 4. The audited hosts expose gfortran and Intel ifx, but no nvfortran or nvc.
    GPU results require an allocated device, captured identity, and kernel
    residency evidence.
@@ -267,7 +275,9 @@ device identity and kernel-residency evidence.
 - [ ] F4: run archived Landreman control and FortBO at the original allocation,
   then a labeled resource-matched GPU scaling row.
 - [ ] F5: recover FOCUS artifacts and implement/check the inducing variational
-  derivative model and paired action.
+  derivative model and paired action. The local fixed-hyperparameter model and
+  independent oracle are shipped; FOCUS recovery, stochastic training parity,
+  and the paired action gate remain open.
 - [ ] F6: run both Glas/Bindel perturbation amplitudes, global/local stages,
   SAA/BFGS control, and out-of-sample validation.
 - [ ] F7: publish ledgers, parity tables, utilization, cost breakdowns,
