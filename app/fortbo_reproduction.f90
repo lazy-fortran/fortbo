@@ -5,7 +5,8 @@ program fortbo_reproduction
 
     use fortnum_kinds, only: dp
     use fortnum_status, only: fortnum_status_t, FORTNUM_OK
-    use fortbo_turbo_driver, only: fortbo_turbo_config_t, fortbo_turbo_driver_t
+    use fortbo_turbo_driver, only: fortbo_turbo_config_t, fortbo_turbo_driver_t, &
+        FORTBO_TURBO_ACQUISITION_EI, FORTBO_TURBO_ACQUISITION_TS
     implicit none
 
     integer :: dimension, budget, n_initial, seed
@@ -17,8 +18,8 @@ program fortbo_reproduction
     type(fortbo_turbo_driver_t) :: driver
     type(fortnum_status_t) :: status
 
-    if (command_argument_count() /= 4) then
-        print *, "usage: fortbo_reproduction DIMENSION BUDGET N_INITIAL SEED"
+    if (command_argument_count() < 4 .or. command_argument_count() > 5) then
+        print *, "usage: fortbo_reproduction DIMENSION BUDGET N_INITIAL SEED [ei|ts]"
         error stop 2
     end if
     call get_command_argument(1, argument, length=length)
@@ -29,6 +30,18 @@ program fortbo_reproduction
     read (argument(:length), *) n_initial
     call get_command_argument(4, argument, length=length)
     read (argument(:length), *) seed
+    if (command_argument_count() == 5) then
+        call get_command_argument(5, argument, length=length)
+        select case (trim(adjustl(argument(:length))))
+        case ("ei", "qei")
+            config%acquisition = FORTBO_TURBO_ACQUISITION_EI
+        case ("ts")
+            config%acquisition = FORTBO_TURBO_ACQUISITION_TS
+        case default
+            print *, "unknown acquisition: ", trim(argument(:length))
+            error stop 2
+        end select
+    end if
 
     config%n_regions = 1
     config%batch_size = 1

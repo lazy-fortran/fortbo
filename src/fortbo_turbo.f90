@@ -51,11 +51,11 @@ module fortbo_turbo
 
 contains
 
-    !! `n_cand = min(100 d, 5000)`.
+    !! `n_cand = min(5000, max(2000, 200 d))` for the Landreman replay.
     pure integer function fortbo_candidate_count(n_inputs) result(count)
         integer, intent(in) :: n_inputs
 
-        count = min(100*max(n_inputs, 1), 5000)
+        count = min(5000, max(2000, 200*max(n_inputs, 1)))
     end function fortbo_candidate_count
 
     !! `p = min(1, 20/d)`.

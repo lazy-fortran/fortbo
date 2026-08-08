@@ -44,6 +44,7 @@ module fortbo_turbo_driver
     use fortbo_posterior, only: fortbo_posterior_t
     use fortbo_history, only: fortbo_history_t
     use fortbo_trust_region, only: fortbo_trust_region_t
+    use fortbo_acquisition, only: fortbo_expected_improvement
     use fortbo_turbo, only: fortbo_turbo_candidates, fortbo_candidate_count, &
         fortbo_thompson_select
     use fortbo_fortml, only: fortbo_fit_from_history
@@ -53,6 +54,9 @@ module fortbo_turbo_driver
 
     public :: fortbo_turbo_config_t
     public :: fortbo_turbo_driver_t
+
+    integer, parameter, public :: FORTBO_TURBO_ACQUISITION_TS = 0
+    integer, parameter, public :: FORTBO_TURBO_ACQUISITION_EI = 1
 
     !! How the run is configured. Defaults describe TuRBO-1 with a batch of one.
     type :: fortbo_turbo_config_t
@@ -69,6 +73,13 @@ module fortbo_turbo_driver
         !! caller rather than inferred, because ignoring gradients is a
         !! legitimate choice and should be a visible one.
         logical :: use_gradients = .false.
+        !! Thompson sampling is the historical default. EI is the q=1
+        !! Landreman path; q>1 remains a no-replacement candidate reduction.
+        integer :: acquisition = FORTBO_TURBO_ACQUISITION_TS
+        !! Trust-state tolerances. A zero failure tolerance selects the
+        !! dimension/batch rule; nonzero values pin a replay configuration.
+        integer :: success_tolerance = 3
+        integer :: failure_tolerance = 0
         !! Draw candidates from a Sobol sequence rather than the generator.
         logical :: quasi_random = .true.
     end type fortbo_turbo_config_t
@@ -122,6 +133,23 @@ contains
                 "fortbo turbo driver: initial count must not be negative")
             return
         end if
+        if (config%acquisition < FORTBO_TURBO_ACQUISITION_TS .or. &
+                config%acquisition > FORTBO_TURBO_ACQUISITION_EI) then
+            call status_set(status, FORTNUM_DOMAIN_ERROR, &
+                "fortbo turbo driver: unknown acquisition mode")
+            return
+        end if
+        if (config%acquisition == FORTBO_TURBO_ACQUISITION_EI .and. &
+                config%batch_size /= 1) then
+            call status_set(status, FORTNUM_DOMAIN_ERROR, &
+                "fortbo turbo driver: EI replay currently requires q=1")
+            return
+        end if
+        if (config%success_tolerance < 1 .or. config%failure_tolerance < 0) then
+            call status_set(status, FORTNUM_DOMAIN_ERROR, &
+                "fortbo turbo driver: invalid trust-state tolerance")
+            return
+        end if
 
         self%config = config
         self%n_inputs = n_inputs
@@ -132,6 +160,10 @@ contains
         do k = 1, config%n_regions
             call self%regions(k)%initialize(n_inputs, config%batch_size, status)
             if (status%code /= FORTNUM_OK) return
+            self%regions(k)%success_tolerance = config%success_tolerance
+            if (config%failure_tolerance > 0) then
+                self%regions(k)%failure_tolerance = config%failure_tolerance
+            end if
             call self%histories(k)%initialize(n_inputs, 0, status)
             if (status%code /= FORTNUM_OK) return
         end do
@@ -171,7 +203,7 @@ contains
         real(dp), allocatable :: pooled(:, :), realizations(:, :)
         real(dp), allocatable :: mean(:), variance(:), draw(:)
         integer, allocatable :: pooled_region(:), chosen(:), assigned(:)
-        real(dp) :: uniform
+        real(dp) :: uniform, acquisition_value, incumbent
         integer :: k, i, j, per_region, total, filled, required, offset
         integer :: needed, slot
 
@@ -276,14 +308,27 @@ contains
                 offset = offset + 1
                 pooled(offset, :) = candidates(i, :)
                 pooled_region(offset) = k
-                ! Posterior realizations, deliberately left in the objective's
-                ! own units so that a region believing in better values wins
-                ! more of the batch.
-                do slot = 1, needed
-                    call rng_uniform(self%generator, uniform)
-                    realizations(offset, slot) = mean(i) &
-                        + sqrt(max(variance(i), 0.0_dp))*fortbo_inverse_normal(uniform)
-                end do
+                if (self%config%acquisition == FORTBO_TURBO_ACQUISITION_EI) then
+                    ! Landreman's production q=1 path is analytic EI. The
+                    ! pooled reduction is a no-replacement arg-max of EI,
+                    ! represented as a negated score for the common selector.
+                    incumbent = self%histories(k)%objectives(&
+                        self%histories(k)%best_index())
+                    call fortbo_expected_improvement(mean(i), &
+                        sqrt(max(variance(i), 0.0_dp)), incumbent, 0.0_dp, &
+                        acquisition_value)
+                    realizations(offset, :) = -acquisition_value
+                else
+                    ! Posterior realizations, deliberately left in the
+                    ! objective's own units so that a region believing in
+                    ! better values wins more of the batch.
+                    do slot = 1, needed
+                        call rng_uniform(self%generator, uniform)
+                        realizations(offset, slot) = mean(i) &
+                            + sqrt(max(variance(i), 0.0_dp))* &
+                            fortbo_inverse_normal(uniform)
+                    end do
+                end if
             end do
         end do
 

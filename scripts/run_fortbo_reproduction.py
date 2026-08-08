@@ -202,11 +202,12 @@ def run_fortbo(args: argparse.Namespace) -> Dict[str, Any]:
     command = [
         args.fortbo_command or "fo", "exec", "fortbo_reproduction",
         str(args.dimension), str(args.budget), str(args.initial), str(args.seed),
+        args.acquisition,
     ]
     if args.fortbo_command:
         command = [
             args.fortbo_command, str(args.dimension), str(args.budget),
-            str(args.initial), str(args.seed),
+            str(args.initial), str(args.seed), args.acquisition,
         ]
     started = time.perf_counter()
     result = subprocess.run(

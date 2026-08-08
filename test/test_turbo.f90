@@ -49,9 +49,9 @@ contains
     subroutine check_reference_counts(failures)
         integer, intent(inout) :: failures
 
-        call expect(fortbo_candidate_count(1) == 100, "n_cand is 100 d in low dimension", &
+        call expect(fortbo_candidate_count(1) == 2000, "n_cand has the 2000 minimum", &
             failures)
-        call expect(fortbo_candidate_count(20) == 2000, "n_cand scales with dimension", &
+        call expect(fortbo_candidate_count(20) == 4000, "n_cand scales at 200 d", &
             failures)
         call expect(fortbo_candidate_count(200) == 5000, "n_cand caps at 5000", failures)
 
