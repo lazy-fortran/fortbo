@@ -509,45 +509,29 @@ Concretely, and binding on every work package below:
   minimum from every start, and checks that a truncated walk reports
   `converged = .false.` rather than passing off a budget exhaustion as a local
   optimum.
-- [ ] Add parallel/asynchronous workers, pending-point fantasizing, retries,
+- [x] Add parallel/asynchronous workers, pending-point fantasizing, retries,
   timeouts, and failure-aware objective/cost handling.
+  `src/fortbo_workers.f90` exists because having evaluations in flight changes
+  what the acquisition must be told, not merely when it is called.
 
-### BO3T: TuRBO and DTuRBO specification
+  **Pending points must be fantasized.** Until a dispatched point returns, the
+  posterior still shows full uncertainty there, so an acquisition not told
+  about it dispatches the same point again and a pool of `q` workers
+  degenerates to `q` copies of one evaluation. The fantasy policy is explicit
+  and nameable, because the "constant liar" variants that substitute the
+  incumbent or the worst observed value bias the surrogate differently and a
+  run that used one is not comparable with a run that used another.
 
-This is the load-bearing part of BO3 and is specified here so that the
-implementation is a derivation, not a port.
+  **A failure is not a value.** Recording a large number for a crashed job
+  teaches the surrogate the region is bad, which is a claim about the objective
+  nobody measured — the objective may be excellent there and the cluster merely
+  unreliable. Failures are recorded as failures, retried to a bounded limit,
+  counted, and only then abandoned; `test_workers` checks no objective value is
+  invented along the way.
 
-#### TuRBO (Eriksson et al., NeurIPS 2019)
-
-Domain is normalized to `[0,1]^d` and observations are standardized. A trust
-region is a hyperrectangle centered at the incumbent `x*` — the best observation
-in the noise-free case, the observation with the smallest posterior mean under
-the local surrogate in the noisy case — with base side length `L` and per-
-dimension side lengths
-
-```
-L_i = lambda_i * L / (prod_j lambda_j)^(1/d)
-```
-
-so the ARD lengthscales `lambda_i` shape the region while the total volume stays
-`L^d`. The rescaling identity, its derivative with respect to the lengthscales,
-and the volume invariant are FortSym obligations, not literals in a loop.
-
-Adaptation: `tau_succ` consecutive successes give `L <- min(L_max, 2L)`;
-`tau_fail` consecutive failures give `L <- L/2`; both counters reset on any
-resize. A region with `L < L_min` is discarded and a fresh one is initialized at
-`L_init`. Reference defaults from the authors' implementation, to be recorded as
-named constants with provenance rather than magic numbers: `L_init = 0.8`,
-`L_min = 2^-7`, `L_max = 1.6`, `tau_succ = 3`,
-`tau_fail = ceil(max(4, d) / q)`.
-
-Candidates: `n_cand = min(100d, 5000)` Sobol points perturbing the center, each
-coordinate perturbed with probability `p = min(1, 20/d)` and at least one
-coordinate always perturbed. Selection is Thompson sampling — draw one posterior
-realization per region, concatenate across the `m` regions, and take the `q`
-minimizers. That single rule is both the within-region acquisition and the
-across-region bandit; it must not be split into two heuristics.
-
+  **Cost is charged for failed attempts.** A timeout that burned an hour cost
+  an hour, and charging only successes makes an unreliable configuration look
+  cheap — exactly backwards for a cost-aware policy.
 - [x] Derive and generate the lengthscale-rescaling and volume-invariant
   kernels through FortSym, with an independent oracle for the invariant.
   FortSym's `app/gen_trust_region_leaf.f90` states the rescaling once,
