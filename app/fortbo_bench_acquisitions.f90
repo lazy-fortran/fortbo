@@ -23,7 +23,7 @@ program fortbo_bench_acquisitions
 
     use fortnum_kinds, only: dp
     use fortnum_status, only: fortnum_status_t, FORTNUM_OK
-    use fortnum_rng, only: rng_t, rng_seed, rng_uniform
+    use fortnum_rng, only: rng_t, rng_seed, rng_uniform, rng_normal
     use fortml_kernels, only: kernel_t, make_rbf_kernel
     use fortbo_acquisition, only: fortbo_acquisition_t, fortbo_ei_t, fortbo_log_ei_t, fortbo_pi_t, &
         fortbo_ucb_t
@@ -40,6 +40,8 @@ program fortbo_bench_acquisitions
     real(dp), allocatable :: train_x(:, :), train_y(:, :), candidates(:, :)
     real(dp), allocatable :: values(:), mean(:), sd(:), variance(:)
     real(dp), allocatable :: optimum_samples(:)
+    real(dp), allocatable :: observed_mean(:), observed_sd(:), observed_variance(:)
+    real(dp), allocatable :: observed_draws(:, :)
     type(kernel_t) :: kernel
     type(fortbo_gp_posterior_t) :: posterior
     type(fortnum_status_t) :: status
@@ -54,6 +56,7 @@ program fortbo_bench_acquisitions
     type(fortbo_mc_base_t) :: base
     real(dp) :: best, started, finished, draw
     integer, parameter :: dimension = 8
+    integer, parameter :: n_repeats = 5
 
     n_candidates = 4000
     n_train = 40
@@ -108,17 +111,23 @@ program fortbo_bench_acquisitions
     best = minval(train_y(:, 1))
     allocate (values(n_candidates), mean(n_candidates), sd(n_candidates))
     allocate (variance(n_candidates))
+    allocate (observed_mean(n_train), observed_sd(n_train), observed_variance(n_train))
+    allocate (observed_draws(n_train, n_samples))
 
     print *, "CONFIG ", n_candidates, n_train, n_samples, dimension
 
     ! The posterior evaluation itself, timed separately. Every acquisition
     ! pays it, so reporting it apart is what stops a slow acquisition hiding
     ! behind a slow posterior or the reverse.
-    started = wall_seconds()
     call posterior%moments(candidates, mean, variance, status)
+    started = wall_seconds()
+    do k = 1, n_repeats
+        call posterior%moments(candidates, mean, variance, status)
+    end do
     finished = wall_seconds()
     sd = sqrt(max(variance, 0.0_dp))
-    print *, "TIME posterior_moments ", finished - started, sum(mean), sum(sd)
+    print *, "TIME posterior_moments ", (finished - started)/real(n_repeats, dp), &
+        sum(mean), sum(sd)
 
     ei%best = best
     ei%xi = 0.0_dp
@@ -145,6 +154,20 @@ program fortbo_bench_acquisitions
     mc_pi%base = base
     mc_pi%best = best
     call time_acquisition("mc_pi", mc_pi)
+    call posterior%moments(train_x, observed_mean, observed_variance, status)
+    if (status%code /= FORTNUM_OK) then
+        print *, "observed moments failed: ", trim(status%msg)
+        error stop 1
+    end if
+    observed_sd = sqrt(max(observed_variance, 0.0_dp))
+    do k = 1, n_samples
+        do j = 1, n_train
+            call rng_normal(generator, observed_draws(j, k))
+        end do
+    end do
+    mc_noisy%observed_mean = observed_mean
+    mc_noisy%observed_sd = observed_sd
+    mc_noisy%observed_draws = observed_draws
     mc_noisy%base = base
     mc_noisy%best = best
     call time_acquisition("mc_noisy_ei", mc_noisy)
@@ -186,10 +209,13 @@ contains
         class(fortbo_acquisition_t), intent(in) :: acquisition
         real(dp) :: begin, done
 
-        begin = wall_seconds()
         call acquisition%value(posterior, candidates, values, status)
+        begin = wall_seconds()
+        do k = 1, n_repeats
+            call acquisition%value(posterior, candidates, values, status)
+        end do
         done = wall_seconds()
-        print *, "TIME "//name//" ", done - begin, sum(values), &
+        print *, "TIME "//name//" ", (done - begin)/real(n_repeats, dp), sum(values), &
             merge(0, 1, status%code == FORTNUM_OK)
         if (status%code /= FORTNUM_OK) print *, "   refused: ", trim(status%msg)
     end subroutine time_acquisition

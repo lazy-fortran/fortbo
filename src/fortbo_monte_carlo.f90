@@ -176,21 +176,24 @@ contains
         real(dp), intent(out) :: values(:)
         type(fortnum_status_t), intent(out) :: status
         real(dp), allocatable :: mean(:), variance(:)
-        real(dp) :: threshold, sample, total
+        real(dp) :: threshold, sample
         integer :: i, s, n_samples
 
         call marginal_setup(self%base, posterior, points, mean, variance, status)
         if (status%code /= FORTNUM_OK) return
         threshold = self%best - self%xi
         n_samples = self%base%n_samples()
-        do i = 1, size(points, 1)
-            total = 0.0_dp
-            do s = 1, n_samples
+        ! `draws(point, sample)` is column-major.  Walking samples outside
+        ! points keeps both the base draws and the output accumulation
+        ! contiguous, which is the hot loop for large candidate batches.
+        values = 0.0_dp
+        do s = 1, n_samples
+            do i = 1, size(points, 1)
                 sample = mean(i) + sqrt(variance(i))*self%base%draws(i, s)
-                total = total + max(threshold - sample, 0.0_dp)
+                values(i) = values(i) + max(threshold - sample, 0.0_dp)
             end do
-            values(i) = total/real(n_samples, dp)
         end do
+        values = values/real(n_samples, dp)
         call status_set(status, FORTNUM_OK, "")
     end subroutine mc_ei_value
 
@@ -258,20 +261,20 @@ contains
         type(fortnum_status_t), intent(out) :: status
         real(dp), allocatable :: mean(:), variance(:)
         real(dp) :: threshold, sample
-        integer :: i, s, n_samples, hits
+        integer :: i, s, n_samples
 
         call marginal_setup(self%base, posterior, points, mean, variance, status)
         if (status%code /= FORTNUM_OK) return
         threshold = self%best - self%xi
         n_samples = self%base%n_samples()
-        do i = 1, size(points, 1)
-            hits = 0
-            do s = 1, n_samples
+        values = 0.0_dp
+        do s = 1, n_samples
+            do i = 1, size(points, 1)
                 sample = mean(i) + sqrt(variance(i))*self%base%draws(i, s)
-                if (sample < threshold) hits = hits + 1
+                if (sample < threshold) values(i) = values(i) + 1.0_dp
             end do
-            values(i) = real(hits, dp)/real(n_samples, dp)
         end do
+        values = values/real(n_samples, dp)
         call status_set(status, FORTNUM_OK, "")
     end subroutine mc_pi_value
 
@@ -332,8 +335,8 @@ contains
         real(dp), intent(in) :: points(:, :)
         real(dp), intent(out) :: values(:)
         type(fortnum_status_t), intent(out) :: status
-        real(dp), allocatable :: mean(:), variance(:)
-        real(dp) :: sample, incumbent, total
+        real(dp), allocatable :: mean(:), variance(:), incumbent(:)
+        real(dp) :: sample
         integer :: i, s, j, n_samples, n_observed
 
         values = 0.0_dp
@@ -366,19 +369,27 @@ contains
             return
         end if
 
-        do i = 1, size(points, 1)
-            total = 0.0_dp
-            do s = 1, n_samples
-                incumbent = huge(1.0_dp)
-                do j = 1, n_observed
-                    incumbent = min(incumbent, self%observed_mean(j) &
-                        + self%observed_sd(j)*self%observed_draws(j, s))
-                end do
-                sample = mean(i) + sqrt(variance(i))*self%base%draws(i, s)
-                total = total + max(incumbent - sample, 0.0_dp)
+        ! The latent incumbent depends only on the sample, not on the query.
+        ! Computing it inside the candidate loop repeated the O(n_observed)
+        ! reduction for every candidate.  Hoist it once and leave the hot path
+        ! as the same contiguous sample-major traversal used by EI and PI.
+        allocate (incumbent(n_samples))
+        do s = 1, n_samples
+            incumbent(s) = huge(1.0_dp)
+            do j = 1, n_observed
+                incumbent(s) = min(incumbent(s), self%observed_mean(j) &
+                    + self%observed_sd(j)*self%observed_draws(j, s))
             end do
-            values(i) = total/real(n_samples, dp)
         end do
+
+        values = 0.0_dp
+        do s = 1, n_samples
+            do i = 1, size(points, 1)
+                sample = mean(i) + sqrt(variance(i))*self%base%draws(i, s)
+                values(i) = values(i) + max(incumbent(s) - sample, 0.0_dp)
+            end do
+        end do
+        values = values/real(n_samples, dp)
         call status_set(status, FORTNUM_OK, "")
     end subroutine mc_noisy_ei_value
 

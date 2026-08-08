@@ -1319,6 +1319,13 @@ and belongs to FortML's parameter registry, not to FortBO.
   budget -- and that is stated rather than papered over. Generators live in
   `fortbo-bench/scripts/emit_reference.py` and `emit_regret.py`.
 
+- [x] Inventory every FortBO source module in the benchmark matrix, including
+  direct external lanes, published-policy lanes, independent reference-only
+  lanes, and device/contract refusal lanes. The complete row set is generated
+  by `fortbo-bench/scripts/run_feature_matrix.py`; the benchmark repository
+  owns the JSON/CSV evidence and refuses to call an unavailable or
+  non-comparable lane a speed win.
+
 ### BO6: evidence and release
 
 `test_end_to_end` is the integration evidence for everything assembled so far:
