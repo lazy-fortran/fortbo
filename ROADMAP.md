@@ -645,10 +645,21 @@ into the headline number.
 - [ ] Record simple regret, cumulative regret, best feasible value, constraint
   violations, acquisition evaluations, gradient evaluations, ESS for sampled
   policies, memory, transfers, and wall time.
-- [ ] Record the trust-region trace for every TuRBO/DTuRBO run: per-region
+- [x] Record the trust-region trace for every TuRBO/DTuRBO run: per-region
   radius history, success/failure counters, ratio-test values, restart events,
   and which region supplied each accepted batch point. A regret curve without
   the radius history is not evidence that the trust-region logic is correct.
+  `src/fortbo_trace.f90` appends one row per batch in run order and never
+  rewrites them, so a trace read back is the run as it happened. The ratio is
+  computed inside `record` from the decreases it also stores, so the two can
+  never drift apart, and a row carries `has_ratio` rather than a zero when no
+  ratio test ran — TuRBO's counter rule has no ratio, and storing zero would be
+  indistinguishable from a step that predicted well and delivered nothing,
+  which is the opposite verdict about the model. `test_trace` drives a real
+  region up and then down through `fortbo_dturbo_ratio_update` and recovers the
+  whole story from the trace alone; writing it exposed that the trace had no
+  row for the *starting* radius, so the history began at the already-expanded
+  value and could not show the region growing at all.
 - [ ] Keep CPU, transfer-inclusive GPU, resident GPU, and typed refusal rows
   separate, with source/toolchain/device provenance.
 
