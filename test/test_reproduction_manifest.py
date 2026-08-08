@@ -126,6 +126,17 @@ class ReproductionManifestTests(unittest.TestCase):
             self.assertIn("cannot be labeled published-parity-dturbo",
                           result.stderr)
 
+    def test_control_audit_status_is_valid(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            directory = Path(temporary)
+            manifest = self.make_manifest(
+                directory, digest(b"independent source bytes\n"))
+            data = json.loads(manifest.read_text(encoding="utf-8"))
+            data["status"] = "ready-for-control-audit"
+            manifest.write_text(json.dumps(data), encoding="utf-8")
+            result = self.run_checker(manifest, "--metadata-only")
+            self.assertEqual(result.returncode, 0, result.stderr)
+
 
 if __name__ == "__main__":
     unittest.main()

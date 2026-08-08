@@ -1,0 +1,68 @@
+{
+  "schema_version": 1,
+  "config_id": "b5-constellaration-turbo",
+  "config_revision": "2026-08-09",
+  "status": "ready-for-control-audit",
+  "source": [
+    {
+      "id": "b5_turbo_1_comparison",
+      "kind": "file",
+      "path": "/mnt/storage/code/simsopt-dfo/results/constellaration/b5-async-turbo/comparison.json",
+      "sha256": "f22030f45d8c6e98e247a6f63a5af0bc812d18cb3ee4205462376f55c170c4b9"
+    },
+    {
+      "id": "b5_turbo_m_comparison",
+      "kind": "file",
+      "path": "/mnt/storage/code/simsopt-dfo/results/constellaration/b5-async-turbo-m/comparison.json",
+      "sha256": "4d6f2df3785f350a8b87fb1cfed443225109e1c657b1b9b139bffc65768d1dcd"
+    },
+    {
+      "id": "b5_data_transform_json",
+      "kind": "file",
+      "path": "/mnt/storage/code/simsopt-dfo/results/constellaration/b5-data-transform.json",
+      "sha256": "951c2b6f8e0f8dd1dee0297aca91645900ce4044f104e3f5132fbad523e68340"
+    },
+    {
+      "id": "b5_data_transform_npz",
+      "kind": "file",
+      "path": "/mnt/storage/code/simsopt-dfo/results/constellaration/b5-data-transform.npz",
+      "sha256": "23efce87449de554ff8a0c9025cdf44e301a14f48c511fb907f6fdeb6fce7953"
+    }
+  ],
+  "parameters": {
+    "case_id": "b5_simple_to_build_qi",
+    "evaluator": {
+      "source": "ConStellaration",
+      "workers": 8,
+      "budget": 256,
+      "feasibility_threshold": 0.01
+    },
+    "coordinate_modes": {
+      "raw": {"dimension": 80},
+      "data-informed": {
+        "dimension": 20,
+        "transform_json_source": "b5_data_transform_json",
+        "transform_npz_source": "b5_data_transform_npz"
+      }
+    },
+    "controls": {
+      "turbo_1": {
+        "comparison_source": "b5_turbo_1_comparison",
+        "seeds": [1, 2, 3, 4, 5],
+        "modes": ["raw", "data-informed"],
+        "workers": 8,
+        "budget": 256
+      },
+      "turbo_m": {
+        "comparison_source": "b5_turbo_m_comparison",
+        "seeds": [1, 2, 3, 4, 5],
+        "regions": 4,
+        "mode": "data-informed",
+        "workers": 8,
+        "budget": 256
+      }
+    },
+    "fortbo_rows": "pending",
+    "control_audit": "scripts/check_b5_campaign.py verifies aggregate and raw ledgers"
+  }
+}

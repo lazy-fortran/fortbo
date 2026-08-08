@@ -31,6 +31,11 @@ region-partitioned candidate pools, with independent coordinate and trust-state
 gates. These are local parity prerequisites, not evidence that the archived
 Landreman runtime or published DTuRBO model has been reproduced.
 
+The external B5 control ledgers are now materialized from Git LFS and pass the
+FortBO-side audit: ten TuRBO-1 ledgers (raw and data-informed) plus ten
+data-informed four-region TuRBO-m ledgers, all at 256 calls and eight workers.
+FortBO B5 rows are still pending, so this closes control evidence only.
+
 ## Active blockers
 
 1. The Landreman archive and its historical Slurm job are now pinned in the
@@ -70,6 +75,10 @@ Frozen artifacts:
 | Landreman VMEC input inside the archive | 88318d8b2ab17741110a11bc5141ecfbbd862eb5ff02b47f808bc527c6bf263e |
 | Glas/Bindel paper | 24cc2600e8b20b74b80b96ce294286c66bea19c2e96808e516abae5f960f8d0b |
 | Glas/Bindel harvest | 61e1dc8912ddb4825b6ac5ad5d26c2a0d86280fb71d86f2ef3991dfb5c40a693 |
+| B5 TuRBO-1 control comparison | f22030f45d8c6e98e247a6f63a5af0bc812d18cb3ee4205462376f55c170c4b9 |
+| B5 TuRBO-m control comparison | 4d6f2df3785f350a8b87fb1cfed443225109e1c657b1b9b139bffc65768d1dcd |
+| B5 data-informed transform JSON | 951c2b6f8e0f8dd1dee0297aca91645900ce4044f104e3f5132fbad523e68340 |
+| B5 data-informed transform arrays | 23efce87449de554ff8a0c9025cdf44e301a14f48c511fb907f6fdeb6fce7953 |
 
 ~~~
 sha256sum /home/ert/data/landreman-data-informed-2026/20260514-01-zenodo_for_data_informed_spaces_paper.20260617.tar /home/ert/proj/stellopt-talk/literature/glas2022_coil-dturbo.pdf /home/ert/data/simsopt-dfo-harvest/coil-dturbo-paper-2110.07464/2110.07464.tar
@@ -253,7 +262,8 @@ device identity and kernel-residency evidence.
 - [ ] F2: match Landreman qEI and TS posterior, acquisition, candidate,
   trust-state, and completion traces.
 - [ ] F3: run five paired seeds for raw/data-informed TuRBO-1 and
-  data-informed TuRBO-m at 256 calls and eight workers.
+  data-informed TuRBO-m at 256 calls and eight workers; control ledgers are
+  audited, while the FortBO rows remain pending.
 - [ ] F4: run archived Landreman control and FortBO at the original allocation,
   then a labeled resource-matched GPU scaling row.
 - [ ] F5: recover FOCUS artifacts and implement/check the inducing variational
