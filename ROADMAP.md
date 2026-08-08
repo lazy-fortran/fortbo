@@ -449,7 +449,26 @@ and belongs to FortML's parameter registry, not to FortBO.
   Chebyshev scalarization's augmentation term is checked by the case it exists
   for: without it a weakly dominated point scores identically to the point that
   dominates it.
-- [ ] Implement preference learning and noisy dominance.
+- [x] Implement preference learning and noisy dominance.
+  `src/fortbo_preference.f90` covers both, because both reduce to one Gaussian
+  tail probability. Preference learning fits a latent objective to pairwise
+  judgements under the Thurstone-Mosteller model; noisy dominance asks the same
+  question of a multi-objective posterior, combining the two standard
+  deviations in quadrature. Deciding dominance by comparing posterior means
+  instead discards exactly the information that says whether the comparison is
+  trustworthy, which is how a front built from noisy observations fills up with
+  points that were never good. Nothing is transcribed: FortSym's
+  `app/gen_preference_leaf.f90` states the model once and derives the
+  probability, its logarithm, and every first derivative. `test_preference`
+  validates the probability against Monte Carlo simulation of the model's own
+  generative story, the log-likelihood gradient against central differences,
+  and the deep-tail asymptotic branch against the Gaussian tail written
+  independently — that last check is what caught a missing `log(2)` in the
+  branch, since a relative tolerance on a value near -3200 would have absorbed
+  it. `fortbo_probability_non_dominated` assumes front members are independent,
+  which they are not under a shared surrogate; the test asserts the direction
+  the approximation errs in (it understates) rather than an equality that does
+  not hold, and checks the one-member case where it is exact.
 - [ ] Implement active learning, level-set estimation, contour finding,
   feasibility search, and Bayesian calibration/design of experiments.
 - [x] Add stopping rules based on target value, stall, posterior uncertainty,
