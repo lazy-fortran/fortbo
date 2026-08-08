@@ -24,7 +24,7 @@ program test_knowledge_gradient
         FORTNUM_NOT_IMPLEMENTED
     use fortnum_rng, only: rng_t, rng_seed, rng_normal
     use fortbo_knowledge_gradient, only: fortbo_knowledge_gradient_value, &
-        fortbo_expected_minimum_of_lines
+        fortbo_expected_minimum_of_lines, fortbo_batch_knowledge_gradient
     use fortbo_test_posteriors, only: demo_posterior_t, moments_only_posterior_t
     implicit none
 
@@ -36,6 +36,8 @@ program test_knowledge_gradient
     call check_kg_against_simulation(failures)
     call check_kg_is_non_negative(failures)
     call check_kg_rewards_informative_samples(failures)
+    call check_batch_reduces_to_sequential(failures)
+    call check_batch_is_monotone(failures)
     call check_refusals(failures)
 
     if (failures == 0) then
@@ -259,6 +261,77 @@ contains
             failures)
     end subroutine check_kg_rewards_informative_samples
 
+    !! The anchor tying the batch estimator to the exact one: with a single
+    !! fantasy slot, d-KG *is* the sequential knowledge gradient, so the Monte
+    !! Carlo estimate must land on the closed-form envelope value.
+    subroutine check_batch_reduces_to_sequential(failures)
+        integer, intent(inout) :: failures
+        type(rng_t) :: generator
+        type(fortnum_status_t) :: status
+        integer, parameter :: m = 6, n_samples = 400000
+        real(dp) :: reference_mean(m), loading(m, 1)
+        real(dp) :: batch_value, exact, expected_min, standard_error
+        integer :: k
+
+        reference_mean = [0.5_dp, -0.2_dp, 1.0_dp, 0.1_dp, -0.6_dp, 0.3_dp]
+        loading(:, 1) = [0.4_dp, -0.7_dp, 0.2_dp, 0.9_dp, -0.1_dp, 0.5_dp]
+
+        ! The closed form, through the envelope.
+        call fortbo_expected_minimum_of_lines(reference_mean, loading(:, 1), &
+            expected_min, status)
+        exact = minval(reference_mean) - expected_min
+
+        call rng_seed(generator, int(606060, int64), status)
+        call fortbo_batch_knowledge_gradient(reference_mean, loading, n_samples, &
+            generator, batch_value, status)
+        call expect(status%code == FORTNUM_OK, "the batch estimator evaluates", &
+            failures)
+
+        ! The estimator averages a bounded piecewise-linear function; its spread
+        ! is at most the range of the reference means plus a few loadings.
+        standard_error = (maxval(reference_mean) - minval(reference_mean) &
+            + maxval(abs(loading)))/sqrt(real(n_samples, dp))
+        call expect(abs(batch_value - exact) < 6.0_dp*standard_error, &
+            "a batch of one reproduces the exact sequential value", failures)
+        call expect(batch_value > 0.0_dp, &
+            "a batch that can teach something has positive value", failures)
+    end subroutine check_batch_reduces_to_sequential
+
+    !! Adding a fantasy slot cannot reduce the value: the extra observation can
+    !! always be ignored. A sign error or a mis-shaped loading loop breaks this
+    !! without needing a reference value.
+    subroutine check_batch_is_monotone(failures)
+        integer, intent(inout) :: failures
+        type(rng_t) :: generator
+        type(fortnum_status_t) :: status
+        integer, parameter :: m = 5, n_samples = 200000
+        real(dp) :: reference_mean(m), small(m, 1), large(m, 2)
+        real(dp) :: small_value, large_value, zero_value
+        real(dp) :: empty_loading(m, 1)
+
+        reference_mean = [0.4_dp, -0.1_dp, 0.9_dp, 0.2_dp, -0.5_dp]
+        small(:, 1) = [0.3_dp, -0.5_dp, 0.2_dp, 0.6_dp, -0.2_dp]
+        large(:, 1) = small(:, 1)
+        large(:, 2) = [-0.4_dp, 0.3_dp, -0.6_dp, 0.1_dp, 0.5_dp]
+
+        call rng_seed(generator, int(717272, int64), status)
+        call fortbo_batch_knowledge_gradient(reference_mean, small, n_samples, &
+            generator, small_value, status)
+        call rng_seed(generator, int(717272, int64), status)
+        call fortbo_batch_knowledge_gradient(reference_mean, large, n_samples, &
+            generator, large_value, status)
+        call expect(large_value > small_value, &
+            "a larger batch is worth at least as much", failures)
+
+        ! A batch that moves nothing teaches nothing.
+        empty_loading = 0.0_dp
+        call rng_seed(generator, int(717272, int64), status)
+        call fortbo_batch_knowledge_gradient(reference_mean, empty_loading, 1000, &
+            generator, zero_value, status)
+        call expect(zero_value == 0.0_dp, &
+            "a batch that shifts no reference mean is worthless", failures)
+    end subroutine check_batch_is_monotone
+
     subroutine check_refusals(failures)
         integer, intent(inout) :: failures
         type(demo_posterior_t) :: posterior
@@ -294,6 +367,22 @@ contains
             expectation, status)
         call expect(status%code == FORTNUM_DOMAIN_ERROR, &
             "mismatched line arrays are refused", failures)
+
+        block
+            type(rng_t) :: generator
+            real(dp) :: loading(2, 1), batch_value
+            loading = 0.0_dp
+            call rng_seed(generator, int(1, int64), status)
+            call fortbo_batch_knowledge_gradient([1.0_dp, 2.0_dp, 3.0_dp], &
+                loading, 10, generator, batch_value, status)
+            call expect(status%code == FORTNUM_DOMAIN_ERROR, &
+                "a loading that does not match the reference set is refused", &
+                failures)
+            call fortbo_batch_knowledge_gradient([1.0_dp, 2.0_dp], loading, 0, &
+                generator, batch_value, status)
+            call expect(status%code == FORTNUM_DOMAIN_ERROR, &
+                "a zero sample count is refused", failures)
+        end block
     end subroutine check_refusals
 
     subroutine expect(condition, description, failures)

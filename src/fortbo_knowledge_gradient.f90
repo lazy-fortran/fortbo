@@ -35,6 +35,7 @@ module fortbo_knowledge_gradient
     use fortnum_kinds, only: dp
     use fortnum_status, only: fortnum_status_t, status_set, FORTNUM_OK, &
         FORTNUM_DOMAIN_ERROR, FORTNUM_NOT_IMPLEMENTED
+    use fortnum_rng, only: rng_t, rng_normal
     use fortbo_posterior, only: fortbo_posterior_t, FORTBO_CAP_MOMENTS, &
         FORTBO_CAP_COVARIANCE
     implicit none
@@ -42,6 +43,7 @@ module fortbo_knowledge_gradient
 
     public :: fortbo_knowledge_gradient_value
     public :: fortbo_expected_minimum_of_lines
+    public :: fortbo_batch_knowledge_gradient
 
     !! Two slopes closer than this are the same line for envelope purposes.
     !! Distinguishing them would divide by their difference when computing an
@@ -241,6 +243,91 @@ contains
         value = max(current_best - expected_best, 0.0_dp)
         call status_set(status, FORTNUM_OK, "")
     end subroutine fortbo_knowledge_gradient_value
+
+    !! Batch knowledge gradient over `q` simultaneous fantasized observations.
+    !!
+    !! Written against Wu, Poloczek, Wilson and Frazier, *Bayesian Optimization
+    !! with Gradients* (arXiv:1703.04389), whose equation (3.4) states
+    !!
+    !!     d-KG = min_A mu_n - E_n[ min_A mu_{n+q} | batch ],
+    !!
+    !! with the expectation marginalizing over all `q` observations at once.
+    !!
+    !! The sequential case collapsed to a one-dimensional envelope because a
+    !! single fantasy shifts every reference mean along a line in one scalar.
+    !! With `q` fantasies the shift is affine in a `q`-vector, and the minimum
+    !! of affine functions of a multivariate normal has no such closed form.
+    !! This is therefore Monte Carlo over the fantasy vector — and that is a
+    !! statement about the problem, not a shortcut: the exact quantity is a
+    !! `q`-dimensional integral of a piecewise-linear function.
+    !!
+    !! `loading(reference, slot)` is the caller's factorization of how each
+    !! fantasy moves each reference mean, the batch analogue of `sigma_tilde`.
+    !! Supplying it rather than deriving it here keeps the posterior's
+    !! factorization where the posterior is, and lets a caller reuse one
+    !! factorization across many candidate batches.
+    !!
+    !! Draws are taken from a caller-owned generator and can be frozen by
+    !! seeding it, so two candidate batches are compared against the same
+    !! realizations rather than against separate noise. Comparing batches under
+    !! independent draws would rank them by sampling error whenever their true
+    !! values are close, which is exactly when the ranking matters.
+    subroutine fortbo_batch_knowledge_gradient(reference_mean, loading, &
+            n_samples, generator, value, status)
+        real(dp), intent(in) :: reference_mean(:)
+        !! `loading(reference, slot)`.
+        real(dp), intent(in) :: loading(:, :)
+        integer, intent(in) :: n_samples
+        type(rng_t), intent(inout) :: generator
+        real(dp), intent(out) :: value
+        type(fortnum_status_t), intent(out) :: status
+        real(dp), allocatable :: draw(:), shifted(:)
+        real(dp) :: current_best, total, sample_min
+        integer :: m, q, s, i, j
+
+        value = 0.0_dp
+        m = size(reference_mean)
+        q = size(loading, 2)
+        if (m < 1 .or. size(loading, 1) /= m) then
+            call status_set(status, FORTNUM_DOMAIN_ERROR, &
+                "fortbo knowledge gradient: loading must match the reference set")
+            return
+        end if
+        if (q < 1) then
+            call status_set(status, FORTNUM_DOMAIN_ERROR, &
+                "fortbo knowledge gradient: a batch needs at least one point")
+            return
+        end if
+        if (n_samples < 1) then
+            call status_set(status, FORTNUM_DOMAIN_ERROR, &
+                "fortbo knowledge gradient: sample count must be positive")
+            return
+        end if
+
+        allocate (draw(q), shifted(m))
+        current_best = minval(reference_mean)
+        total = 0.0_dp
+        do s = 1, n_samples
+            do j = 1, q
+                call rng_normal(generator, draw(j))
+            end do
+            shifted = reference_mean
+            do j = 1, q
+                do i = 1, m
+                    shifted(i) = shifted(i) + loading(i, j)*draw(j)
+                end do
+            end do
+            sample_min = minval(shifted)
+            total = total + sample_min
+        end do
+
+        ! Non-negativity is a theorem: information cannot make the best
+        ! decision worse in expectation. Sampling error can still produce a
+        ! small negative, and reporting it would let a batch be preferred for
+        ! a reason that is pure noise.
+        value = max(current_best - total/real(n_samples, dp), 0.0_dp)
+        call status_set(status, FORTNUM_OK, "")
+    end subroutine fortbo_batch_knowledge_gradient
 
     !! Ascending by slope, and *descending* by intercept within equal slopes.
     !!

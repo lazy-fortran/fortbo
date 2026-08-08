@@ -340,9 +340,31 @@ Concretely, and binding on every work package below:
   about `sqrt(jitter)`, not to rounding, because a covariance with a repeated
   point is singular and the jitter that makes it factorizable is exactly what
   lets the copy wander, entering the draw through a Cholesky factor.
-- [ ] Implement batch **qKG**, Thompson sampling as a batch rule, and fantasy
-  observations. qKG needs the fantasy machinery over `q` simultaneous
-  observations, which is a different construction from the three above.
+- [x] Implement batch **qKG** and fantasy observations. Written against Wu,
+  Poloczek, Wilson and Frazier (arXiv:1703.04389), whose equation (3.4) states
+  d-KG as `min_A mu_n - E_n[min_A mu_{n+q}]` with the expectation marginalizing
+  over all `q` observations at once.
+
+  The sequential case collapsed to a one-dimensional envelope because a single
+  fantasy shifts every reference mean along a line in one scalar. With `q`
+  fantasies the shift is affine in a `q`-vector and no such closed form exists,
+  so `fortbo_batch_knowledge_gradient` is Monte Carlo over the fantasy vector.
+  That is a statement about the problem rather than a shortcut: the exact
+  quantity is a `q`-dimensional integral of a piecewise-linear function.
+
+  `test_knowledge_gradient` anchors it where an anchor exists — with one fantasy
+  slot d-KG *is* the sequential knowledge gradient, so the Monte Carlo estimate
+  must land on the closed-form envelope value, which it does within sampling
+  error. Monotonicity in the batch is checked too, since an extra observation
+  can always be ignored and so cannot lower the value.
+
+  Draws come from a caller-owned generator so two candidate batches are compared
+  against the same realizations. Comparing them under independent draws would
+  rank by sampling error exactly when their true values are close, which is when
+  the ranking matters.
+- [ ] Add Thompson sampling as an explicit batch rule. It already exists inside
+  the TuRBO driver as the pooled selection across regions; what is missing is a
+  standalone rule usable with a non-trust-region policy.
 - [x] Implement **constrained and cost-aware** acquisitions.
   `src/fortbo_constrained.f90` weights a base acquisition by the probability of
   feasibility, or divides it by cost to the power `alpha`. Both are weightings,
