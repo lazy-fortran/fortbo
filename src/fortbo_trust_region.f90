@@ -86,6 +86,17 @@ module fortbo_trust_region
         procedure, public :: volume_fraction => region_volume_fraction
     end type fortbo_trust_region_t
 
+    interface
+        pure subroutine fortbo_generated_trust_region_leaf(log_lengthscale, &
+                log_mean, base_length, side_length, side_d_log_lengthscale, &
+                side_d_log_mean, side_d_base_length)
+            import :: dp
+            real(dp), intent(in) :: log_lengthscale, log_mean, base_length
+            real(dp), intent(out) :: side_length, side_d_log_lengthscale
+            real(dp), intent(out) :: side_d_log_mean, side_d_base_length
+        end subroutine fortbo_generated_trust_region_leaf
+    end interface
+
 contains
 
     !! Prepare a region for a `n_inputs`-dimensional problem evaluated in
@@ -188,6 +199,8 @@ contains
         real(dp), intent(out) :: lengths(:)
         type(fortnum_status_t), intent(out) :: status
         real(dp) :: log_mean
+        real(dp) :: d_log_lengthscale, d_log_mean, d_base_length
+        integer :: j
 
         if (size(lengthscales) /= self%n_inputs .or. size(lengths) /= self%n_inputs) then
             call status_set(status, FORTNUM_DOMAIN_ERROR, &
@@ -201,8 +214,18 @@ contains
         end if
         ! Work in logs: the direct product underflows for a few hundred
         ! dimensions, which is exactly where TuRBO is meant to be used.
+        !
+        ! The mean is a reduction and stays here; the per-dimension relation is
+        ! an expression and is *derived*, by FortSym's `gen_trust_region_leaf`.
+        ! FortSym still cannot express a reduction, so that split is where the
+        ! remaining gap sits — but nothing with mathematical content is
+        ! transcribed by hand any more.
         log_mean = sum(log(lengthscales))/real(self%n_inputs, dp)
-        lengths = exp(log(lengthscales) - log_mean)*self%length
+        do j = 1, self%n_inputs
+            call fortbo_generated_trust_region_leaf(log(lengthscales(j)), log_mean, &
+                self%length, lengths(j), d_log_lengthscale, d_log_mean, &
+                d_base_length)
+        end do
         call status_set(status, FORTNUM_OK, "")
     end subroutine region_side_lengths
 

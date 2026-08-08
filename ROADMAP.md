@@ -442,15 +442,27 @@ realization per region, concatenate across the `m` regions, and take the `q`
 minimizers. That single rule is both the within-region acquisition and the
 across-region bandit; it must not be split into two heuristics.
 
-- [ ] Derive and generate the lengthscale-rescaling and volume-invariant
+- [x] Derive and generate the lengthscale-rescaling and volume-invariant
   kernels through FortSym, with an independent oracle for the invariant.
-  **Blocked on a FortSym gap, not deferred by choice**: the rescaling is a
-  reduction over the dimension, and the kernel emitter currently lowers scalar
-  expression graphs only — it has no way to express a loop or a reduction. The
-  invariant itself is already checked independently in `test_trust_region`.
-  Fix belongs in FortSym alongside M9/M13, and the interim Fortran computes the
-  geometric mean in log space so it survives the few hundred dimensions this
-  algorithm exists for.
+  FortSym's `app/gen_trust_region_leaf.f90` states the rescaling once,
+  `length_j = exp(log ell_j - mean_k log ell_k) * L`, and derives it together
+  with its derivatives in the log lengthscale, the log mean, and the base
+  length. `region_side_lengths` now calls the generated leaf per dimension.
+
+  **The remaining FortSym gap is narrower than it looked.** What was blocked is
+  the *reduction*, and a mean is not a formula — it carries no mathematical
+  content beyond "arithmetic mean". Everything that is an expression is scalar
+  in `j` and derivable today; only the summation stays in Fortran. FortSym
+  still cannot express a reduction, and that is recorded here rather than
+  worked around silently, but nothing with mathematical content is transcribed
+  by hand any longer.
+
+  The volume invariant `product_j length_j = L^d` follows because deviations
+  from a mean sum to zero, and is checked independently in `test_trust_region`,
+  which also checks the generated derivatives against central differences and
+  pins the statement that the normalization really is the geometric mean: a
+  lengthscale sitting at the mean receives exactly the base length.
+
 - [x] Implement the trust-region state machine with deterministic replay:
   identical seed, identical batch, identical resize history.
   `src/fortbo_trust_region.f90` carries the reference constants with their
