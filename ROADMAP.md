@@ -283,8 +283,19 @@ Concretely, and binding on every work package below:
   by Simpson's rule, applied both to the entropy itself and to the difference
   `H(f) - H(f | f >= y*)` that MES is defined as — the definition of entropy
   rather than a rearrangement of the closed form.
-- [ ] Implement predictive entropy search, which targets the optimum's location
-  rather than its value and needs the nested approximation MES avoids.
+- [ ] Implement predictive entropy search. **Partially built, deliberately not
+  checked off.** `src/fortbo_pes.f90` computes the conditional density and
+  entropy of `f(x)` under the constraint `f(x) >= f(x*)`, exactly for that
+  constraint and validated against simulation. It is an *ingredient* of PES and
+  not PES, and the measurement says so: the weighting factor's slope in `t` is
+  `sqrt((1 - rho)/(1 + rho))`, so a query strongly correlated with the sampled
+  minimizer gets a flatter constraint and therefore a *smaller* entropy
+  reduction — the opposite of location-aware. The information PES actually
+  extracts comes from conditioning the whole posterior on `x*` being a
+  stationary minimum, which couples queries and needs expectation propagation.
+  The test asserts the behaviour that occurs rather than the one that would be
+  convenient; asserting the convenient direction would have hidden that the
+  single-query reduction cannot carry location information at all.
 - [x] Implement Monte Carlo acquisition evaluation with common random numbers,
   antithetic draws, reparameterized posterior samples, and exact gradients.
   `src/fortbo_monte_carlo.f90` freezes the standard normal base draws once,

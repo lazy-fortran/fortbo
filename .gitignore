@@ -1,0 +1,4 @@
+build/
+provenance/
+*.mod
+*.o
