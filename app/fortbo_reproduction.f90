@@ -47,6 +47,11 @@ program fortbo_reproduction
     config%batch_size = 1
     config%n_initial = n_initial
     config%lengthscale = 0.25_dp
+    ! The synthetic smoke keeps equal scales for continuity, but exercises the
+    ! same explicit ARD posterior branch as the parity fixture.
+    allocate (config%lengthscales(dimension))
+    config%lengthscales = config%lengthscale
+    config%use_ard = .true.
     config%success_tolerance = 10
     config%failure_tolerance = max(4, dimension)
     config%improvement_tolerance = 1.0e-3_dp

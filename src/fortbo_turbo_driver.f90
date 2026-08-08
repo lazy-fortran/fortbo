@@ -68,6 +68,10 @@ module fortbo_turbo_driver
         !! `2*d`, the paper's rule.
         integer :: n_initial = 0
         real(dp) :: lengthscale = 0.2_dp
+        !! Optional ARD lengthscales for the explicit Landreman parity lane.
+        !! When absent, the established isotropic FortML adapter is used.
+        real(dp), allocatable :: lengthscales(:)
+        logical :: use_ard = .false.
         real(dp) :: noise_variance = 1.0e-6_dp
         !! Use measured gradients when the history carries them. Left to the
         !! caller rather than inferred, because ignoring gradients is a
@@ -134,6 +138,15 @@ contains
             call status_set(status, FORTNUM_DOMAIN_ERROR, &
                 "fortbo turbo driver: initial count must not be negative")
             return
+        end if
+        if (config%use_ard) then
+            if (.not. allocated(config%lengthscales) .or. &
+                    size(config%lengthscales) /= n_inputs .or. &
+                    any(config%lengthscales <= 0.0_dp)) then
+                call status_set(status, FORTNUM_DOMAIN_ERROR, &
+                    "fortbo turbo driver: ARD lengthscales must match inputs")
+                return
+            end if
         end if
         if (config%acquisition < FORTBO_TURBO_ACQUISITION_TS .or. &
                 config%acquisition > FORTBO_TURBO_ACQUISITION_EI) then
@@ -257,7 +270,11 @@ contains
         ! Every remaining slot goes through the pooled Thompson bandit.
         per_region = fortbo_candidate_count(self%n_inputs)
         allocate (lengthscales(self%n_inputs))
-        lengthscales = self%config%lengthscale
+        if (self%config%use_ard) then
+            lengthscales = self%config%lengthscales
+        else
+            lengthscales = self%config%lengthscale
+        end if
         allocate (candidates(per_region, self%n_inputs))
         total = per_region*size(self%regions)
         allocate (pooled(total, self%n_inputs), pooled_region(total))
@@ -299,10 +316,17 @@ contains
             ! mapping back into the objective's own units.
             call standardized_copy(self%histories(k), scratch, shift, scale, status)
             if (status%code /= FORTNUM_OK) return
-            call fortbo_fit_from_history(scratch, posterior, status, &
-                lengthscale=self%config%lengthscale, &
-                noise_variance=self%config%noise_variance, &
-                use_gradients=self%config%use_gradients)
+            if (self%config%use_ard) then
+                call fortbo_fit_from_history(scratch, posterior, status, &
+                    noise_variance=self%config%noise_variance, &
+                    use_gradients=self%config%use_gradients, &
+                    lengthscales=lengthscales)
+            else
+                call fortbo_fit_from_history(scratch, posterior, status, &
+                    lengthscale=self%config%lengthscale, &
+                    noise_variance=self%config%noise_variance, &
+                    use_gradients=self%config%use_gradients)
+            end if
             if (status%code /= FORTNUM_OK) return
             call posterior%moments(candidates, mean, variance, status)
             if (status%code /= FORTNUM_OK) return

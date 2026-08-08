@@ -32,6 +32,7 @@ module fortbo_fortml
         FORTBO_CAP_NOISY_MOMENTS, FORTBO_CAP_MOMENT_GRADIENT, &
         FORTBO_CAP_MEAN_HESSIAN, FORTBO_CAP_MOMENT_HESSIAN
     use fortbo_history, only: fortbo_history_t
+    use fortbo_ard_posterior, only: fortbo_fit_ard_posterior
     implicit none
     private
 
@@ -396,7 +397,7 @@ contains
     !! an allocatable posterior. The caller receives `fortbo_posterior_t` and
     !! cannot tell which branch was taken without asking.
     subroutine fortbo_fit_from_history(history, posterior, status, lengthscale, &
-            signal_variance, noise_variance, use_gradients)
+            signal_variance, noise_variance, use_gradients, lengthscales)
         type(fortbo_history_t), intent(in) :: history
         class(fortbo_posterior_t), intent(out), allocatable :: posterior
         type(fortnum_status_t), intent(out) :: status
@@ -406,13 +407,18 @@ contains
         !! Force the branch. Absent means "use gradients when the history has
         !! them", which is the behavior the roadmap requires.
         logical, intent(in), optional :: use_gradients
+        !! When present, select the exact value-only ARD parity adapter. This
+        !! is intentionally explicit: a caller must opt in rather than
+        !! receiving a different model merely because a vector happens to be
+        !! available.
+        real(dp), intent(in), optional :: lengthscales(:)
         type(fortbo_gp_posterior_t), allocatable :: value_only
         type(fortbo_derivative_gp_posterior_t), allocatable :: with_gradients
         type(kernel_t) :: kernel
         real(dp), allocatable :: inputs(:, :), objectives(:), gradients(:, :)
         real(dp), allocatable :: rows(:, :), targets(:, :)
         integer, allocatable :: components(:)
-        real(dp) :: noise
+        real(dp) :: noise, signal
         integer :: d, n, i, j, row, expanded
         logical :: wanted
 
@@ -420,6 +426,23 @@ contains
         if (d < 1) then
             call status_set(status, FORTNUM_DOMAIN_ERROR, &
                 "fortbo fortml: history is not initialized")
+            return
+        end if
+
+        if (present(lengthscales)) then
+            if (present(use_gradients)) then
+                if (use_gradients) then
+                    call status_set(status, FORTNUM_NOT_IMPLEMENTED, &
+                        "fortbo fortml: ARD parity adapter is value-only")
+                    return
+                end if
+            end if
+            noise = 1.0e-6_dp
+            if (present(noise_variance)) noise = noise_variance
+            signal = 1.0_dp
+            if (present(signal_variance)) signal = signal_variance
+            call fortbo_fit_ard_posterior(history, posterior, lengthscales, status, &
+                signal_variance=signal, noise_variance=noise)
             return
         end if
 
