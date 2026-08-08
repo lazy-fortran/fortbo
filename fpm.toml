@@ -25,3 +25,9 @@ auto-tests = true
 [fortran]
 implicit-typing = false
 source-form = "free"
+
+# fortbo_device.F90 contains an OpenACC-only module dependency.  Let fpm
+# preprocess that conditional before scanning modules, so a host build does
+# not require the compiler-provided `openacc` module.
+[preprocess]
+[preprocess.cpp]
