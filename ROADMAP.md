@@ -1205,8 +1205,28 @@ into the headline number.
   whole story from the trace alone; writing it exposed that the trace had no
   row for the *starting* radius, so the history began at the already-expanded
   value and could not show the region growing at all.
-- [ ] Keep CPU, transfer-inclusive GPU, resident GPU, and typed refusal rows
+- [x] Keep CPU, transfer-inclusive GPU, resident GPU, and typed refusal rows
   separate, with source/toolchain/device provenance.
+  `src/fortbo_provenance.f90` holds the four lanes and refuses to blur them.
+
+  The distinction that matters most is **transfer-inclusive versus resident**.
+  Both are legitimate numbers answering different questions, and reporting a
+  resident timing as though it were what a user experiences is the single most
+  common way a GPU claim misleads. They are separate lanes, and a mean is taken
+  within a lane, never across.
+
+  **A refusal is a result and stays in the table**, carrying no timing at all
+  rather than a zero. A zero would be averaged in and would drag every summary
+  toward it invisibly; dropping refused rows entirely is what turns "this works
+  on four of nine configurations" into "this works". A refusal must also say
+  *why*, or it is indistinguishable from a row nobody got round to filling in.
+
+  A lane with no measured rows reports **unavailable**, not zero — "fast" and
+  "never ran" are different claims. And comparability requires matching case,
+  precision, and *source revision*: comparing a CPU row from one revision
+  against a GPU row from another measures the revisions rather than the lanes,
+  which is the most common way a speedup is manufactured by accident.
+
 
 ## Definition of done
 
