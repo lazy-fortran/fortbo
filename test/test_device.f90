@@ -27,6 +27,7 @@ program test_device
     use fortbo_acquisition, only: fortbo_expected_improvement
     use fortbo_device, only: fortbo_device_available, fortbo_device_name, &
         fortbo_device_score_and_select, fortbo_host_score_and_select, &
+        fortbo_device_turbo_select, fortbo_host_turbo_select, &
         FORTBO_EXECUTED_HOST, FORTBO_EXECUTED_DEVICE
     implicit none
 
@@ -36,6 +37,7 @@ program test_device
     call check_host_matches_the_acquisition(failures)
     call check_ties_go_to_the_lowest_index(failures)
     call check_device_agrees_exactly_or_refuses(failures)
+    call check_resident_inner_loop(failures)
     call check_refusals(failures)
     call report_device_state()
 
@@ -161,6 +163,79 @@ contains
                 failures)
         end if
     end subroutine check_device_agrees_exactly_or_refuses
+
+    !! The resident inner loop: every region's candidates in one array, one
+    !! kernel, one reduction spanning all of them. The properties checked are
+    !! the ones that distinguish residency from a host loop with an accelerated
+    !! inner product.
+    subroutine check_resident_inner_loop(failures)
+        integer, intent(inout) :: failures
+        type(fortnum_status_t) :: status
+        integer, parameter :: n = 3000, n_regions = 4
+        real(dp) :: mean(n), sd(n), draw(n)
+        logical :: mask(n)
+        integer :: region_of(n)
+        integer :: host_chosen, host_region, device_chosen, device_region
+        integer :: executed, k
+        real(dp) :: host_value, device_value
+        logical :: masked_ever_chosen
+
+        do k = 1, n
+            mean(k) = 0.4_dp*sin(0.017_dp*real(k, dp))
+            sd(k) = 0.1_dp + 0.3_dp*abs(cos(0.0091_dp*real(k, dp)))
+            draw(k) = sin(0.31_dp*real(k, dp))*1.3_dp
+            region_of(k) = 1 + mod(k - 1, n_regions)
+            ! A third of the candidates are masked out, including some that
+            ! would otherwise win, so the mask has to be respected rather than
+            ! merely present.
+            mask(k) = mod(k, 3) /= 0
+        end do
+
+        call fortbo_host_turbo_select(mean, sd, draw, mask, region_of, &
+            host_chosen, host_region, host_value, status)
+        call expect(status%code == FORTNUM_OK, "the host inner loop runs", failures)
+        call expect(mask(host_chosen), &
+            "the selection respects the perturbation mask", failures)
+        call expect(host_region == region_of(host_chosen), &
+            "the reported region is the chosen candidate's", failures)
+
+        ! The cross-region argmin really spans regions: the winner is whichever
+        ! candidate has the lowest realization anywhere, not the best in region
+        ! one.
+        masked_ever_chosen = .false.
+        do k = 1, n
+            if (.not. mask(k)) cycle
+            if (mean(k) + sd(k)*draw(k) < host_value - 1.0e-12_dp) &
+                masked_ever_chosen = .true.
+        end do
+        call expect(.not. masked_ever_chosen, &
+            "no unmasked candidate anywhere beats the pooled winner", failures)
+
+        call fortbo_device_turbo_select(mean, sd, draw, mask, region_of, &
+            device_chosen, device_region, device_value, executed, status)
+        if (fortbo_device_available()) then
+            call expect(status%code == FORTNUM_OK .and. &
+                executed == FORTBO_EXECUTED_DEVICE, &
+                "the resident inner loop runs on the device", failures)
+            call expect(device_chosen == host_chosen .and. &
+                device_region == host_region .and. &
+                device_value == host_value, &
+                "the resident inner loop agrees with the host bit-for-bit", &
+                failures)
+        else
+            call expect(status%code == FORTNUM_NOT_IMPLEMENTED, &
+                "without a device the resident inner loop refuses by name", &
+                failures)
+        end if
+
+        ! Masking everything is a caller error, not a selection with no winner.
+        mask = .false.
+        call fortbo_host_turbo_select(mean, sd, draw, mask, region_of, &
+            host_chosen, host_region, host_value, status)
+        call expect(status%code == FORTNUM_DOMAIN_ERROR, &
+            "masking every candidate is refused rather than returning nothing", &
+            failures)
+    end subroutine check_resident_inner_loop
 
     subroutine check_refusals(failures)
         integer, intent(inout) :: failures

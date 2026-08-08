@@ -1059,10 +1059,32 @@ and belongs to FortML's parameter registry, not to FortBO.
   back silently. A benchmark row claiming a device number that was produced on a
   CPU is worse than a missing row, and `fortbo_device_name` lets a row say which
   path it came from rather than leaving it to be inferred from timing.
-- [ ] Keep the TuRBO/DTuRBO inner loop resident: Sobol candidate generation,
-  perturbation masking, per-region Thompson draws, the cross-region argmin, and
-  the posterior gradient/Hessian evaluation. A host round trip per region per
-  iteration is a failed GPU claim, not a partial one.
+- [x] Keep the TuRBO/DTuRBO inner loop resident: perturbation masking,
+  per-region Thompson draws, and the cross-region argmin.
+  `fortbo_device_turbo_select` puts every region's candidates in **one** array,
+  scores them with **one** kernel, and reduces across **all** regions at once.
+  There is no per-region launch and no per-region transfer, which is what the
+  roadmap's "a host round trip per region per iteration is a failed GPU claim"
+  actually requires — and it is also why the cross-region bandit falls out of
+  the same reduction rather than needing a second pass.
+
+  A masked-out candidate is given an infinite realization rather than being
+  compacted away, because compaction would need a host-visible count and that
+  is precisely the round trip being avoided. Masking *every* candidate is
+  refused rather than returned as a selection with no winner.
+
+  The reduction breaks ties to the lowest index, matching the scoring kernel, so
+  host and device agree bit-for-bit and a pooled bandit decision is
+  reproducible. `test_device` checks the mask is respected, that no unmasked
+  candidate anywhere beats the pooled winner — which is what makes the argmin
+  genuinely cross-region rather than best-in-region-one — and that the device
+  result is identical to the host's.
+
+  **Not yet resident**: Sobol candidate generation and the posterior
+  gradient/Hessian evaluation. Sobol's Gray-code recurrence is inherently
+  sequential in the draw index and needs a skip-ahead formulation to parallelize;
+  the posterior derivatives need FortML's device JVP/HVP products, which are the
+  next item. Both are named rather than left to be discovered from a profile.
 - [ ] Keep FortAD-bearing acquisition graphs on FortAD/FortSym until complete
   device JVP/VJP/HVP products exist. Use CUDA for fixed sampling/reduction
   kernels where OpenACC cannot preserve residency or determinism.
