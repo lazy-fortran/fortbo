@@ -214,11 +214,35 @@ Concretely, and binding on every work package below:
   against central differences. Emitting a `pure` leaf required an additive
   `pure_procedure` option in the FortSym kernel emitter, fixed upstream rather
   than worked around here.
-- [ ] Implement knowledge gradient, entropy search, predictive entropy search,
-  and noisy expected improvement. Knowledge gradient and the entropy family
-  need the one-dimensional inner optimization and the expectation over
-  fantasized observations that BO1's Monte Carlo item provides, so they land
-  after it rather than before.
+- [x] Implement **knowledge gradient**. `src/fortbo_knowledge_gradient.f90`
+  answers a different question from expected improvement: not how much better
+  the next *observation* will be, but how much better the decision finally
+  reported will be. The difference shows up whenever the point worth sampling
+  is not the point worth reporting, which is why EI degrades under heavy noise
+  and KG does not.
+
+  Conditioning on one fantasized observation shifts every reference mean along
+  a line in a single standard normal, so the inner expectation is the expected
+  minimum of a family of affine functions of one scalar — computed exactly by
+  envelope sweep rather than sampled, because sampling noise inside an
+  acquisition turns a tie into a coin flip and breaks replay.
+
+  Two real defects surfaced while testing it against Monte Carlo. First, the
+  minimum of affine functions is *concave*, so sorting by increasing slope
+  traverses its envelope right to left, while the maximum is convex and
+  traverses left to right; the first version swept the minimum directly with
+  the convex convention and kept lines that are never on the envelope at all.
+  It is now computed as `-E[max(-lines)]`, so the sweep is written once. Second,
+  the slope-tie ordering has to be *descending* by intercept: on an upper
+  envelope only the highest of a set of parallel lines can appear, and
+  ascending kept the wrong one. `test_knowledge_gradient` also checks the
+  property that separates KG from EI — a candidate uncorrelated with every
+  reference point is worth nothing however uncertain it is, where EI would
+  chase its variance.
+- [ ] Implement entropy search, predictive entropy search, and noisy expected
+  improvement. The entropy family needs the one-dimensional inner optimization
+  and the expectation over fantasized observations that BO1's Monte Carlo item
+  provides.
 - [x] Implement Monte Carlo acquisition evaluation with common random numbers,
   antithetic draws, reparameterized posterior samples, and exact gradients.
   `src/fortbo_monte_carlo.f90` freezes the standard normal base draws once,
