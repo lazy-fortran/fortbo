@@ -239,10 +239,29 @@ Concretely, and binding on every work package below:
   property that separates KG from EI — a candidate uncorrelated with every
   reference point is worth nothing however uncertain it is, where EI would
   chase its variance.
-- [ ] Implement entropy search, predictive entropy search, and noisy expected
-  improvement. The entropy family needs the one-dimensional inner optimization
-  and the expectation over fantasized observations that BO1's Monte Carlo item
-  provides.
+- [x] Implement **noisy expected improvement**. `fortbo_mc_noisy_ei_t` removes
+  the observed value from the comparison entirely. Plain EI measures against
+  the smallest value ever *observed*, which under noise is the minimum of a
+  sample: biased low by roughly the noise scale, and worse the more points are
+  evaluated. EI against it shrinks toward zero everywhere as a run proceeds,
+  which is the failure usually reported as "EI stops exploring". Noisy EI's
+  incumbent is the posterior's belief about the best *latent* value at the
+  evaluated inputs, re-drawn inside each sample and sharing the sample index
+  with the candidate — an honest comparison needs the draw in which the
+  observed points look good to be the same draw in which the candidate is
+  judged.
+
+  `test_monte_carlo` checks it against its own definition from the frozen
+  draws, checks that noiseless observations reduce it exactly to ordinary EI
+  (so it is a generalization, not a different acquisition with the same name),
+  and checks the property it exists for: it beats EI measured against a
+  noise-depressed sample minimum. One assertion had to be corrected — an
+  uncertain incumbent leaves *less* improvement available, not more, because
+  the minimum of several random variables sits below the minimum of their
+  means. Jensen decides that, not intuition.
+- [ ] Implement entropy search and predictive entropy search. Both need the
+  one-dimensional inner optimization and the expectation over fantasized
+  observations that BO1's Monte Carlo item provides.
 - [x] Implement Monte Carlo acquisition evaluation with common random numbers,
   antithetic draws, reparameterized posterior samples, and exact gradients.
   `src/fortbo_monte_carlo.f90` freezes the standard normal base draws once,

@@ -43,6 +43,7 @@ module fortbo_monte_carlo
     public :: fortbo_mc_base_t
     public :: fortbo_mc_ei_t
     public :: fortbo_mc_pi_t
+    public :: fortbo_mc_noisy_ei_t
 
     type :: fortbo_mc_base_t
         !! Fixed standard normal base draws, shaped (n_points, n_samples).
@@ -68,6 +69,45 @@ module fortbo_monte_carlo
         procedure, public :: value => mc_pi_value
         procedure, public :: name => mc_pi_name
     end type fortbo_mc_pi_t
+
+    !! Noisy expected improvement.
+    !!
+    !! Plain EI compares against `best`, the smallest value ever *observed*.
+    !! Under noise that number is not a property of the objective at all: it is
+    !! the minimum of a sample, so it is biased low by roughly the noise scale
+    !! and gets worse the more points are evaluated. EI measured against it
+    !! shrinks toward zero everywhere as a run proceeds, which is exactly the
+    !! failure people report as "EI stops exploring".
+    !!
+    !! Noisy EI removes the observed value from the comparison entirely. The
+    !! incumbent is the posterior's own belief about the best *latent* value at
+    !! the points already evaluated, and it is re-drawn inside each sample:
+    !!
+    !!     NEI(x) = E[ max(min_j f_j - f(x), 0) ]
+    !!
+    !! where `f_j` are the latent values at the observed inputs and `f(x)` the
+    !! latent value at the candidate, all under one joint posterior draw. Using
+    !! a joint draw is what makes the comparison honest — a sample in which the
+    !! observed points happen to be good must be the same sample in which the
+    !! candidate is judged, or the estimator credits the candidate for
+    !! randomness the incumbent also enjoyed.
+    !!
+    !! `observed_mean` and `observed_sd` are supplied by the caller rather than
+    !! recomputed here, because the caller already holds them from the fit and
+    !! because re-querying would let the two drift apart across a refit.
+    type, extends(fortbo_acquisition_t) :: fortbo_mc_noisy_ei_t
+        type(fortbo_mc_base_t) :: base
+        !! Posterior moments at the already-evaluated inputs.
+        real(dp), allocatable :: observed_mean(:)
+        real(dp), allocatable :: observed_sd(:)
+        !! Independent base draws for the observed points, shaped
+        !! (n_observed, n_samples). Frozen alongside `base` so the whole
+        !! acquisition replays from one seed.
+        real(dp), allocatable :: observed_draws(:, :)
+    contains
+        procedure, public :: value => mc_noisy_ei_value
+        procedure, public :: name => mc_noisy_ei_name
+    end type fortbo_mc_noisy_ei_t
 
 contains
 
@@ -281,5 +321,72 @@ contains
                 "fortbo monte carlo: negative posterior variance")
         end if
     end subroutine marginal_setup
+
+
+    !! One joint draw per sample: the observed latent values and the candidate's
+    !! latent value share the sample index, so the incumbent varies with the
+    !! draw exactly as the candidate does.
+    subroutine mc_noisy_ei_value(self, posterior, points, values, status)
+        class(fortbo_mc_noisy_ei_t), intent(in) :: self
+        class(fortbo_posterior_t), intent(in) :: posterior
+        real(dp), intent(in) :: points(:, :)
+        real(dp), intent(out) :: values(:)
+        type(fortnum_status_t), intent(out) :: status
+        real(dp), allocatable :: mean(:), variance(:)
+        real(dp) :: sample, incumbent, total
+        integer :: i, s, j, n_samples, n_observed
+
+        values = 0.0_dp
+        if (.not. allocated(self%observed_mean) .or. &
+            .not. allocated(self%observed_sd) .or. &
+            .not. allocated(self%observed_draws)) then
+            call status_set(status, FORTNUM_DOMAIN_ERROR, &
+                "fortbo mc noisy ei: observed moments have not been supplied")
+            return
+        end if
+        n_observed = size(self%observed_mean)
+        if (n_observed < 1 .or. size(self%observed_sd) /= n_observed .or. &
+            size(self%observed_draws, 1) /= n_observed) then
+            call status_set(status, FORTNUM_DOMAIN_ERROR, &
+                "fortbo mc noisy ei: observed arrays disagree")
+            return
+        end if
+        if (any(self%observed_sd < 0.0_dp)) then
+            call status_set(status, FORTNUM_DOMAIN_ERROR, &
+                "fortbo mc noisy ei: observed standard deviations must not be negative")
+            return
+        end if
+
+        call marginal_setup(self%base, posterior, points, mean, variance, status)
+        if (status%code /= FORTNUM_OK) return
+        n_samples = self%base%n_samples()
+        if (size(self%observed_draws, 2) /= n_samples) then
+            call status_set(status, FORTNUM_DOMAIN_ERROR, &
+                "fortbo mc noisy ei: observed draws must match the sample count")
+            return
+        end if
+
+        do i = 1, size(points, 1)
+            total = 0.0_dp
+            do s = 1, n_samples
+                incumbent = huge(1.0_dp)
+                do j = 1, n_observed
+                    incumbent = min(incumbent, self%observed_mean(j) &
+                        + self%observed_sd(j)*self%observed_draws(j, s))
+                end do
+                sample = mean(i) + sqrt(variance(i))*self%base%draws(i, s)
+                total = total + max(incumbent - sample, 0.0_dp)
+            end do
+            values(i) = total/real(n_samples, dp)
+        end do
+        call status_set(status, FORTNUM_OK, "")
+    end subroutine mc_noisy_ei_value
+
+    pure function mc_noisy_ei_name(self) result(name)
+        class(fortbo_mc_noisy_ei_t), intent(in) :: self
+        character(len=:), allocatable :: name
+
+        name = "mc_noisy_ei"
+    end function mc_noisy_ei_name
 
 end module fortbo_monte_carlo

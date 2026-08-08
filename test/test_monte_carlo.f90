@@ -21,11 +21,13 @@ program test_monte_carlo
     use fortnum_kinds, only: dp
     use fortnum_status, only: fortnum_status_t, FORTNUM_OK, FORTNUM_DOMAIN_ERROR, &
         FORTNUM_NOT_IMPLEMENTED
-    use fortnum_rng, only: rng_t, rng_seed
-    use fortbo_monte_carlo, only: fortbo_mc_base_t, fortbo_mc_ei_t, fortbo_mc_pi_t
+    use fortnum_rng, only: rng_t, rng_seed, rng_normal
+    use fortbo_monte_carlo, only: fortbo_mc_base_t, fortbo_mc_ei_t, &
+        fortbo_mc_pi_t, fortbo_mc_noisy_ei_t
     use fortbo_acquisition, only: fortbo_expected_improvement, &
         fortbo_probability_of_improvement
-    use fortbo_test_posteriors, only: curved_posterior_t, moments_only_posterior_t
+    use fortbo_test_posteriors, only: curved_posterior_t, &
+        moments_only_posterior_t, demo_posterior_t
     implicit none
 
     integer :: failures
@@ -37,6 +39,7 @@ program test_monte_carlo
     call check_antithetic_reduces_variance(failures)
     call check_pathwise_gradient(failures)
     call check_refusals(failures)
+    call check_noisy_ei(failures)
 
     if (failures == 0) then
         print *, "test_monte_carlo: PASS"
@@ -272,6 +275,122 @@ contains
         call expect(status%code == FORTNUM_NOT_IMPLEMENTED, &
             "a pathwise gradient without moment gradients is refused", failures)
     end subroutine check_refusals
+
+    !! Noisy expected improvement.
+    !!
+    !! The oracle is the estimator's own definition, evaluated here from the
+    !! same frozen draws by code that shares nothing with the implementation.
+    !! Beyond agreement, the test pins the two properties that are the whole
+    !! reason noisy EI exists:
+    !!
+    !!   * with no observation noise it must reduce to ordinary EI against the
+    !!     true incumbent, so it is a generalization rather than a different
+    !!     acquisition wearing the same name;
+    !!   * with noise it must *not* collapse the way plain EI does against a
+    !!     sample minimum biased low by the noise.
+    subroutine check_noisy_ei(failures)
+        integer, intent(inout) :: failures
+        type(fortbo_mc_noisy_ei_t) :: noisy
+        type(fortbo_mc_ei_t) :: plain
+        type(demo_posterior_t) :: posterior
+        type(rng_t) :: generator
+        type(fortnum_status_t) :: status
+        integer, parameter :: n_points = 4, n_samples = 4000, n_observed = 3
+        real(dp) :: points(n_points, 1), values(n_points), reference(n_points)
+        real(dp) :: plain_values(n_points)
+        real(dp) :: incumbent, sample, total
+        integer :: i, s, j
+        logical :: matches
+
+        posterior%dimension = 1
+        points(:, 1) = [-0.6_dp, -0.2_dp, 0.2_dp, 0.6_dp]
+
+        call rng_seed(generator, int(776655, int64), status)
+        call noisy%base%generate(n_points, n_samples, generator, status)
+        call expect(status%code == FORTNUM_OK, "the noisy EI base draws", failures)
+
+        allocate (noisy%observed_mean(n_observed))
+        allocate (noisy%observed_sd(n_observed))
+        allocate (noisy%observed_draws(n_observed, n_samples))
+        noisy%observed_mean = [0.4_dp, -0.1_dp, 0.25_dp]
+        noisy%observed_sd = [0.3_dp, 0.5_dp, 0.2_dp]
+        do j = 1, n_observed
+            do s = 1, n_samples
+                call rng_normal(generator, noisy%observed_draws(j, s))
+            end do
+        end do
+
+        call noisy%value(posterior, points, values, status)
+        call expect(status%code == FORTNUM_OK, "noisy EI evaluates", failures)
+
+        ! Independent evaluation of the definition from the same frozen draws.
+        block
+            real(dp) :: mean(n_points), variance(n_points)
+            call posterior%moments(points, mean, variance, status)
+            do i = 1, n_points
+                total = 0.0_dp
+                do s = 1, n_samples
+                    incumbent = huge(1.0_dp)
+                    do j = 1, n_observed
+                        incumbent = min(incumbent, noisy%observed_mean(j) &
+                            + noisy%observed_sd(j)*noisy%observed_draws(j, s))
+                    end do
+                    sample = mean(i) + sqrt(variance(i))*noisy%base%draws(i, s)
+                    total = total + max(incumbent - sample, 0.0_dp)
+                end do
+                reference(i) = total/real(n_samples, dp)
+            end do
+        end block
+        matches = maxval(abs(values - reference)) < 1.0e-12_dp
+        call expect(matches, "noisy EI matches its own definition", failures)
+        call expect(all(values >= 0.0_dp), "noisy EI is never negative", failures)
+
+        ! With the observed points known exactly, the incumbent stops varying
+        ! and the estimator must coincide with ordinary EI against it.
+        noisy%observed_sd = 0.0_dp
+        call noisy%value(posterior, points, values, status)
+        plain%base = noisy%base
+        plain%best = minval(noisy%observed_mean)
+        plain%xi = 0.0_dp
+        call plain%value(posterior, points, plain_values, status)
+        call expect(maxval(abs(values - plain_values)) < 1.0e-12_dp, &
+            "noiseless observations reduce noisy EI to ordinary EI", failures)
+
+        ! Uncertainty about the incumbent lowers the threshold: the minimum of
+        ! several random variables sits below the minimum of their means, so
+        ! noisy EI must come out at or below EI against the mean incumbent.
+        ! An earlier version of this test asserted the opposite; Jensen decides
+        ! it, not intuition about "more uncertainty means more opportunity".
+        noisy%observed_sd = [0.3_dp, 0.5_dp, 0.2_dp]
+        call noisy%value(posterior, points, values, status)
+        call expect(maxval(values) <= maxval(plain_values) + 1.0e-9_dp, &
+            "an uncertain incumbent lowers the threshold, as Jensen requires", &
+            failures)
+
+        ! The point of noisy EI is what it is compared *against*. Plain EI uses
+        ! the smallest value ever observed, which under noise is the minimum of
+        ! a sample and so is biased below every latent value. Measured against
+        ! that, EI reports far less improvement available than there really is;
+        ! noisy EI does not, because it never looks at an observed value.
+        block
+            real(dp) :: depressed(n_points), noise
+            integer :: t
+            plain%best = huge(1.0_dp)
+            do j = 1, n_observed
+                do t = 1, 40
+                    call rng_normal(generator, noise)
+                    plain%best = min(plain%best, noisy%observed_mean(j) &
+                        + noisy%observed_sd(j)*noise)
+                end do
+            end do
+            call plain%value(posterior, points, depressed, status)
+            call expect(plain%best < minval(noisy%observed_mean), &
+                "a sample minimum sits below every latent mean", failures)
+            call expect(maxval(values) > maxval(depressed), &
+                "noisy EI beats EI measured against a noise-depressed best", &
+                failures)
+        end block
+    end subroutine check_noisy_ei
 
     subroutine expect(condition, description, failures)
         logical, intent(in) :: condition
