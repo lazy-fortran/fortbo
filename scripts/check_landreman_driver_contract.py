@@ -37,6 +37,14 @@ def _require(source: str, pattern: str, label: str) -> None:
         raise DriverContractError(f"cannot find {label} in archived driver")
 
 
+def _check_digest(data: bytes, expected: Any, label: str) -> None:
+    actual = hashlib.sha256(data).hexdigest()
+    if actual != expected:
+        raise DriverContractError(
+            f"{label} digest mismatch: expected {expected}, got {actual}"
+        )
+
+
 def check_driver(source: str) -> None:
     """Check independent source-level invariants from the archived driver."""
     literals = {
@@ -101,12 +109,15 @@ def check(manifest_path: Path) -> None:
 
     archive_pin = _source(manifest, "landreman_archive")
     driver_pin = _source(manifest, "landreman_driver")
+    environment_pin = _source(manifest, "landreman_ax_environment")
     if archive_pin.get("kind") != "file":
         raise DriverContractError("Landreman archive pin must be a file")
     if driver_pin.get("kind") != "archive_member":
         raise DriverContractError("Landreman driver pin must be an archive member")
     if driver_pin.get("archive") != archive_pin.get("id"):
         raise DriverContractError("Landreman driver does not point to the archive")
+    if environment_pin.get("archive") != archive_pin.get("id"):
+        raise DriverContractError("Landreman environment does not point to the archive")
 
     archive_path = Path(archive_pin["path"])
     if not archive_path.is_file():
@@ -114,20 +125,35 @@ def check(manifest_path: Path) -> None:
     try:
         with tarfile.open(archive_path, mode="r:") as archive:
             driver_bytes = _member_bytes(archive, driver_pin["member"])
+            environment_bytes = _member_bytes(archive, environment_pin["member"])
     except (OSError, tarfile.TarError, KeyError) as error:
         raise DriverContractError(f"cannot read archived driver: {error}") from error
 
-    actual_digest = hashlib.sha256(driver_bytes).hexdigest()
-    if actual_digest != driver_pin.get("sha256"):
-        raise DriverContractError(
-            f"driver digest mismatch: expected {driver_pin.get('sha256')}, "
-            f"got {actual_digest}"
-        )
+    _check_digest(driver_bytes, driver_pin.get("sha256"), "driver")
+    _check_digest(environment_bytes, environment_pin.get("sha256"), "environment")
     try:
         source = driver_bytes.decode("utf-8")
     except UnicodeDecodeError as error:
         raise DriverContractError("archived driver is not UTF-8") from error
     check_driver(source)
+    try:
+        environment = environment_bytes.decode("utf-8")
+    except UnicodeDecodeError as error:
+        raise DriverContractError("archived environment list is not UTF-8") from error
+    expected_packages = {
+        "torch": "2.8.0",
+        "botorch": "0.15.1",
+        "gpytorch": "1.14",
+        "ax-platform": "1.1.2",
+    }
+    for package, version in expected_packages.items():
+        _require(environment, rf"^{re.escape(package)}\s+{re.escape(version)}\s*$",
+                 f"{package} {version} environment pin")
+    run = manifest.get("parameters", {}).get("run", {})
+    if run.get("environment_source") != environment_pin.get("id"):
+        raise DriverContractError("manifest environment source is not the pinned list")
+    if run.get("environment_packages") != expected_packages:
+        raise DriverContractError("manifest environment package versions are incomplete")
     print("Landreman driver contract: PASS (scrambled Sobol, ARD GP, qEI, async completion)")
 
 

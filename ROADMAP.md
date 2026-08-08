@@ -58,6 +58,7 @@ Frozen artifacts:
 | Artifact | SHA-256 |
 | --- | --- |
 | Landreman Zenodo archive | 7037bb0abbaaa7ccc4bc7b9f5434e41b18ecdf97af04cf8ae244ea2ae20c428f |
+| Landreman Ax environment list | 99ea0eb5f3d920804cdcad0505485a6d6b213b259bb74f211ff9ef765b9af228 |
 | Landreman PCA data inside the archive | 745548e503beda2f8794b169b8a8abd55adeddfa4acc71c2a76045b61acaac7c |
 | Landreman VMEC input inside the archive | 88318d8b2ab17741110a11bc5141ecfbbd862eb5ff02b47f808bc527c6bf263e |
 | Glas/Bindel paper | 24cc2600e8b20b74b80b96ce294286c66bea19c2e96808e516abae5f960f8d0b |

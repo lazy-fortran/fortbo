@@ -18,6 +18,13 @@
       "sha256": "bafbaaa897325c84859213493288774417e61fefbf2e65d3e8af6e4700d8cfb9"
     },
     {
+      "id": "landreman_ax_environment",
+      "kind": "archive_member",
+      "archive": "landreman_archive",
+      "member": "20260514-01-zenodo_for_data_informed_spaces_paper/environments/Ax_modules_pip_list",
+      "sha256": "99ea0eb5f3d920804cdcad0505485a6d6b213b259bb74f211ff9ef765b9af228"
+    },
+    {
       "id": "landreman_pca_data",
       "kind": "archive_member",
       "archive": "landreman_archive",
@@ -90,6 +97,13 @@
         "historical_partition": "regular",
         "historical_constraint": "gpu&hbm40g",
         "historical_account": "m4505"
+      },
+      "environment_source": "landreman_ax_environment",
+      "environment_packages": {
+        "torch": "2.8.0",
+        "botorch": "0.15.1",
+        "gpytorch": "1.14",
+        "ax-platform": "1.1.2"
       },
       "path_remapping": {
         "source_absolute_path_in_archive": "/pscratch/sd/l/landrema/20260402-01-alpha_optimization_unconstrained_parameter_scans/20260402-01_prepare_weighted_data_nfpAtLeast3_PCA.h5",

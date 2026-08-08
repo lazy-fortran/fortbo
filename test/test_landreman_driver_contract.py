@@ -62,16 +62,26 @@ trial_index, result_value = comm.recv(source=worker_rank, tag=RESULT_TAG)
 Y_turbo_list.append(result_value)
 """
 
+ENVIRONMENT = b"""ax-platform               1.1.2
+botorch                   0.15.1
+gpytorch                  1.14
+torch                     2.8.0
+"""
+
 
 class LandremanDriverContractTests(unittest.TestCase):
     def make_manifest(self, directory: Path, source: bytes = None) -> Path:
         source = source or CONTRACT_SOURCE.encode()
         archive_path = directory / "landreman.tar"
         driver_name = "source/driver.py"
+        environment_name = "source/Ax_modules_pip_list"
         driver_path = directory / "driver.py"
+        environment_path = directory / "Ax_modules_pip_list"
         driver_path.write_bytes(source)
+        environment_path.write_bytes(ENVIRONMENT)
         with tarfile.open(archive_path, "w") as archive:
             archive.add(driver_path, arcname=driver_name)
+            archive.add(environment_path, arcname=environment_name)
         manifest = {
             "source": [
                 {"id": "landreman_archive", "kind": "file",
@@ -79,7 +89,21 @@ class LandremanDriverContractTests(unittest.TestCase):
                 {"id": "landreman_driver", "kind": "archive_member",
                  "archive": "landreman_archive", "member": driver_name,
                  "sha256": hashlib.sha256(source).hexdigest()},
+                {"id": "landreman_ax_environment", "kind": "archive_member",
+                 "archive": "landreman_archive", "member": environment_name,
+                 "sha256": hashlib.sha256(ENVIRONMENT).hexdigest()},
             ],
+            "parameters": {
+                "run": {
+                    "environment_source": "landreman_ax_environment",
+                    "environment_packages": {
+                        "torch": "2.8.0",
+                        "botorch": "0.15.1",
+                        "gpytorch": "1.14",
+                        "ax-platform": "1.1.2",
+                    },
+                },
+            },
         }
         path = directory / "manifest.json"
         path.write_text(json.dumps(manifest), encoding="utf-8")
