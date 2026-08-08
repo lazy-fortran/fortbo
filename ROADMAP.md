@@ -1014,9 +1014,45 @@ and belongs to FortML's parameter registry, not to FortBO.
   the jitter `fortbo_fit_from_history` adds holds the posterior standard
   deviation near 1e-5, so ordinary use never lands on the cusp — worth knowing,
   and worth testing anyway.
-- [ ] Derive the posterior gradient and Hessian expressions for each supported
+- [x] Derive the posterior gradient and Hessian expressions for each supported
   kernel through FortSym and emit them; block-matrix work blocks on FortSym M9
   and must be fixed there.
+
+  **The M9 dependency was recorded more broadly than it is.** A GP posterior
+  gradient *looks* like block-matrix work and is not. Writing
+
+      m(x) = k(x)^T alpha,        alpha = K^-1 y
+      v(x) = k(x,x) - k(x)^T K^-1 k(x)
+
+  the derivatives are `dm/dx_i = (dk/dx_i)^T alpha` and
+  `dv/dx_i = dk(x,x)/dx_i - 2 (dk/dx_i)^T K^-1 k(x)`, and every matrix in
+  them — `alpha`, `K^-1 k(x)` — is a *numeric* vector from a runtime solve
+  against data. No symbolic inverse, determinant or eigenvalue appears
+  anywhere. So Bareiss, Dixon lifting and symbolic eigenvalues are not on this
+  path, and the item was never actually blocked. This is the second time in
+  this roadmap a recorded FortSym blocker turned out to be narrower than
+  written; both were resolved by asking what the expression actually needs.
+
+  The symbolic content is two things, and both are emitted. **Per-kernel input
+  derivatives**: FortSym now carries `gen_rbf_derivatives`, `gen_matern12_hvp`,
+  `gen_matern32_hvp` and `gen_matern52_hvp`, covering every kernel FortBO's
+  posteriors use — 5/2 was the gap, and it is the default precisely because it
+  is twice differentiable, so a posterior Hessian over it exists where one over
+  3/2 does not at coincident points. **The variance-to-standard-deviation
+  chain rule**: `gen_posterior_moment_leaf` derives
+
+      s = sqrt(v),  s' = v'/(2 sqrt v),  s'' = v''/(2 sqrt v) - v'^2/(4 v^{3/2})
+
+  and emits it as `src/generated/fortbo_generated_posterior_moment_leaf.f90`.
+  The `v^(-3/2)` term is exactly `s^(-3)`, which is where
+  `FORTBO_SD_HESSIAN_FLOOR` comes from — at a standard deviation of 1e-6 that
+  term already reaches about 1e18. Deriving it makes the bound something the
+  generator produces rather than something a comment claims.
+
+  `test_generated_kernels` gains the matching check, against
+  Richardson-extrapolated differences of a *stated* variance profile rather
+  than of the leaf's own output, and sweeps down to small variances where the
+  `v^(-3/2)` term dominates. Halving that term's coefficient trips it.
 - [x] Verify every generated derivative kernel against a complex-step or
   Richardson-extrapolated finite-difference oracle, with the symmetry of the
   Hessian checked exactly. `test_generated_kernels` sweeps *all* of

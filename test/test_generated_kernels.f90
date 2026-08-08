@@ -58,6 +58,13 @@ program test_generated_kernels
             real(real64), intent(out) :: side_length, side_d_log_lengthscale
             real(real64), intent(out) :: side_d_log_mean, side_d_base_length
         end subroutine fortbo_generated_trust_region_leaf
+
+        pure subroutine fortbo_generated_posterior_moment_leaf(variance, &
+                variance_d1, variance_d2, sd, sd_d1, sd_d2)
+            import :: dp
+            real(dp), intent(in) :: variance, variance_d1, variance_d2
+            real(dp), intent(out) :: sd, sd_d1, sd_d2
+        end subroutine fortbo_generated_posterior_moment_leaf
     end interface
 
     integer :: failures
@@ -68,6 +75,8 @@ program test_generated_kernels
     call check_preference_leaf(failures)
     call check_preference_identities(failures)
     call check_trust_region_leaf(failures)
+
+    call check_posterior_moment_leaf(failures)
 
     if (failures == 0) then
         print *, "test_generated_kernels: PASS"
@@ -390,6 +399,102 @@ contains
             "the rescaling's log derivatives are the value and its negation", &
             failures)
     end subroutine check_trust_region_leaf
+
+    !! The variance-to-standard-deviation chain rule.
+    !!
+    !! The oracle is the definition applied to a *stated* variance profile
+    !! rather than to the leaf's own outputs: pick `v(t)` in closed form,
+    !! differentiate it by hand, feed the leaf `v`, `v'` and `v''`, and check
+    !! `sd`, `sd'` and `sd''` against derivatives of `sqrt(v(t))` obtained by
+    !! Richardson-extrapolated central differences of that same closed form.
+    !! Nothing in the oracle reads the generated code.
+    !!
+    !! The second derivative is where this earns its place. It carries a
+    !! `v^(-3/2)` term, and that term is the whole reason
+    !! `FORTBO_SD_HESSIAN_FLOOR` exists — so the check runs down to small
+    !! variances where that term dominates, which is exactly where a wrong
+    !! coefficient would still look plausible at moderate values.
+    subroutine check_posterior_moment_leaf(failures)
+        integer, intent(inout) :: failures
+        real(dp) :: t, variance, variance_d1, variance_d2
+        real(dp) :: sd, sd_d1, sd_d2
+        real(dp) :: expected_d1, expected_d2
+        real(dp) :: worst_value, worst_d1, worst_d2, scale
+        integer :: k
+
+        worst_value = 0.0_dp
+        worst_d1 = 0.0_dp
+        worst_d2 = 0.0_dp
+        do k = 1, 40
+            ! A spread that reaches genuinely small variances, where the
+            ! v^(-3/2) term dominates and a wrong coefficient stops hiding.
+            t = 0.05_dp*real(k, dp)
+            call variance_profile(t, variance, variance_d1, variance_d2)
+            call fortbo_generated_posterior_moment_leaf(variance, variance_d1, &
+                variance_d2, sd, sd_d1, sd_d2)
+
+            worst_value = max(worst_value, abs(sd - sqrt(variance)))
+            call richardson_sd(t, expected_d1, expected_d2)
+            scale = max(1.0_dp, abs(expected_d1))
+            worst_d1 = max(worst_d1, abs(sd_d1 - expected_d1)/scale)
+            scale = max(1.0_dp, abs(expected_d2))
+            worst_d2 = max(worst_d2, abs(sd_d2 - expected_d2)/scale)
+        end do
+
+        call expect(worst_value < 1.0e-14_dp, &
+            "the generated standard deviation is the square root of the "// &
+            "variance", failures)
+        call expect(worst_d1 < 1.0e-8_dp, &
+            "its first derivative matches a Richardson-extrapolated oracle", &
+            failures)
+        call expect(worst_d2 < 1.0e-6_dp, &
+            "its second derivative matches, including the v^(-3/2) term", &
+            failures)
+        if (worst_d2 >= 1.0e-6_dp) print *, "    worst second-derivative "// &
+            "error:", worst_d2
+    end subroutine check_posterior_moment_leaf
+
+    !! A stated variance profile and its exact derivatives. Chosen to stay
+    !! positive while dipping small, so the awkward regime is covered without
+    !! ever asking for the square root of a negative number.
+    pure subroutine variance_profile(t, variance, variance_d1, variance_d2)
+        real(dp), intent(in) :: t
+        real(dp), intent(out) :: variance, variance_d1, variance_d2
+
+        variance = 0.02_dp + 0.5_dp*(1.0_dp - cos(t))
+        variance_d1 = 0.5_dp*sin(t)
+        variance_d2 = 0.5_dp*cos(t)
+    end subroutine variance_profile
+
+    !! First and second derivatives of `sqrt(v(t))` by Richardson-extrapolated
+    !! central differences of the profile itself.
+    subroutine richardson_sd(t, first, second)
+        real(dp), intent(in) :: t
+        real(dp), intent(out) :: first, second
+        real(dp) :: h, coarse_first, fine_first, coarse_second, fine_second
+
+        h = 1.0e-3_dp
+        coarse_first = (root_variance(t + h) - root_variance(t - h))/(2.0_dp*h)
+        fine_first = (root_variance(t + 0.5_dp*h) &
+            - root_variance(t - 0.5_dp*h))/h
+        ! Central differences are second-order, so the extrapolation weights
+        ! are (4*fine - coarse)/3.
+        first = (4.0_dp*fine_first - coarse_first)/3.0_dp
+
+        coarse_second = (root_variance(t + h) - 2.0_dp*root_variance(t) &
+            + root_variance(t - h))/(h*h)
+        fine_second = (root_variance(t + 0.5_dp*h) - 2.0_dp*root_variance(t) &
+            + root_variance(t - 0.5_dp*h))/(0.25_dp*h*h)
+        second = (4.0_dp*fine_second - coarse_second)/3.0_dp
+    end subroutine richardson_sd
+
+    pure real(dp) function root_variance(t) result(value)
+        real(dp), intent(in) :: t
+        real(dp) :: variance, unused_d1, unused_d2
+
+        call variance_profile(t, variance, unused_d1, unused_d2)
+        value = sqrt(variance)
+    end function root_variance
 
     subroutine expect(condition, description, failures)
         logical, intent(in) :: condition
