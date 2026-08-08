@@ -81,6 +81,10 @@ contains
         real(dp), allocatable :: point(:)
         real(dp) :: asymmetry
         integer :: n
+        !! Default-initialized instances, standing in for empty
+        !! structure constructors: nvfortran rejects `T()` outright,
+        !! and a declared local carries the same default init.
+        type(lbfgsb_options_t) :: lbfgsb_options_t_default
 
         n = size(gradient)
         step = 0.0_dp
@@ -128,7 +132,7 @@ contains
         model%gradient = gradient
         model%hessian = hessian
 
-        local_options = lbfgsb_options_t()
+        local_options = lbfgsb_options_t_default
         if (present(options)) local_options = options
 
         call objective%initialize_context(n, model, quadratic_objective, status)
