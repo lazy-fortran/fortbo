@@ -282,11 +282,35 @@ Concretely, and binding on every work package below:
   every elementary split, and a measured star-discrepancy advantage over
   pseudorandom points. A wrong direction-number table passes a range check and
   fails those.
-- [ ] Implement **TuRBO** to the specification below: lengthscale-rescaled
+- [x] Implement **TuRBO** to the specification below: lengthscale-rescaled
   hyperrectangle trust regions, success/failure counters, halve/double radius
   adaptation, restart on collapse, Thompson-sampling candidate selection, and
   the implicit multi-armed bandit across `m` simultaneous regions (TuRBO-1 and
-  TuRBO-`m`).
+  TuRBO-`m`). The regions, candidates, and Thompson selection each stand alone
+  and are tested on their own; `src/fortbo_turbo_driver.f90` is what makes them
+  a *method*. It is ask/tell rather than a callback loop, because FortBO does
+  not own the objective and the asynchronous-worker item needs that shape
+  anyway. Each region carries its own history and its own local surrogate;
+  pooling the data would defeat the point of a local model. A collapsed region
+  is left *unplaced* and draws a fresh design before being re-centered on the
+  best point of it, since re-centering on an arbitrary point discards a design
+  the run is about to pay for.
+
+  **The bandit is implicit, and testing that took two attempts.** The first
+  test let both regions explore freely and compared whichever happened to hold
+  better values; that measured almost nothing, because both converge on the
+  same basin and the result sat at chance whether the bandit worked or not.
+  Constructing the asymmetry — one region seeded on a design at the optimum,
+  the other in the far corner — made the measurement mean something, and
+  immediately exposed a real defect: the driver sent 31 of 50 proposals to the
+  *worse* region. A GP with a zero mean function reverts to zero away from its
+  data, so a region whose observations are all bad extrapolates to a prior
+  claiming zero is typical — better than anything it has actually seen — and
+  its realizations undercut a region sitting on genuinely good values.
+  Standardizing each region's observations before fitting and mapping the
+  moments back fixes it: the prior then says "typical for here", which is what
+  a trust region means. This is why TuRBO standardizes per region, and it is
+  not cosmetic.
 - [ ] Implement **DTuRBO**, the derivative-enabled trust-region policy, in its
   three composable modes: derivative observations in the surrogate, posterior
   gradient/Hessian local quadratic models solved as bound-constrained
