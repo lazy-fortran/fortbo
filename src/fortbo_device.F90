@@ -17,11 +17,12 @@ module fortbo_device
     !! **Determinism is not free on a device and is not sacrificed here.** A
     !! parallel reduction over floating-point values depends on the order the
     !! partial results combine, and that order is not fixed across launches. The
-    !! reductions below are therefore over *indices*, with ties broken by the
-    !! lowest index, so the answer is bit-identical between a host run and a
-    !! device run and between two device runs. An acquisition whose selected
-    !! point varied with scheduling would make a run unreplayable, which the
-    !! roadmap forbids independently of any performance claim.
+    !! reductions below first select the extremal scalar value, then use an
+    !! atomic lowest-index tie-break, so the answer is bit-identical between a
+    !! host run and a device run and between two device runs. An acquisition
+    !! whose selected point varied with scheduling would make a run
+    !! unreplayable, which the roadmap forbids independently of any performance
+    !! claim.
     !!
     !! **Refusal is typed, not silent.** When no device is present the routines
     !! say so rather than quietly running on the host — a benchmark row that
@@ -158,9 +159,9 @@ contains
     !! between scoring and reduction, which is what the roadmap's residency
     !! requirement means operationally.
     !!
-    !! The reduction is a two-stage index reduction rather than a value
-    !! `max` followed by a search: the latter would need a second pass and
-    !! could pick a different tied index than the host does.
+    !! The reduction is a value extremum followed by a deterministic index
+    !! tie-break. The second pass only compares exact values already present in
+    !! the device array, so it cannot change the selected score.
     subroutine fortbo_device_score_and_select(mean, sd, best, xi, chosen, value, &
             executed, status)
         real(dp), intent(in) :: mean(:)
@@ -172,7 +173,8 @@ contains
         integer, intent(out) :: executed
         type(fortnum_status_t), intent(out) :: status
         real(dp), allocatable :: scores(:)
-        integer :: n, i
+        real(dp) :: best_score
+        integer :: n, i, best_index
 
         chosen = 0
         value = 0.0_dp
@@ -199,29 +201,46 @@ contains
         end if
 
         allocate (scores(n))
+        best_score = -huge(1.0_dp)
+        best_index = n + 1
 #ifdef _OPENACC
-        !$acc data copyin(mean, sd) create(scores) copyout(scores)
+        !$acc data copyin(mean, sd) create(scores) copy(best_score, best_index)
         !$acc parallel loop present(mean, sd, scores)
         do i = 1, n
             scores(i) = improvement(mean(i), sd(i), best, xi)
         end do
         !$acc end parallel loop
+        !$acc parallel loop present(scores) reduction(max:best_score)
+        do i = 1, n
+            best_score = max(best_score, scores(i))
+        end do
+        !$acc end parallel loop
+        !$acc parallel loop present(scores)
+        do i = 1, n
+            if (scores(i) == best_score) then
+                !$acc atomic update
+                best_index = min(best_index, i)
+            end if
+        end do
+        !$acc end parallel loop
+        !$acc update self(best_score, best_index)
         !$acc end data
 #else
         do i = 1, n
             scores(i) = improvement(mean(i), sd(i), best, xi)
         end do
+        do i = 1, n
+            if (scores(i) > best_score) best_score = scores(i)
+        end do
+        do i = 1, n
+            if (scores(i) == best_score) best_index = min(best_index, i)
+        end do
 #endif
 
-        ! Deterministic index reduction, matching the host's tie-break exactly.
-        chosen = 1
-        value = scores(1)
-        do i = 2, n
-            if (scores(i) > value) then
-                value = scores(i)
-                chosen = i
-            end if
-        end do
+        ! The index reduction also ran on the device. The atomic min keeps the
+        ! lowest index for an exact score tie, matching the host reference.
+        chosen = best_index
+        value = best_score
 
         executed = FORTBO_EXECUTED_DEVICE
         call status_set(status, FORTNUM_OK, "")
@@ -257,7 +276,8 @@ contains
         integer, intent(out) :: executed
         type(fortnum_status_t), intent(out) :: status
         real(dp), allocatable :: realization(:)
-        integer :: n, i
+        real(dp) :: best_realization
+        integer :: n, i, best_index
 
         chosen = 0
         region = 0
@@ -273,25 +293,55 @@ contains
             return
         end if
 
+        if (.not. any(mask)) then
+            call status_set(status, FORTNUM_DOMAIN_ERROR, &
+                "fortbo device: every candidate was masked out")
+            return
+        end if
+
         allocate (realization(n))
+        best_realization = huge(1.0_dp)
+        best_index = n + 1
 #ifdef _OPENACC
-        !$acc data copyin(mean, sd, base_draw, mask) copyout(realization)
+        !$acc data copyin(mean, sd, base_draw, mask) &
+        !$acc& create(realization) copy(best_realization, best_index)
         !$acc parallel loop present(mean, sd, base_draw, mask, realization)
         do i = 1, n
             realization(i) = thompson_realization(mean(i), sd(i), base_draw(i), &
                 mask(i))
         end do
         !$acc end parallel loop
+        !$acc parallel loop present(realization) reduction(min:best_realization)
+        do i = 1, n
+            best_realization = min(best_realization, realization(i))
+        end do
+        !$acc end parallel loop
+        !$acc parallel loop present(realization)
+        do i = 1, n
+            if (realization(i) == best_realization) then
+                !$acc atomic update
+                best_index = min(best_index, i)
+            end if
+        end do
+        !$acc end parallel loop
+        !$acc update self(best_realization, best_index)
         !$acc end data
 #else
         do i = 1, n
             realization(i) = thompson_realization(mean(i), sd(i), base_draw(i), &
                 mask(i))
         end do
+        do i = 1, n
+            if (realization(i) < best_realization) best_realization = realization(i)
+        end do
+        do i = 1, n
+            if (realization(i) == best_realization) best_index = min(best_index, i)
+        end do
 #endif
 
-        call reduce_minimum(realization, region_of, chosen, region, value, status)
-        if (status%code /= FORTNUM_OK) return
+        chosen = best_index
+        region = region_of(chosen)
+        value = best_realization
         executed = FORTBO_EXECUTED_DEVICE
     end subroutine fortbo_device_turbo_select
 

@@ -75,6 +75,17 @@ published periodic-kernel equations are now implemented in
 `scripts/glas_covariance.py` and checked against direct numerical integration;
 that generator does not claim to recover the paper's random-number schedule.
 
+The current local GPU audit on `mailuefterl` found `nvfortran`/`nvc` 26.5-0 and
+two NVIDIA GeForce RTX 5060 Ti devices (driver 610.43.03, 16311 MiB each).
+`src/fortbo_device.F90` now keeps the score and pooled TuRBO realization arrays
+on the device through the reduction, returning only the selected scalar state.
+A standalone probe compiled with `nvfortran -acc -O2 -Minfo=accel` passed on
+both devices; `PGI_ACC_TIME=1` reported NVIDIA kernels and reduction kernels
+with no per-candidate array copyout. This is kernel/residency evidence, not a
+package benchmark: `FC=nvfortran fo build --flag "-acc"` currently stops in the
+external FortAD `fortad_reverse.f90` with an nvfortran internal compiler error
+(`Deferred-length character symbol must have descriptor`, line 5166).
+
 ## Active blockers
 
 1. The Landreman archive and its historical Slurm job are now pinned in the
@@ -97,9 +108,12 @@ that generator does not claim to recover the paper's random-number schedule.
    published stochastic training and paired action are still unchecked; until
    those gates pass, label the result `fortbo-exact-derivative` or
    `fortbo-variational-derivative` as appropriate.
-4. The audited hosts expose gfortran and Intel ifx, but no nvfortran or nvc.
-   GPU results require an allocated device, captured identity, and kernel
-   residency evidence.
+4. The current audit host has nvfortran/nvc and two allocated RTX 5060 Ti
+   devices, and the standalone FortBO device probe now has captured identity
+   and kernel-residency evidence. A whole-package OpenACC build is still
+   blocked by the external FortAD nvfortran compiler error recorded above, so
+   the package-level GPU benchmark and end-to-end performance profile remain
+   open.
 
 ## Repository and provenance
 
@@ -293,6 +307,7 @@ nvidia-smi for GPU jobs, package freezes, linked libraries, stdout, and stderr.
 
 | Host | Role | Constraint |
 | --- | --- | --- |
+| mailuefterl | local OpenACC kernel probe | nvfortran/nvc 26.5-0, two RTX 5060 Ti devices; whole-package build currently stops in external FortAD |
 | aCluster | first CPU smoke and available-T4 tests | CUDA 11.8, gfortran 12.2, Intel ifx, no nvfortran/nvc, request --gres=gpu:1 |
 | sCluster | preferred GPU run when GRES is free | CUDA 13.1 at /usr/local/cuda, gfortran 12.2, all audited GPUs were allocated |
 | faepmac1 | SSH proxy/login | no benchmark runs |
