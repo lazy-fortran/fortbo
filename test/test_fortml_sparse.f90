@@ -21,11 +21,13 @@ program test_fortml_sparse
         FORTNUM_NOT_IMPLEMENTED
     use fortnum_rng, only: rng_t, rng_seed
     use fortml_kernels, only: kernel_t, make_rbf_kernel
+    use fortml_robust_gp, only: FORTML_LIKELIHOOD_POISSON, &
+        FORTML_LIKELIHOOD_STUDENT_T
     use fortbo_posterior, only: FORTBO_CAP_MOMENTS, FORTBO_CAP_COVARIANCE, &
         FORTBO_CAP_JOINT_SAMPLE
     use fortbo_fortml_sparse, only: fortbo_multi_output_posterior_t, &
         fortbo_student_t_posterior_t, fortbo_heteroskedastic_posterior_t, &
-        fortbo_classification_posterior_t
+        fortbo_classification_posterior_t, fortbo_robust_posterior_t
     use fortbo_acquisition, only: fortbo_ei_t
     use fortbo_batch, only: fortbo_batch_samples_t, fortbo_qei
     implicit none
@@ -39,6 +41,7 @@ program test_fortml_sparse
     call check_acquisitions_run_unchanged(failures)
     call check_heteroskedastic_separates_its_two_uncertainties(failures)
     call check_classification_presents_the_latent(failures)
+    call check_robust_adapter(failures)
     call check_refusals(failures)
 
     if (failures == 0) then
@@ -365,6 +368,54 @@ contains
         call expect(.not. model%supports(FORTBO_CAP_JOINT_SAMPLE), &
             "the classification adapter claims no joint sampling", failures)
     end subroutine check_classification_presents_the_latent
+
+    !! Count and robust surrogates. The adapter presents latent moments, and
+    !! declares nothing at all when the Laplace mode failed to settle.
+    subroutine check_robust_adapter(failures)
+        integer, intent(inout) :: failures
+        type(fortbo_robust_posterior_t) :: counts
+        type(kernel_t) :: kernel
+        type(fortnum_status_t) :: status
+        real(dp) :: x(8, 1), y(8), probe(3, 1), mean(3), variance(3)
+        integer :: k
+
+        do k = 1, 8
+            x(k, 1) = -1.4_dp + 0.4_dp*real(k - 1, dp)
+            y(k) = real(max(0, nint(3.0_dp*exp(0.6_dp*x(k, 1)))), dp)
+        end do
+        do k = 1, 3
+            probe(k, 1) = -1.0_dp + 1.0_dp*real(k - 1, dp)
+        end do
+
+        kernel = make_rbf_kernel(1, 1.0_dp, 0.9_dp, status)
+        call counts%model%fit(x, y, kernel, FORTML_LIKELIHOOD_POISSON, status)
+        call expect(status%code == FORTNUM_OK, "the count model fits", failures)
+        counts%dimension = 1
+        counts%fitted = .true.
+
+        call expect(counts%converged(), "the count fit settles", failures)
+        call expect(counts%supports(FORTBO_CAP_MOMENTS), &
+            "a settled fit declares moments", failures)
+
+        call counts%moments(probe, mean, variance, status)
+        call expect(status%code == FORTNUM_OK, "the latent moments evaluate", &
+            failures)
+        ! Latent, not response: a log rate is signed and rises with the counts.
+        call expect(mean(3) > mean(1), &
+            "the latent log rate rises with the observed counts", failures)
+        call expect(all(variance >= 0.0_dp), "the latent variance is a variance", &
+            failures)
+
+        ! An unfitted adapter declares nothing, so a policy cannot consume
+        ! moments that do not exist.
+        block
+            type(fortbo_robust_posterior_t) :: unfitted
+            call expect(unfitted%capabilities() == 0, &
+                "an unfitted robust adapter declares nothing", failures)
+            call expect(.not. unfitted%converged(), &
+                "an unfitted adapter is not reported as converged", failures)
+        end block
+    end subroutine check_robust_adapter
 
     subroutine check_refusals(failures)
         integer, intent(inout) :: failures

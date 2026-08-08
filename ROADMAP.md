@@ -499,8 +499,35 @@ Concretely, and binding on every work package below:
   than in the objective. That makes this adapter right for exactly one job —
   finding the decision boundary, where the latent crosses zero — so its intended
   consumer is level-set estimation in `fortbo_active`, not `fortbo_ei`.
-- [ ] Add count and robust surrogate likelihood adapters, which need Poisson and
-  heavy-tailed observation models FortML does not yet carry.
+- [x] Add count and robust surrogate likelihood adapters. The observation
+  models are new FortML code (`fortml_robust_gp.f90`), since a Poisson or
+  Student-t likelihood is generic GP work.
+
+  Both are cases an ordinary GP handles badly for one shared reason: it assumes
+  a Gaussian residual whose variance does not depend on the latent. A Gaussian
+  likelihood on counts puts mass on negative counts and treats a spread of 3
+  around a mean of 4 the same as around a mean of 400. A Gaussian log density is
+  quadratic, so a single outlier pulls with unbounded force, where a Student-t's
+  is logarithmic and its influence *saturates*.
+
+  Two numerical points that had to be got right rather than guessed. The
+  Student-t posterior is **not log-concave** — beyond `sqrt(nu) * scale` its
+  curvature turns negative and a Newton step would ascend — so the curvature is
+  floored at zero, which is precisely the influence saturation the likelihood
+  was chosen for. And the Newton system uses `B = I + W^(1/2) K W^(1/2)`, which
+  is symmetric positive definite, rather than the direct `I + W K`, which is
+  neither: the direct form would need normal equations and square the condition
+  number, on a fit whose curvature has just been floored.
+
+  The Poisson response is `exp(f + v/2)`, the log-normal *mean*, not `exp(f)`,
+  which is the median — reporting the median understates every rate, and worst
+  where the model is least sure. The adapter nonetheless presents *latent*
+  moments, because an acquisition on the response would weight a rise from 400
+  to 410 the same as one from 4 to 14.
+
+  `converged` is exposed and gates the capability bits: an unsettled Laplace fit
+  has moments, but they approximate around a point that is not a mode, and
+  declaring them would let a policy consume them silently.
 - [ ] Add fully Bayesian surrogate hyperparameter integration through FortMC
   and compare integrated versus plug-in acquisition policies.
 - [x] Support user-defined FortML posterior providers without requiring a GP.

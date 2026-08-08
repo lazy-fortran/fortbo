@@ -35,6 +35,7 @@ module fortbo_fortml_sparse
     use fortml_student_t_process, only: student_t_process_t
     use fortml_heteroskedastic_gp, only: heteroskedastic_gp_t
     use fortml_gp_classification, only: gp_classification_t
+    use fortml_robust_gp, only: robust_gp_t
     use fortbo_posterior, only: fortbo_posterior_t, FORTBO_CAP_MOMENTS, &
         FORTBO_CAP_NOISY_MOMENTS, FORTBO_CAP_COVARIANCE, FORTBO_CAP_JOINT_SAMPLE
     implicit none
@@ -45,6 +46,7 @@ module fortbo_fortml_sparse
     public :: fortbo_student_t_posterior_t
     public :: fortbo_heteroskedastic_posterior_t
     public :: fortbo_classification_posterior_t
+    public :: fortbo_robust_posterior_t
 
     !! Jitter added before factorizing a joint covariance for sampling. A
     !! multi-output covariance restricted to one output is often near-singular
@@ -124,6 +126,32 @@ module fortbo_fortml_sparse
         procedure, public :: capabilities => classification_capabilities
         procedure, public :: moments => classification_moments
     end type fortbo_classification_posterior_t
+
+    !! Count and robust surrogates behind the contract, presenting *latent*
+    !! moments under a Laplace approximation.
+    !!
+    !! Latent rather than response, for the same reason as the classification
+    !! adapter: the latent is the Gaussian object FortBO's acquisitions
+    !! integrate against. For a Poisson model the response is a rate, whose
+    !! relation to the latent is exponential, so an acquisition run on the
+    !! response would be measuring improvement in rate — which is a different
+    !! and usually worse objective than improvement in log rate, because it
+    !! weights an increase from 400 to 410 the same as one from 4 to 14.
+    !!
+    !! `converged` is exposed rather than folded into the fit's status. A
+    !! Student-t posterior is not log-concave and its mode can fail to settle;
+    !! a caller that reads the moments without checking is reading a Laplace
+    !! approximation around a point that may not be a mode.
+    type, extends(fortbo_posterior_t) :: fortbo_robust_posterior_t
+        type(robust_gp_t) :: model
+        integer :: dimension = 0
+        logical :: fitted = .false.
+    contains
+        procedure, public :: n_inputs => robust_n_inputs
+        procedure, public :: capabilities => robust_capabilities
+        procedure, public :: moments => robust_moments
+        procedure, public :: converged => robust_converged
+    end type fortbo_robust_posterior_t
 
     type, extends(fortbo_posterior_t) :: fortbo_multi_output_posterior_t
         type(multi_output_gp_t) :: model
@@ -308,6 +336,53 @@ contains
         ! The *latent* moments, deliberately. See the type's note.
         call self%model%predict_latent(points, mean, variance, status)
     end subroutine classification_moments
+
+    pure integer function robust_n_inputs(self) result(n)
+        class(fortbo_robust_posterior_t), intent(in) :: self
+
+        n = self%dimension
+    end function robust_n_inputs
+
+    pure integer function robust_capabilities(self) result(caps)
+        class(fortbo_robust_posterior_t), intent(in) :: self
+
+        caps = 0
+        ! Only claimed once the Laplace mode has settled. An unconverged fit
+        ! has moments, but they are an approximation around a point that is not
+        ! a mode, and declaring them would let a policy consume them silently.
+        if (self%fitted .and. self%model%converged) then
+            caps = FORTBO_CAP_MOMENTS + FORTBO_CAP_NOISY_MOMENTS
+        end if
+    end function robust_capabilities
+
+    pure logical function robust_converged(self) result(settled)
+        class(fortbo_robust_posterior_t), intent(in) :: self
+
+        settled = self%fitted .and. self%model%converged
+    end function robust_converged
+
+    subroutine robust_moments(self, points, mean, variance, status)
+        class(fortbo_robust_posterior_t), intent(in) :: self
+        real(dp), intent(in) :: points(:, :)
+        real(dp), intent(out) :: mean(:)
+        real(dp), intent(out) :: variance(:)
+        type(fortnum_status_t), intent(out) :: status
+
+        mean = 0.0_dp
+        variance = 0.0_dp
+        if (.not. self%fitted) then
+            call status_set(status, FORTNUM_DOMAIN_ERROR, &
+                "fortbo robust: surrogate has not been fitted")
+            return
+        end if
+        if (size(points, 2) /= self%dimension .or. size(mean) /= size(points, 1) &
+            .or. size(variance) /= size(points, 1)) then
+            call status_set(status, FORTNUM_DOMAIN_ERROR, &
+                "fortbo robust: query shape does not match the surrogate")
+            return
+        end if
+        call self%model%predict_latent(points, mean, variance, status)
+    end subroutine robust_moments
 
     pure integer function multi_n_inputs(self) result(n)
         class(fortbo_multi_output_posterior_t), intent(in) :: self
