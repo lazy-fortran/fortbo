@@ -408,7 +408,7 @@ contains
         real(dp), intent(out) :: mean(:)
         real(dp), intent(out) :: variance(:)
         type(fortnum_status_t), intent(out) :: status
-        real(dp), allocatable :: full_mean(:, :), joint(:, :)
+        real(dp), allocatable :: full_mean(:, :), all_variance(:, :)
         integer :: n, i
 
         mean = 0.0_dp
@@ -427,11 +427,17 @@ contains
         if (status%code /= FORTNUM_OK) return
         mean = full_mean(:, self%output)
 
-        allocate (joint(n, n))
-        call selected_covariance(self, points, joint, status)
+        ! Marginals only. This used to form the full joint posterior
+        ! covariance and read its diagonal, which allocates `(n*p)` squared:
+        ! at the candidate counts TuRBO actually scores -- `min(100d, 5000)`
+        ! per region per step -- that is a ten-thousand-square matrix and
+        ! eight hundred megabytes to obtain `n` numbers. Callers that need the
+        ! cross-covariances still have `multi_covariance`.
+        allocate (all_variance(n, self%n_outputs))
+        call self%model%predict_variance(points, all_variance, status)
         if (status%code /= FORTNUM_OK) return
         do i = 1, n
-            variance(i) = max(joint(i, i), 0.0_dp)
+            variance(i) = max(all_variance(i, self%output), 0.0_dp)
         end do
         call status_set(status, FORTNUM_OK, "")
     end subroutine multi_moments
