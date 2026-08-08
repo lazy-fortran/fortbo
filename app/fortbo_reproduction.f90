@@ -31,7 +31,7 @@ program fortbo_reproduction
     read (argument(:length), *) n_initial
     call get_command_argument(4, argument, length=length)
     read (argument(:length), *) seed
-    if (command_argument_count() == 5) then
+    if (command_argument_count() >= 5) then
         call get_command_argument(5, argument, length=length)
         select case (trim(adjustl(argument(:length))))
         case ("ei", "qei")
