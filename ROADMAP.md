@@ -382,7 +382,25 @@ Concretely, and binding on every work package below:
   surrogate likelihood adapters.
 - [ ] Add fully Bayesian surrogate hyperparameter integration through FortMC
   and compare integrated versus plug-in acquisition policies.
-- [ ] Support user-defined FortML posterior providers without requiring a GP.
+- [x] Support user-defined FortML posterior providers without requiring a GP.
+  `src/fortbo_linear_posterior.f90` is a Bayesian linear model on a caller-
+  supplied feature map, and it is in the tree specifically so the contract's
+  claim stays tested rather than merely stated: `test_linear_posterior` runs
+  expected improvement, UCB, qEI, and knowledge gradient against it *unchanged*.
+
+  It is the right second provider because it is not a GP in the way that
+  matters. Its posterior has a finite-dimensional parameter, its cost is
+  independent of the observation count once fitted, and its function-space
+  covariance has rank at most the feature count however many query points are
+  asked about. An acquisition that quietly assumed full-rank joint covariance
+  would pass against a GP and fail here, so the test constructs exactly that
+  case — six query points, three features — and confirms the covariance is
+  singular while batch sampling still works, because joint samples are drawn in
+  *weight* space rather than by factorizing the singular function-space matrix.
+
+  It declines `FORTBO_CAP_MOMENT_GRADIENT`: that needs the feature map's
+  Jacobian, and a caller who supplied only a value map must not have one
+  invented on its behalf.
 
 ### BO3: candidate optimization and trust regions
 
