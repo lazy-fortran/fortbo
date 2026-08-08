@@ -568,22 +568,33 @@ contains
         real(dp), intent(out) :: scale
         type(fortnum_status_t), intent(out) :: status
         real(dp) :: spread
-        integer :: n, i
+        integer :: n, i, row
 
-        n = source%count
+        n = source%usable_count()
         shift = 0.0_dp
         scale = 1.0_dp
         call copy%initialize(source%n_inputs, 0, status)
         if (status%code /= FORTNUM_OK) return
         if (n < 1) return
 
-        shift = sum(source%objectives(:n))/real(n, dp)
+        shift = 0.0_dp
+        do row = 1, source%count
+            if (.not. source%is_usable(row)) cycle
+            shift = shift + source%objectives(row)
+        end do
+        shift = shift/real(n, dp)
         if (n > 1) then
-            spread = sum((source%objectives(:n) - shift)**2)/real(n - 1, dp)
+            spread = 0.0_dp
+            do row = 1, source%count
+                if (.not. source%is_usable(row)) cycle
+                spread = spread + (source%objectives(row) - shift)**2
+            end do
+            spread = spread/real(n - 1, dp)
             if (spread > 0.0_dp) scale = sqrt(spread)
         end if
 
-        do i = 1, n
+        do i = 1, source%count
+            if (.not. source%is_usable(i)) cycle
             if (source%has_gradient(i)) then
                 call copy%add(source%inputs(i, :), status, &
                     objective=(source%objectives(i) - shift)/scale, &

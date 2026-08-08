@@ -37,6 +37,7 @@ program test_turbo_driver
     call check_driver_uses_gradients(failures)
     call check_driver_uses_variational_model(failures)
     call check_driver_records_failures(failures)
+    call check_failed_rows_do_not_poison_surrogate(failures)
     call check_frozen_initial_design(failures)
     call check_frozen_candidate_pool(failures)
     call check_frozen_candidate_regions(failures)
@@ -480,6 +481,81 @@ contains
         call expect(driver%best_value == value(1), &
             "successful evaluations update the incumbent", failures)
     end subroutine check_driver_records_failures
+
+    !! A failed truth call is retained for accounting and trust-state updates,
+    !! but its imputed sentinel must not enter standardization or surrogate
+    !! fitting. The independent oracle is a paired run with the same successful
+    !! history and one extra ask: when the failure is excluded, both runs have
+    !! the same posterior and therefore the same next frozen-pool proposal.
+    subroutine check_failed_rows_do_not_poison_surrogate(failures)
+        integer, intent(inout) :: failures
+        type(fortbo_turbo_config_t) :: config
+        type(fortbo_turbo_driver_t) :: clean, failed
+        type(fortnum_status_t) :: status
+        real(dp) :: point(1, 2), failed_point(1, 2), clean_point(1, 2)
+        real(dp) :: value(1), pool(8, 2)
+        logical :: successful(1)
+        integer :: region(1), failed_region(1), clean_region(1)
+
+        config%n_regions = 1
+        config%batch_size = 1
+        config%n_initial = 1
+        allocate (config%frozen_initial_design(1, 2), config%frozen_candidates(8, 2))
+        config%frozen_initial_design = reshape([0.5_dp, 0.5_dp], [1, 2])
+        pool = 0.5_dp
+        pool(1, :) = [0.30_dp, 0.35_dp]
+        pool(2, :) = [0.35_dp, 0.40_dp]
+        pool(3, :) = [0.40_dp, 0.45_dp]
+        pool(4, :) = [0.45_dp, 0.50_dp]
+        pool(5, :) = [0.50_dp, 0.55_dp]
+        pool(6, :) = [0.55_dp, 0.60_dp]
+        pool(7, :) = [0.60_dp, 0.65_dp]
+        pool(8, :) = [0.65_dp, 0.70_dp]
+        config%frozen_candidates = pool
+
+        call clean%initialize(2, config, 6060, status)
+        call expect(status%code == FORTNUM_OK, &
+            "clean failure-reference driver initializes", failures)
+        call failed%initialize(2, config, 6060, status)
+        call expect(status%code == FORTNUM_OK, &
+            "failure-path driver initializes", failures)
+
+        call clean%ask(point, clean_region, status)
+        call failed%ask(failed_point, failed_region, status)
+        value = 0.25_dp
+        call clean%tell(point, clean_region, value, status)
+        call failed%tell(failed_point, failed_region, value, status)
+        call expect(status%code == FORTNUM_OK, &
+            "the shared successful observation is recorded", failures)
+
+        ! Advance both generators through the same first posterior proposal.
+        call clean%ask(clean_point, clean_region, status)
+        call failed%ask(failed_point, failed_region, status)
+        call expect(maxval(abs(clean_point - failed_point)) == 0.0_dp, &
+            "the paired drivers agree before the injected failure", failures)
+
+        successful = .false.
+        value = huge(1.0_dp)
+        call failed%tell(failed_point, failed_region, value, status, &
+            successful=successful)
+        call expect(status%code == FORTNUM_OK, &
+            "the injected failed observation is recorded", failures)
+
+        ! The clean reference asks again without adding a truth observation;
+        ! the failure path asks after adding a failed row. They must agree if
+        ! the imputed sentinel stayed out of the standardized training data.
+        call clean%ask(clean_point, clean_region, status)
+        call failed%ask(failed_point, failed_region, status)
+        call expect(status%code == FORTNUM_OK, &
+            "the failure path can fit and ask again", failures)
+        call expect(maxval(abs(clean_point - failed_point)) == 0.0_dp, &
+            "a failed row does not change the next surrogate proposal", failures)
+        call expect(failed%histories(1)%count == 2 .and. &
+            failed%histories(1)%usable_count() == 1, &
+            "failed rows remain recorded but excluded from fitting", failures)
+        call expect(failed%best_value == 0.25_dp, &
+            "a failed row does not become the incumbent", failures)
+    end subroutine check_failed_rows_do_not_poison_surrogate
 
     !! A caller-supplied initial design takes precedence over the local Sobol
     !! implementation. This is the exact-replay escape hatch for upstream
