@@ -94,6 +94,7 @@ class TurboState:
     best_value: float = math.inf
     success_counter: int = 0
     failure_counter: int = 0
+    restart_triggered: bool = False
 
     def __post_init__(self) -> None:
         if self.dimension < 1 or self.batch_size < 1:
@@ -121,6 +122,8 @@ class TurboState:
             self.length /= 2.0
             self.failure_counter = 0
         self.best_value = min(self.best_value, current)
+        if self.length < self.length_min:
+            self.restart_triggered = True
 
 
 def candidate_count(dimension: int) -> int:

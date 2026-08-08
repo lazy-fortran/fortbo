@@ -67,6 +67,8 @@ def check_driver(source: str) -> None:
         "trust initial length": r"length: float = 0\.8",
         "trust minimum length": r"length_min: float = 0\.5\*\*7",
         "trust maximum length": r"length_max: float = 1\.6",
+        "trust failure tolerance":
+            r"math\.ceil\(\s*max\(\[4\.0 / self\.batch_size, float\(self\.dim\) / self\.batch_size\]\)\s*\)",
         "trust success tolerance": r"success_tolerance: int = 10",
         "candidate count": r"min\(5000, max\(2000, 200 \* X_turbo\.shape\[-1\]\)\)",
         "candidate perturbation probability": r"min\(20\.0 / d, 1\.0\)",
@@ -96,6 +98,20 @@ def check_driver(source: str) -> None:
         "asynchronous result receive":
             r"comm\.recv\(source=worker_rank, tag=RESULT_TAG\)",
         "completion-ordered objective history": r"Y_turbo_list\.append\(",
+        "trust improvement test":
+            r"Y_min < state\.best_value - 1e-3 \* math\.fabs\(state\.best_value\)",
+        "trust expansion":
+            r"state\.length = min\(2\.0 \* state\.length, state\.length_max\)",
+        "trust shrinkage": r"state\.length /= 2\.0",
+        "trust restart trigger": r"if state\.length < state\.length_min:",
+        "TS Sobol candidates": r"pert = sobol\.draw\(n_candidates\)",
+        "TS perturbation mask":
+            r"mask = torch\.rand\(n_candidates, d, dtype=dtype, device=device\) <= prob_perturb",
+        "TS nonempty perturbation rows":
+            r"torch\.where\(mask\.sum\(dim=1\) == 0\)",
+        "TS no-replacement sampling":
+            r"MaxPosteriorSampling\(model=model, replacement=False\)",
+        "EI trust bounds": r"bounds=torch\.stack\(\[tr_lb, tr_ub\]\)",
     }
     for label, pattern in expressions.items():
         _require(source, pattern, label)
@@ -154,7 +170,7 @@ def check(manifest_path: Path) -> None:
         raise DriverContractError("manifest environment source is not the pinned list")
     if run.get("environment_packages") != expected_packages:
         raise DriverContractError("manifest environment package versions are incomplete")
-    print("Landreman driver contract: PASS (scrambled Sobol, ARD GP, qEI, async completion)")
+    print("Landreman driver contract: PASS (trust state, TS, qEI, ARD GP, async completion)")
 
 
 def main(argv: Optional[list[str]] = None) -> int:

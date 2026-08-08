@@ -33,7 +33,28 @@ class TurboState:
     length: float = 0.8
     length_min: float = 0.5**7
     length_max: float = 1.6
+    failure_tolerance: int = math.ceil(max([4.0 / self.batch_size, float(self.dim) / self.batch_size]))
+    failure_counter: int = 0
+    success_counter: int = 0
     success_tolerance: int = 10
+
+def update_turbo_state(state, Y_next):
+    Y_min = float(np.min(Y_next))
+    if Y_min < state.best_value - 1e-3 * math.fabs(state.best_value):
+        state.success_counter += 1
+        state.failure_counter = 0
+    else:
+        state.success_counter = 0
+        state.failure_counter += 1
+    if state.success_counter == state.success_tolerance:
+        state.length = min(2.0 * state.length, state.length_max)
+        state.success_counter = 0
+    elif state.failure_counter == state.failure_tolerance:
+        state.length /= 2.0
+        state.failure_counter = 0
+    state.best_value = min(state.best_value, Y_min)
+    if state.length < state.length_min:
+        state.restart_triggered = True
 
 def generate_turbo_batch(X_turbo, Y_turbo, batch_size,
                          n_candidates: int = None,
@@ -43,9 +64,15 @@ def generate_turbo_batch(X_turbo, Y_turbo, batch_size,
     d = X_turbo.shape[-1]
     sobol = SobolEngine(d, scramble=True)
     prob_perturb = min(20.0 / d, 1.0)
+    pert = sobol.draw(n_candidates)
+    mask = torch.rand(n_candidates, d, dtype=dtype, device=device) <= prob_perturb
+    ind = torch.where(mask.sum(dim=1) == 0)[0]
+    mask[ind, torch.randint(0, d - 1, size=(len(ind),), device=device)] = 1
+    thompson_sampling = MaxPosteriorSampling(model=model, replacement=False)
+    X_next = thompson_sampling(X_cand, num_samples=batch_size)
     ei = qExpectedImprovement(model, Y_turbo.max())
     X_next, acq_value = optimize_acqf(
-        ei, q=batch_size,
+        ei, bounds=torch.stack([tr_lb, tr_ub]), q=batch_size,
         num_restarts=num_restarts,
         raw_samples=raw_samples,
     )
@@ -117,6 +144,12 @@ class LandremanDriverContractTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             source = CONTRACT_SOURCE.replace("raw_samples: int = 512",
                                              "raw_samples: int = 256")
+            with self.assertRaises(DriverContractError):
+                check(self.make_manifest(Path(temporary), source.encode()))
+
+    def test_changed_trust_update_contract_fails(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            source = CONTRACT_SOURCE.replace("state.length /= 2.0", "state.length /= 4.0")
             with self.assertRaises(DriverContractError):
                 check(self.make_manifest(Path(temporary), source.encode()))
 

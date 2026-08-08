@@ -55,6 +55,16 @@ class LandremanReferenceTests(unittest.TestCase):
             state.update(np.array([1.0]))
         self.assertEqual(state.length, 0.8)
         self.assertEqual(state.failure_counter, 0)
+        self.assertFalse(state.restart_triggered)
+
+    def test_trust_state_sets_restart_after_minimum_length(self):
+        state = TurboState(20, 1)
+        state.length = state.length_min
+        state.best_value = 1.0
+        for _ in range(state.failure_tolerance):
+            state.update(np.array([1.0]))
+        self.assertTrue(state.restart_triggered)
+        self.assertLess(state.length, state.length_min)
 
     def test_candidate_and_bounds_contract(self):
         self.assertEqual(candidate_count(1), 2000)

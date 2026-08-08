@@ -31,6 +31,12 @@ region-partitioned candidate pools, with independent coordinate and trust-state
 gates. These are local parity prerequisites, not evidence that the archived
 Landreman runtime or published DTuRBO model has been reproduced.
 
+The archived Landreman source contract now checks the trust-state update,
+minimum-length restart, Thompson candidate masking, no-replacement sampling,
+and qEI trust bounds in addition to the pinned constants. The independent
+NumPy replay reference records the same restart transition. A live archived
+MPI/physics trace is still required for F2.
+
 FortBO now also has a fixed-hyperparameter inducing variational derivative
 posterior. It retains all usable value rows, appends every complete gradient
 row, exposes covariance/joint-sample/moment-gradient capabilities, and is
