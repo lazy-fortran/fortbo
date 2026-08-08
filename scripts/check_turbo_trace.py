@@ -23,6 +23,7 @@ ROOT = Path(__file__).resolve().parents[1]
 @dataclass
 class Row:
     evaluation: int
+    point: np.ndarray
     value: float
     best: float
     length: float
@@ -45,6 +46,8 @@ def parse_rows(output: str, dimension: int) -> list[Row]:
         point_end = 3 + dimension
         rows.append(Row(
             evaluation=int(fields[1]),
+            point=np.array([float(item) for item in fields[3:point_end]],
+                           dtype=np.float64),
             value=float(fields[point_end]),
             best=float(fields[point_end + 1]),
             length=float(fields[point_end + 2]),
@@ -57,6 +60,38 @@ def parse_rows(output: str, dimension: int) -> list[Row]:
     if not rows:
         raise ValueError("trace contains no ROW records")
     return rows
+
+
+def check_frozen_proposals(
+        rows: list[Row], initial: int,
+        frozen_initial: Optional[np.ndarray] = None,
+        frozen_candidates: Optional[np.ndarray] = None,
+        atol: float = 1.0e-12) -> None:
+    """Check proposal coordinates against caller-owned replay fixtures.
+
+    The fixtures are independent of FortBO and are the escape hatch for
+    cross-language Sobol/Owen streams that cannot be reconstructed bit-for-bit
+    locally.  Initial rows are ordered; later rows only need to be members of
+    the frozen candidate pool because the posterior decides which candidate
+    is selected.
+    """
+    if frozen_initial is not None:
+        if len(frozen_initial) < initial:
+            raise ValueError("frozen initial design is shorter than the trace")
+        observed = np.array([row.point for row in rows[:initial]])
+        np.testing.assert_allclose(observed, frozen_initial[:initial],
+                                   rtol=0.0, atol=atol)
+
+    if frozen_candidates is not None:
+        if len(rows) == initial:
+            return
+        for row in rows[initial:]:
+            if not np.any(np.all(np.isclose(frozen_candidates, row.point,
+                                             rtol=0.0, atol=atol), axis=1)):
+                raise AssertionError(
+                    f"proposal at evaluation {row.evaluation} is not in "
+                    "the frozen candidate pool"
+                )
 
 
 def check_rows(rows: list[Row], dimension: int, initial: int, atol: float = 1.0e-12) -> None:
@@ -87,8 +122,29 @@ def check_rows(rows: list[Row], dimension: int, initial: int, atol: float = 1.0e
             raise AssertionError("the bounded smoke trace unexpectedly restarted")
 
 
-def check(output: str, dimension: int, initial: int, atol: float = 1.0e-12) -> None:
-    check_rows(parse_rows(output, dimension), dimension, initial, atol=atol)
+def check(output: str, dimension: int, initial: int, atol: float = 1.0e-12,
+          frozen_initial: Optional[np.ndarray] = None,
+          frozen_candidates: Optional[np.ndarray] = None) -> None:
+    rows = parse_rows(output, dimension)
+    check_rows(rows, dimension, initial, atol=atol)
+    check_frozen_proposals(rows, initial, frozen_initial=frozen_initial,
+                           frozen_candidates=frozen_candidates, atol=atol)
+
+
+def read_point_pool(path: Path, dimension: int) -> np.ndarray:
+    """Read the small count/width/text format used by the replay adapter."""
+    lines = [line.split() for line in path.read_text(encoding="utf-8").splitlines()
+             if line.strip()]
+    if not lines or len(lines[0]) != 2:
+        raise ValueError(f"invalid point-pool header in {path}")
+    count, width = (int(item) for item in lines[0])
+    if count < 1 or width != dimension or len(lines[1:]) != count:
+        raise ValueError(f"invalid point-pool shape in {path}")
+    values = np.array([[float(item) for item in row] for row in lines[1:]],
+                      dtype=np.float64)
+    if values.shape != (count, dimension):
+        raise ValueError(f"invalid point-pool rows in {path}")
+    return values
 
 
 def main(argv: Optional[Iterable[str]] = None) -> int:
@@ -99,16 +155,34 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
     parser.add_argument("--initial", type=int, default=3)
     parser.add_argument("--seed", type=int, default=13)
     parser.add_argument("--acquisition", choices=("ei", "ts"), default="ei")
+    parser.add_argument("--frozen-initial", type=Path)
+    parser.add_argument("--frozen-candidates", type=Path)
     parser.add_argument("--atol", type=float, default=1.0e-12)
     args = parser.parse_args(argv)
+    extra = [args.acquisition]
+    if args.frozen_candidates is not None:
+        extra.append(str(args.frozen_candidates))
+    if args.frozen_initial is not None:
+        if args.frozen_candidates is None:
+            extra.append("-")
+        extra.extend([str(args.frozen_initial)])
+    command = [args.command, "exec", "fortbo_reproduction", str(args.dimension),
+               str(args.budget), str(args.initial), str(args.seed), *extra]
+    if args.command != "fo":
+        command = [args.command, str(args.dimension), str(args.budget),
+                   str(args.initial), str(args.seed), *extra]
     result = subprocess.run(
-        [args.command, "exec", "fortbo_reproduction", str(args.dimension),
-         str(args.budget), str(args.initial), str(args.seed), args.acquisition],
+        command,
         cwd=ROOT, check=False, capture_output=True, text=True,
     )
     if result.returncode:
         raise SystemExit(result.stdout + result.stderr)
-    check(result.stdout, args.dimension, args.initial, atol=args.atol)
+    initial = (read_point_pool(args.frozen_initial, args.dimension)
+               if args.frozen_initial is not None else None)
+    candidates = (read_point_pool(args.frozen_candidates, args.dimension)
+                  if args.frozen_candidates is not None else None)
+    check(result.stdout, args.dimension, args.initial, atol=args.atol,
+          frozen_initial=initial, frozen_candidates=candidates)
     print("TuRBO trust trace: PASS")
     return 0
 
