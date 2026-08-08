@@ -93,6 +93,32 @@ Fixed upstream (`f56cdcd`), with a regression test in
 `predict` returns. The pre-existing tests checked only the tangents, which is
 exactly how the defect survived; reverting the fix now fails that test.
 
+**FortML had no second input derivative of the posterior, and its radial leaves
+were wrong at coincidence.** DTuRBO mode 2 needs the curvature of *both*
+posterior moments. The mean's was reachable indirectly, by predicting derivative
+components and differentiating those once more, but the variance's was not: it
+is not a predicted component but the quadratic form `k(x,x) - k_*^T K^-1 k_*`,
+so its curvature needs genuine second input derivatives of both terms.
+
+Added upstream as `gp_derivative_predict_input_hvp`, assembled from the exact
+third-derivative machinery rather than by finite differences, which at a
+near-stationary point lose most of their significant digits precisely where the
+curvature matters. Building it exposed a real defect: the coincident-point
+branch of the radial leaf zeroed the gradient *tangents* along with the gradient
+itself. The gradient does vanish at `r = 0`, but its tangent is `phi''(0)` times
+the direction, so the reported second-derivative product was exactly zero at
+every training point — the one place a trust-region or Newton step is most
+likely to ask for one. Matern 5/2 at an observed point returned `-3.79` where
+the true curvature is `+5.47`. Fixed upstream (`83d088a`) with
+`test_derivative_gp_input_hvp`, whose oracle is Richardson-extrapolated central
+differences of `predict`, sharing no code with the analytic path.
+
+Matern 3/2 has no third derivative at coincidence and continues to refuse rather
+than return the limit of an expression that has none.
+
+**This clears the blocker on DTuRBO mode 2**, which is now implementable in
+FortBO without further upstream work.
+
 ## Derivative observations are universal
 
 Derivative information is not a feature of one policy. If a run can measure
