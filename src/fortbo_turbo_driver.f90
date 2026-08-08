@@ -232,6 +232,7 @@ contains
         real(dp) :: shift, scale
         real(dp), allocatable :: candidates(:, :), lengthscales(:)
         real(dp), allocatable :: pooled(:, :), realizations(:, :)
+        real(dp), allocatable :: joint_samples(:, :)
         real(dp), allocatable :: mean(:), variance(:), draw(:)
         integer, allocatable :: pooled_region(:), chosen(:), assigned(:)
         real(dp) :: uniform, acquisition_value, incumbent
@@ -361,6 +362,14 @@ contains
             if (status%code /= FORTNUM_OK) return
             mean = shift + scale*mean
             variance = variance*scale*scale
+            if (allocated(joint_samples)) deallocate (joint_samples)
+            if (self%config%use_ard .and. &
+                    self%config%acquisition == FORTBO_TURBO_ACQUISITION_TS) then
+                allocate (joint_samples(per_region, needed))
+                call posterior%joint_sample(candidates, self%generator, &
+                    joint_samples, status)
+                if (status%code /= FORTNUM_OK) return
+            end if
             do i = 1, per_region
                 offset = offset + 1
                 pooled(offset, :) = candidates(i, :)
@@ -380,10 +389,15 @@ contains
                     ! objective's own units so that a region believing in
                     ! better values wins more of the batch.
                     do slot = 1, needed
-                        call rng_uniform(self%generator, uniform)
-                        realizations(offset, slot) = mean(i) &
-                            + sqrt(max(variance(i), 0.0_dp))* &
-                            fortbo_inverse_normal(uniform)
+                        if (self%config%use_ard) then
+                            realizations(offset, slot) = shift + scale* &
+                                joint_samples(i, slot)
+                        else
+                            call rng_uniform(self%generator, uniform)
+                            realizations(offset, slot) = mean(i) &
+                                + sqrt(max(variance(i), 0.0_dp))* &
+                                fortbo_inverse_normal(uniform)
+                        end if
                     end do
                 end if
             end do

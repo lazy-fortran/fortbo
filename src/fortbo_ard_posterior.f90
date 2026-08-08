@@ -12,9 +12,10 @@ module fortbo_ard_posterior
     use fortnum_status, only: fortnum_status_t, status_set, FORTNUM_OK, &
         FORTNUM_DOMAIN_ERROR, FORTNUM_CONVERGENCE_ERROR
     use fortnum_cholesky, only: cholesky_factorization_t
+    use fortnum_rng, only: rng_t, rng_normal
     use fortbo_history, only: fortbo_history_t
     use fortbo_posterior, only: fortbo_posterior_t, FORTBO_CAP_MOMENTS, &
-        FORTBO_CAP_NOISY_MOMENTS
+        FORTBO_CAP_NOISY_MOMENTS, FORTBO_CAP_JOINT_SAMPLE
     implicit none
     private
 
@@ -34,6 +35,7 @@ module fortbo_ard_posterior
         procedure, public :: n_inputs => ard_posterior_n_inputs
         procedure, public :: capabilities => ard_posterior_capabilities
         procedure, public :: moments => ard_posterior_moments
+        procedure, public :: joint_sample => ard_posterior_joint_sample
     end type fortbo_ard_posterior_t
 
 contains
@@ -48,7 +50,8 @@ contains
         class(fortbo_ard_posterior_t), intent(in) :: self
 
         caps = 0
-        if (self%fitted) caps = FORTBO_CAP_MOMENTS + FORTBO_CAP_NOISY_MOMENTS
+        if (self%fitted) caps = FORTBO_CAP_MOMENTS + FORTBO_CAP_NOISY_MOMENTS &
+            + FORTBO_CAP_JOINT_SAMPLE
     end function ard_posterior_capabilities
 
     !! Fit a fixed-hyperparameter, exact dense value-only ARD posterior.
@@ -164,6 +167,70 @@ contains
         end do
         call status_set(status, FORTNUM_OK, "")
     end subroutine ard_posterior_moments
+
+    !! Draw exact joint latent posterior samples at the query points.
+    !!
+    !! The TS path needs one correlated realization over the whole candidate
+    !! pool. Independent marginal normals have the right one-point moments but
+    !! a different arg-min distribution, so this operation is kept explicit.
+    subroutine ard_posterior_joint_sample(self, points, generator, samples, status)
+        class(fortbo_ard_posterior_t), intent(in) :: self
+        real(dp), intent(in) :: points(:, :)
+        type(rng_t), intent(inout) :: generator
+        real(dp), intent(out) :: samples(:, :)
+        type(fortnum_status_t), intent(out) :: status
+        type(cholesky_factorization_t) :: predictive_factor
+        real(dp), allocatable :: mean(:), variance(:), cross(:, :), solved(:, :)
+        real(dp), allocatable :: covariance(:, :), base(:, :)
+        integer :: n_query, n_samples, i, j
+
+        samples = 0.0_dp
+        if (.not. self%fitted) then
+            call status_set(status, FORTNUM_DOMAIN_ERROR, &
+                "fortbo ARD posterior: surrogate has not been fitted")
+            return
+        end if
+        n_query = size(points, 1)
+        n_samples = size(samples, 2)
+        if (size(points, 2) /= self%dimension .or. size(samples, 1) /= n_query &
+                .or. n_query < 1 .or. n_samples < 1) then
+            call status_set(status, FORTNUM_DOMAIN_ERROR, &
+                "fortbo ARD posterior: joint sample shape is invalid")
+            return
+        end if
+
+        allocate (mean(n_query), variance(n_query), cross(size(self%train_x, 1), n_query))
+        allocate (solved, source=cross)
+        allocate (covariance(n_query, n_query))
+        call self%moments(points, mean, variance, status)
+        if (status%code /= FORTNUM_OK) return
+        do i = 1, n_query
+            cross(:, i) = matern52_cross(points(i, :), self%train_x, &
+                self%lengthscales, self%signal_variance)
+            covariance(i, :) = matern52_cross(points(i, :), points, &
+                self%lengthscales, self%signal_variance)
+        end do
+        solved = cross
+        call self%factorization%solve(solved, status)
+        if (status%code /= FORTNUM_OK) return
+        covariance = covariance - matmul(transpose(cross), solved)
+        covariance = 0.5_dp*(covariance + transpose(covariance))
+        do i = 1, n_query
+            covariance(i, i) = covariance(i, i) + 1.0e-12_dp
+        end do
+        call predictive_factor%factorize(covariance, status)
+        if (status%code /= FORTNUM_OK) return
+
+        allocate (base(n_query, n_samples))
+        do j = 1, n_samples
+            do i = 1, n_query
+                call rng_normal(generator, base(i, j))
+            end do
+        end do
+        samples = spread(mean, dim=2, ncopies=n_samples) + &
+            matmul(predictive_factor%lower, base)
+        call status_set(status, FORTNUM_OK, "")
+    end subroutine ard_posterior_joint_sample
 
     pure function matern52_cross(x1, x2, lengthscales, signal) result(values)
         real(dp), intent(in) :: x1(:), x2(:, :), lengthscales(:), signal
