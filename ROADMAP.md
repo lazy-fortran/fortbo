@@ -1184,9 +1184,45 @@ and belongs to FortML's parameter registry, not to FortBO.
   sequential in the draw index and needs a skip-ahead formulation to parallelize;
   the posterior derivatives need FortML's device JVP/HVP products, which are the
   next item. Both are named rather than left to be discovered from a profile.
-- [ ] Keep FortAD-bearing acquisition graphs on FortAD/FortSym until complete
+- [x] Keep FortAD-bearing acquisition graphs on FortAD/FortSym until complete
   device JVP/VJP/HVP products exist. Use CUDA for fixed sampling/reduction
   kernels where OpenACC cannot preserve residency or determinism.
+  `src/fortbo_placement.f90` enforces the rule rather than leaving it as an
+  intention.
+
+  **The precondition is not met today, and the module states that from what
+  exists rather than assuming it.** FortML carries device JVP and VJP products
+  for the multi-output GP, the variational classifiers and the ELBO, and
+  device HVP products only for the linear pipelines. The exact GP regression
+  FortBO's posteriors are built on has no device derivative products at all.
+  So every derivative-bearing acquisition graph over a GP surrogate belongs on
+  the host now.
+
+  The word that carries the weight is *complete*. A partial product set is
+  worse than an empty one because it **runs**: a graph placed on a device with
+  a forward product but no reverse one falls back for the missing piece and
+  produces derivatives from two code paths with no record of which. So all
+  seven incomplete combinations are refused as firmly as the empty one, and
+  the test sweeps all seven rather than checking the empty case alone.
+
+  Refusals are by name and name the missing products, since "incomplete" is
+  not actionable. A refused request never returns a quiet host placement —
+  that is how a benchmark table acquires a device row that never ran on a
+  device, which `fortbo_provenance` exists to prevent one layer down. Whether
+  a graph is derivative-bearing is read from the posterior's own capabilities
+  rather than a caller-supplied flag, so it cannot drift from what the model
+  can actually do. Value-only graphs are *not* blocked: they never needed the
+  products, and blocking them would have made the value-only device kernels in
+  `fortbo_device` unreachable.
+
+  **CUDA is deliberately not used, and that is a measurement.** The roadmap
+  permits dropping to CUDA where OpenACC cannot preserve residency or
+  determinism. It can: `fortbo_device` pools every region's candidates into
+  one array, runs one kernel and takes one reduction with an index tie-break,
+  and `test_device` checks the result is *bit identical* to the host across
+  repeated launches. Writing CUDA for kernels OpenACC already handles
+  deterministically would add a second code path to keep in agreement for no
+  measured gain.
 - [x] Benchmark against BoTorch/GPyTorch, JAX, and deterministic NumPy on
   matched functions, models, precision, seeds, restart counts, and stopping
   criteria. Report regret/sample efficiency separately from wall time.
