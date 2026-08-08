@@ -34,6 +34,7 @@ module fortbo_trust_region
     use fortnum_kinds, only: dp
     use fortnum_status, only: fortnum_status_t, status_set, FORTNUM_OK, &
         FORTNUM_DOMAIN_ERROR
+    use fortbo_generated, only: fortbo_generated_trust_region_leaf
     implicit none
     private
 
@@ -85,17 +86,6 @@ module fortbo_trust_region
         procedure, public :: observe_batch => region_observe_batch
         procedure, public :: volume_fraction => region_volume_fraction
     end type fortbo_trust_region_t
-
-    interface
-        pure subroutine fortbo_generated_trust_region_leaf(log_lengthscale, &
-                log_mean, base_length, side_length, side_d_log_lengthscale, &
-                side_d_log_mean, side_d_base_length)
-            import :: dp
-            real(dp), intent(in) :: log_lengthscale, log_mean, base_length
-            real(dp), intent(out) :: side_length, side_d_log_lengthscale
-            real(dp), intent(out) :: side_d_log_mean, side_d_base_length
-        end subroutine fortbo_generated_trust_region_leaf
-    end interface
 
 contains
 

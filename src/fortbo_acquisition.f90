@@ -24,6 +24,7 @@ module fortbo_acquisition
         FORTNUM_DOMAIN_ERROR, FORTNUM_NOT_IMPLEMENTED
     use fortbo_posterior, only: fortbo_posterior_t, FORTBO_CAP_MOMENTS, &
         FORTBO_CAP_MOMENT_GRADIENT
+    use fortbo_generated, only: fortbo_generated_acquisition_leaf
     implicit none
     private
 
@@ -105,17 +106,6 @@ module fortbo_acquisition
         procedure, public :: value_gradient => ucb_gradient
         procedure, public :: name => ucb_name
     end type fortbo_ucb_t
-
-    interface
-        pure subroutine fortbo_generated_acquisition_leaf(mu, sigma, best, xi, ei, &
-                ei_d_mu, ei_d_sigma, pi_value, &
-                pi_d_mu, pi_d_sigma)
-            import :: dp
-            real(dp), intent(in) :: mu, sigma, best, xi
-            real(dp), intent(out) :: ei, ei_d_mu, ei_d_sigma
-            real(dp), intent(out) :: pi_value, pi_d_mu, pi_d_sigma
-        end subroutine fortbo_generated_acquisition_leaf
-    end interface
 
 contains
 

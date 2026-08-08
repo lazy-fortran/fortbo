@@ -38,6 +38,7 @@ module fortbo_preference
     use fortnum_kinds, only: dp
     use fortnum_status, only: fortnum_status_t, status_set, FORTNUM_OK, &
         FORTNUM_DOMAIN_ERROR
+    use fortbo_generated, only: fortbo_generated_preference_leaf
     implicit none
     private
 
@@ -58,21 +59,6 @@ module fortbo_preference
     !! switch happens well inside the range where the series is accurate to far
     !! better than double precision.
     real(dp), parameter :: LOG_ERFC_ASYMPTOTIC_X = 20.0_dp
-
-    interface
-        pure subroutine fortbo_generated_preference_leaf(f_a, f_b, scale, &
-                probability, probability_d_f_a, probability_d_f_b, &
-                probability_d_scale, log_probability, log_probability_d_f_a, &
-                log_probability_d_f_b, log_probability_d_scale)
-            import :: dp
-            real(dp), intent(in) :: f_a, f_b, scale
-            real(dp), intent(out) :: probability, probability_d_f_a
-            real(dp), intent(out) :: probability_d_f_b, probability_d_scale
-            real(dp), intent(out) :: log_probability, log_probability_d_f_a
-            real(dp), intent(out) :: log_probability_d_f_b
-            real(dp), intent(out) :: log_probability_d_scale
-        end subroutine fortbo_generated_preference_leaf
-    end interface
 
 contains
 

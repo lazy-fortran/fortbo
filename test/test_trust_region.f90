@@ -19,18 +19,8 @@ program test_trust_region
         FORTBO_TR_LENGTH_MIN, FORTBO_TR_LENGTH_MAX, FORTBO_TR_SUCCESS_TOLERANCE, &
         FORTBO_TR_EXPANDED, FORTBO_TR_SHRANK, FORTBO_TR_EXHAUSTED, &
         FORTBO_TR_UNCHANGED
+    use fortbo_generated, only: fortbo_generated_trust_region_leaf
     implicit none
-
-    interface
-        pure subroutine fortbo_generated_trust_region_leaf(log_lengthscale, &
-                log_mean, base_length, side_length, side_d_log_lengthscale, &
-                side_d_log_mean, side_d_base_length)
-            use, intrinsic :: iso_fortran_env, only: real64
-            real(real64), intent(in) :: log_lengthscale, log_mean, base_length
-            real(real64), intent(out) :: side_length, side_d_log_lengthscale
-            real(real64), intent(out) :: side_d_log_mean, side_d_base_length
-        end subroutine fortbo_generated_trust_region_leaf
-    end interface
 
     integer :: failures
 

@@ -26,46 +26,10 @@ program test_generated_kernels
     !!     where a generated kernel actually fails.
 
     use fortnum_kinds, only: dp
+    use fortbo_generated, only: fortbo_generated_acquisition_leaf, &
+        fortbo_generated_preference_leaf, fortbo_generated_trust_region_leaf, &
+        fortbo_generated_posterior_moment_leaf
     implicit none
-
-    interface
-        pure subroutine fortbo_generated_acquisition_leaf(mu, sigma, best, xi, &
-                ei, ei_d_mu, ei_d_sigma, pi_value, pi_d_mu, pi_d_sigma)
-            use, intrinsic :: iso_fortran_env, only: real64
-            real(real64), intent(in) :: mu, sigma, best, xi
-            real(real64), intent(out) :: ei, ei_d_mu, ei_d_sigma
-            real(real64), intent(out) :: pi_value, pi_d_mu, pi_d_sigma
-        end subroutine fortbo_generated_acquisition_leaf
-
-        pure subroutine fortbo_generated_preference_leaf(f_a, f_b, scale, &
-                probability, probability_d_f_a, probability_d_f_b, &
-                probability_d_scale, log_probability, log_probability_d_f_a, &
-                log_probability_d_f_b, log_probability_d_scale)
-            use, intrinsic :: iso_fortran_env, only: real64
-            real(real64), intent(in) :: f_a, f_b, scale
-            real(real64), intent(out) :: probability, probability_d_f_a
-            real(real64), intent(out) :: probability_d_f_b, probability_d_scale
-            real(real64), intent(out) :: log_probability, log_probability_d_f_a
-            real(real64), intent(out) :: log_probability_d_f_b
-            real(real64), intent(out) :: log_probability_d_scale
-        end subroutine fortbo_generated_preference_leaf
-
-        pure subroutine fortbo_generated_trust_region_leaf(log_lengthscale, &
-                log_mean, base_length, side_length, side_d_log_lengthscale, &
-                side_d_log_mean, side_d_base_length)
-            use, intrinsic :: iso_fortran_env, only: real64
-            real(real64), intent(in) :: log_lengthscale, log_mean, base_length
-            real(real64), intent(out) :: side_length, side_d_log_lengthscale
-            real(real64), intent(out) :: side_d_log_mean, side_d_base_length
-        end subroutine fortbo_generated_trust_region_leaf
-
-        pure subroutine fortbo_generated_posterior_moment_leaf(variance, &
-                variance_d1, variance_d2, sd, sd_d1, sd_d2)
-            import :: dp
-            real(dp), intent(in) :: variance, variance_d1, variance_d2
-            real(dp), intent(out) :: sd, sd_d1, sd_d2
-        end subroutine fortbo_generated_posterior_moment_leaf
-    end interface
 
     integer :: failures
 
