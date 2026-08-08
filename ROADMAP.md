@@ -415,8 +415,32 @@ Concretely, and binding on every work package below:
   gradient, and confirms that adding starts never worsens the answer and that
   reordering them does not change it. A surrogate without moment gradients is
   refused with a pointer to the sampling search rather than differenced.
-- [ ] Add fixed categorical choices and constraint penalties or feasible-region
-  parameterizations to the candidate optimizer.
+- [x] Add fixed categorical choices and constraint penalties or feasible-region
+  parameterizations to the candidate optimizer. `src/fortbo_feasible.f90` offers
+  both, and the difference between them is not a matter of taste.
+
+  A fixed choice is a *reparameterization*: the coordinate leaves the search, so
+  no candidate can violate it and no weight has to be chosen. Whenever a
+  constraint can be expressed that way it should be, since searching a smaller
+  space beats searching a larger one with a penalty pushing back. `test_feasible`
+  decodes *every* candidate rather than one, which is what "cannot violate it"
+  means operationally, and checks the unpinned coordinates are left undisturbed.
+
+  Penalties handle what reparameterization cannot. The quadratic penalty is
+  smooth but never binding — its optimum sits at `1 + 1/(2 rho)`, outside the
+  feasible region for every finite weight — while the exact penalty is binding
+  above a finite threshold but has a kink on the boundary, exactly where an
+  optimizer spends its time. `fortbo_penalty_is_differentiable` reports which,
+  so a gradient-based caller is not handed a kink without being told.
+
+  The test that separates them needed correcting. It first asserted the
+  quadratic optimum stays outside for weights up to `1e4`, which failed —
+  because at that weight the offset is `5e-5` against a grid spacing of `1e-3`,
+  so it was measuring the grid rather than the penalty. It now checks the
+  minimizer against `1 + 1/(2 rho)` where that is resolvable, and records the
+  practical consequence: the claim is true in exact arithmetic and invisible
+  below grid resolution, so what a caller needs is a weight large enough to push
+  the residual infeasibility under its own tolerance.
 - [x] Add Sobol/random/quasi-random initialization, cyclic restarts, and
   deterministic tie handling. Sobol did not exist in FortNum and was added
   there rather than reimplemented here: `fortnum_sobol` builds Joe-Kuo
