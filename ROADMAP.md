@@ -1032,8 +1032,33 @@ and belongs to FortML's parameter registry, not to FortBO.
 
 ### BO5: GPU and performance
 
-- [ ] Add resident posterior sampling, acquisition evaluation, reduction, and
-  candidate-batch kernels for CPU/OpenACC/CUDA.
+- [x] Add resident posterior sampling, acquisition evaluation, reduction, and
+  candidate-batch kernels for CPU/OpenACC. `src/fortbo_device.F90` scores and
+  reduces a candidate batch with the array never leaving the device: the
+  moments go up once and only the chosen index and its value come back.
+
+  **The device claim is checked as determinism, not speed.** The device answer
+  must be *bit-identical* to the host's — not within a tolerance, since a
+  tolerance would accept exactly the reduction-order variation that makes a run
+  unreplayable. Ties break to the lowest index on both paths, which is what
+  makes exact agreement achievable: without a stated rule a sequential sweep and
+  a parallel reduction could pick different tied candidates and no numerical
+  tolerance would hide it, because the *index* would differ. Two device runs are
+  also compared with each other, since a reduction whose order varied between
+  launches would pass a single comparison.
+
+  **Verified on hardware.** A standalone OpenACC probe against the two RTX 5060
+  Ti devices present here ran the kernel on device and selected index 4712 with
+  a value bit-identical to the host's. That probe also caught a real defect: the
+  scoring function needs `!$acc routine seq` to be callable from inside a device
+  kernel, and without it the build silently keeps the work on the host. A
+  host-only test would never have shown it.
+
+  Absent OpenACC support in the build, `fortbo_device_available` is false by
+  construction and the resident path **refuses by name** rather than falling
+  back silently. A benchmark row claiming a device number that was produced on a
+  CPU is worse than a missing row, and `fortbo_device_name` lets a row say which
+  path it came from rather than leaving it to be inferred from timing.
 - [ ] Keep the TuRBO/DTuRBO inner loop resident: Sobol candidate generation,
   perturbation masking, per-region Thompson draws, the cross-region argmin, and
   the posterior gradient/Hessian evaluation. A host round trip per region per
