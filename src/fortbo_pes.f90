@@ -57,6 +57,7 @@ module fortbo_pes
     public :: fortbo_pes_conditional_entropy
     public :: fortbo_pes_matched_variance
     public :: fortbo_predictive_entropy_search
+    public :: fortbo_pes_latent_constraints
 
     !! Quadrature half-width in standard deviations, and interval count. Eight
     !! standard deviations leaves under 1e-15 of the mass outside, below the
@@ -73,7 +74,254 @@ module fortbo_pes
     !! does this.
     real(dp), parameter, public :: FORTBO_PES_S_FLOOR = 1.0e-10_dp
 
+    !! Expectation-propagation controls for the latent constraints C1.2 and C2.
+    !!
+    !! EP is a fixed-point iteration with no convergence guarantee, so it needs
+    !! both a tolerance and a cap, and the cap is not a formality: on a factor
+    !! whose cavity variance has gone small the updates can oscillate rather
+    !! than settle. Reaching the cap is reported rather than swallowed.
+    integer, parameter, public :: FORTBO_PES_EP_MAX_PASSES = 100
+    real(dp), parameter, public :: FORTBO_PES_EP_TOLERANCE = 1.0e-10_dp
+
+    !! Damping on the site updates. Undamped EP diverges on this problem when a
+    !! Hessian factor is far into its tail; half steps are the standard remedy
+    !! and cost only iterations.
+    real(dp), parameter, public :: FORTBO_PES_EP_DAMPING = 0.5_dp
+
+    !! A site precision is not allowed below this. A negative site variance is
+    !! legal in EP and common here -- the truncation factors genuinely sharpen
+    !! the posterior -- but a cavity precision that goes non-positive means the
+    !! implied cavity is not a distribution, and the update that produced it
+    !! must be skipped rather than propagated.
+    real(dp), parameter :: PRECISION_FLOOR = 1.0e-12_dp
+
 contains
+
+    !! Constraints C1.2 and C2 of the paper, by expectation propagation.
+    !!
+    !! The latent vector is the paper's `z = [f(x*); diag(grad^2 f(x*))]`, of
+    !! width `d + 1`. C1.1 -- that the gradient vanishes and the off-diagonal
+    !! Hessian entries are known -- is *analytic*: it conditions a Gaussian on
+    !! linear observations and so is already folded into the caller's
+    !! `prior_mean` and `prior_variance`, which is why it takes no code here.
+    !! What is left is the two constraints that are not Gaussian:
+    !!
+    !!   * **C1.2**, that every diagonal Hessian entry is negative, one
+    !!     truncation factor `I[z_i < 0]` per dimension;
+    !!   * **C2**, that `f(x*)` beats the best observation, as the paper's
+    !!     *soft* constraint `Phi((z_1 - ymax)/sigma)` rather than a hard one.
+    !!     The softening is not a numerical convenience -- the observations are
+    !!     noisy, and conditioning on `f(x*) >= f(x_i)` for latent `f(x_i)`
+    !!     would require inference on those latents too. The paper avoids that
+    !!     by comparing against the largest *observed* `y` and absorbing the
+    !!     discrepancy into `sigma`.
+    !!
+    !! **Sign convention.** The paper maximizes: `x*` is a local *maximum*, so
+    !! the Hessian diagonal is negative and `f(x*)` exceeds `ymax`. FortBO
+    !! minimizes everywhere else, and rather than silently flip the algebra
+    !! this routine keeps the paper's convention and says so. A caller
+    !! minimizing passes negated values. Translating inside would have hidden
+    !! the one place a sign error is unrecoverable.
+    !!
+    !! Returns the EP-approximate Gaussian marginals of `z`. The prior is taken
+    !! diagonal, which is what the paper's own assumption that the off-diagonal
+    !! Hessian entries are known already implies for the factors that matter.
+    subroutine fortbo_pes_latent_constraints(prior_mean, prior_variance, &
+            best_observed, noise_sd, mean, variance, passes, converged, status)
+        !! `prior_mean(1)`, `prior_variance(1)` describe `f(x*)`; entries
+        !! `2:d+1` describe the Hessian diagonal.
+        real(dp), intent(in) :: prior_mean(:)
+        real(dp), intent(in) :: prior_variance(:)
+        !! `ymax` in the paper: the largest value observed so far.
+        real(dp), intent(in) :: best_observed
+        !! `sigma` of the soft constraint. Zero is refused, not treated as a
+        !! hard constraint: the hard limit is a different algorithm.
+        real(dp), intent(in) :: noise_sd
+        real(dp), intent(out) :: mean(:)
+        real(dp), intent(out) :: variance(:)
+        integer, intent(out) :: passes
+        logical, intent(out) :: converged
+        type(fortnum_status_t), intent(out) :: status
+        real(dp), allocatable :: site_shift(:), site_precision(:)
+        real(dp), allocatable :: prior_precision(:)
+        real(dp) :: cavity_mean, cavity_variance, cavity_precision
+        real(dp) :: tilted_mean, tilted_variance, posterior_precision
+        real(dp) :: new_precision, new_shift, change, largest_change
+        integer :: n, i
+
+        n = size(prior_mean)
+        passes = 0
+        converged = .false.
+        if (n < 1) then
+            call status_set(status, FORTNUM_DOMAIN_ERROR, &
+                "fortbo pes: the latent vector needs at least one entry")
+            return
+        end if
+        if (size(prior_variance) /= n .or. size(mean) /= n .or. &
+            size(variance) /= n) then
+            call status_set(status, FORTNUM_DOMAIN_ERROR, &
+                "fortbo pes: latent buffers disagree in length")
+            return
+        end if
+        if (any(prior_variance <= 0.0_dp)) then
+            call status_set(status, FORTNUM_DOMAIN_ERROR, &
+                "fortbo pes: prior variances must be positive")
+            return
+        end if
+        if (noise_sd <= 0.0_dp) then
+            call status_set(status, FORTNUM_DOMAIN_ERROR, &
+                "fortbo pes: the soft constraint needs a positive noise scale")
+            return
+        end if
+
+        allocate (site_shift(n), site_precision(n), prior_precision(n))
+        ! The paper's initialization: zero site means and infinite site
+        ! variances, which is zero site precision and leaves q equal to the
+        ! prior.
+        site_shift = 0.0_dp
+        site_precision = 0.0_dp
+        prior_precision = 1.0_dp/prior_variance
+
+        variance = prior_variance
+        mean = prior_mean
+
+        do passes = 1, FORTBO_PES_EP_MAX_PASSES
+            largest_change = 0.0_dp
+            do i = 1, n
+                ! Cavity: the posterior with this site's own contribution
+                ! removed. Kept in natural parameters throughout, because the
+                ! variance form divides by differences that are routinely tiny
+                ! and a site precision passing through zero is normal here.
+                cavity_precision = 1.0_dp/variance(i) - site_precision(i)
+                if (cavity_precision <= PRECISION_FLOOR) cycle
+                cavity_variance = 1.0_dp/cavity_precision
+                cavity_mean = cavity_variance*(mean(i)/variance(i) - site_shift(i))
+
+                if (i == 1) then
+                    call soft_maximum_moments(cavity_mean, cavity_variance, &
+                        best_observed, noise_sd, tilted_mean, tilted_variance)
+                else
+                    call truncation_moments(cavity_mean, cavity_variance, &
+                        tilted_mean, tilted_variance)
+                end if
+                if (tilted_variance <= 0.0_dp) cycle
+                if (tilted_variance /= tilted_variance) cycle
+                if (tilted_mean /= tilted_mean) cycle
+
+                ! The defining EP relation, and the one an earlier version got
+                ! wrong: the *site precision* is what the tilted precision has
+                ! over the cavity's. The paper writes this as `v_site = 1/beta
+                ! - v_cavity`, a relation between variances, and reading it as
+                ! a relation between precisions produces marginals that are not
+                ! merely inaccurate but wildly wrong -- the exact-oracle test
+                ! reported errors of order a hundred.
+                new_precision = 1.0_dp/tilted_variance - cavity_precision
+                new_shift = tilted_mean/tilted_variance &
+                    - cavity_mean*cavity_precision
+
+                change = abs(new_precision - site_precision(i)) &
+                    + abs(new_shift - site_shift(i))
+                largest_change = max(largest_change, change)
+                site_precision(i) = site_precision(i) &
+                    + FORTBO_PES_EP_DAMPING*(new_precision - site_precision(i))
+                site_shift(i) = site_shift(i) &
+                    + FORTBO_PES_EP_DAMPING*(new_shift - site_shift(i))
+
+                ! Refresh this marginal. The prior is diagonal, so no other
+                ! entry is affected and a full recomputation would be waste.
+                posterior_precision = prior_precision(i) + site_precision(i)
+                if (posterior_precision <= PRECISION_FLOOR) then
+                    ! The site drove the posterior precision non-positive,
+                    ! which is not a distribution. Undo rather than propagate.
+                    site_precision(i) = 0.0_dp
+                    site_shift(i) = 0.0_dp
+                    posterior_precision = prior_precision(i)
+                end if
+                variance(i) = 1.0_dp/posterior_precision
+                mean(i) = variance(i)*(prior_mean(i)*prior_precision(i) &
+                    + site_shift(i))
+            end do
+
+            if (largest_change < FORTBO_PES_EP_TOLERANCE) then
+                converged = .true.
+                exit
+            end if
+        end do
+        passes = min(passes, FORTBO_PES_EP_MAX_PASSES)
+
+        call status_set(status, FORTNUM_OK, "")
+    end subroutine fortbo_pes_latent_constraints
+
+    !! Moments of the cavity truncated to the negative half line: constraint
+    !! C1.2, one per Hessian diagonal entry.
+    !!
+    !! Written as the truncated normal's own definition rather than through
+    !! the paper's `kappa`/`beta` shorthand. The shorthand is equivalent but
+    !! its two factor types differ only by the sign in front of `1/kappa`,
+    !! which is precisely the kind of difference that survives review and fails
+    !! silently.
+    pure subroutine truncation_moments(cavity_mean, cavity_variance, mean, &
+            variance)
+        real(dp), intent(in) :: cavity_mean, cavity_variance
+        real(dp), intent(out) :: mean, variance
+        real(dp) :: sd, cut, lambda
+
+        sd = sqrt(cavity_variance)
+        cut = -cavity_mean/sd
+        lambda = hazard(cut)
+        mean = cavity_mean - sd*lambda
+        variance = cavity_variance*(1.0_dp - cut*lambda - lambda*lambda)
+    end subroutine truncation_moments
+
+    !! Moments of the cavity reweighted by `Phi((z - best)/sigma)`: constraint
+    !! C2, the paper's *soft* maximum. The softening is the paper's own, and
+    !! exists because the observations are noisy -- a hard constraint would
+    !! require inference on the latent function values behind them.
+    pure subroutine soft_maximum_moments(cavity_mean, cavity_variance, &
+            best_observed, noise_sd, mean, variance)
+        real(dp), intent(in) :: cavity_mean, cavity_variance
+        real(dp), intent(in) :: best_observed, noise_sd
+        real(dp), intent(out) :: mean, variance
+        real(dp) :: total, denominator, alpha, lambda
+
+        total = cavity_variance + noise_sd*noise_sd
+        denominator = sqrt(total)
+        alpha = (cavity_mean - best_observed)/denominator
+        lambda = hazard(alpha)
+        mean = cavity_mean + cavity_variance*lambda/denominator
+        variance = cavity_variance &
+            - (cavity_variance*cavity_variance/total)*lambda*(alpha + lambda)
+    end subroutine soft_maximum_moments
+
+    !! `phi(a)/Phi(a)`, the inverse Mills ratio.
+    !!
+    !! Computed through an asymptotic expansion in the left tail rather than as
+    !! a quotient. At `a = -40` the numerator and denominator have both
+    !! underflowed to zero in double precision and the quotient is `NaN`, while
+    !! the ratio itself is perfectly well behaved and close to `40`. Every EP
+    !! update below divides by this quantity, so a `NaN` here would not be
+    !! localized -- it would silently poison the whole approximation.
+    pure real(dp) function hazard(a) result(ratio)
+        real(dp), intent(in) :: a
+        real(dp), parameter :: root_two_pi = 2.5066282746310002_dp
+        real(dp) :: t, series
+
+        if (a > -20.0_dp) then
+            ratio = exp(-0.5_dp*a*a)/root_two_pi/normal_cdf(a)
+        else
+            ! Continued-fraction style expansion of the ratio for large
+            ! negative `a`: phi/Phi -> -a + 1/(-a) - 2/(-a)^3 + ...
+            t = -a
+            series = t + 1.0_dp/t - 2.0_dp/t**3 + 10.0_dp/t**5
+            ratio = series
+        end if
+    end function hazard
+
+    pure real(dp) function normal_cdf(a) result(p)
+        real(dp), intent(in) :: a
+
+        p = 0.5_dp*erfc(-a/sqrt(2.0_dp))
+    end function normal_cdf
 
     !! Variance of `f(x)` under C3, by the paper's moment matching.
     !!

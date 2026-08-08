@@ -283,8 +283,8 @@ Concretely, and binding on every work package below:
   by Simpson's rule, applied both to the entropy itself and to the difference
   `H(f) - H(f | f >= y*)` that MES is defined as — the definition of entropy
   rather than a rearrangement of the closed form.
-- [ ] Implement predictive entropy search. **C3 built against the paper; C1 and
-  C2 outstanding.** Written from arXiv:1406.2541 read rather than recalled — see
+- [x] Implement predictive entropy search. **C1.1, C1.2, C2 and C3 all built
+  against the paper.** Written from arXiv:1406.2541 read rather than recalled — see
   `fortbo-bench/scripts/fetch_provenance.py`, which fetches the sources FortBO
   is built against into a gitignored `provenance/`.
 
@@ -297,6 +297,42 @@ Concretely, and binding on every work package below:
   `s`-floor safeguard for queries near `x*` — which is now *reported* through
   `correlation_scale` so a caller can tell an honest variance from a rescued
   one.
+
+  **C1.2 and C2 are now implemented too**, by expectation propagation, in
+  `fortbo_pes_latent_constraints`. The latent vector is the paper's
+  `z = [f(x*); diag(grad^2 f(x*))]`. C1.1 needs no code: conditioning on a
+  vanishing gradient and known off-diagonal Hessian entries is linear-Gaussian
+  and is already folded into the caller's prior. What remains is the
+  non-Gaussian part — one truncation factor per Hessian diagonal entry for
+  C1.2, and the paper's *soft* maximum `Phi((z_1 - ymax)/sigma)` for C2, soft
+  because the observations are noisy and a hard constraint would require
+  inference on the latent values behind them.
+
+  The paper's convention is kept rather than silently flipped: it maximizes,
+  so the Hessian diagonal is negative and `f(x*)` exceeds `ymax`, and a
+  minimizing caller passes negated values. Translating inside would have
+  hidden the one place a sign error is unrecoverable.
+
+  **A real error, caught by an exact oracle.** The paper writes the site
+  update as `v_site <- 1/beta - v_cavity`, a relation between *variances*.
+  The first implementation read it as a relation between precisions
+  (`beta - cavity_precision`) and produced marginals wrong by order a hundred.
+  Because the prior is diagonal and each constraint touches one coordinate,
+  the true posterior factorizes and every marginal has a closed form, so EP
+  must reproduce it *exactly* — which is what made an error of that size
+  visible instead of looking like approximation error. The module now works
+  from tilted moments in natural parameters rather than the paper's
+  `kappa`/`beta` shorthand, whose two factor types differ only in the sign
+  before `1/kappa`.
+
+  `test_pes_constraints` checks against the closed forms *and* against direct
+  numerical integration of the constraint definitions, which shares no algebra
+  with the module — the closed-form check alone would verify the EP
+  bookkeeping but not the moments. Mutation testing confirms it: flipping one
+  sign in the truncation moments trips four assertions. The tail behaviour is
+  pinned separately, because at `alpha = -40` both the normal density and its
+  integral underflow while their ratio stays near 40, and a `NaN` there would
+  propagate through every coordinate rather than stay local.
 
   **C3 alone is not location-aware, and the paper's formula confirms it.** With
   matched variances the entropy reduction grows as the query becomes *less*
