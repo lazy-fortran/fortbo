@@ -362,9 +362,25 @@ Concretely, and binding on every work package below:
   against the same realizations. Comparing them under independent draws would
   rank by sampling error exactly when their true values are close, which is when
   the ranking matters.
-- [ ] Add Thompson sampling as an explicit batch rule. It already exists inside
-  the TuRBO driver as the pooled selection across regions; what is missing is a
-  standalone rule usable with a non-trust-region policy.
+- [x] Add Thompson sampling as an explicit batch rule.
+  `src/fortbo_thompson.f90` supplies the half that was missing — drawing the
+  realizations from an arbitrary posterior — so the rule works with any policy
+  and any provider, including the non-GP one. The selection itself was already
+  policy-independent; it merely lived in `fortbo_turbo` because that is where it
+  was first needed.
+
+  The realizations must be *joint*. Independent marginals would let two
+  near-identical candidates take two batch slots, because nothing would tell the
+  estimator they are the same question asked twice. A posterior offering only
+  marginal moments is therefore refused rather than accommodated.
+
+  Selection is without replacement, which is a deliberate departure from the
+  textbook rule: that rule describes one draw at a time and is silent on the
+  case, while a batch spending `q` slots on one point would be a correct arg-min
+  per slot and a useless batch. `test_thompson` measures that the rule prefers
+  candidates the posterior rates better *and* that it still explores rather than
+  collapsing onto the best mean — a rule that always picked the arg-min of the
+  mean would pass the first check and fail the second.
 - [x] Implement **constrained and cost-aware** acquisitions.
   `src/fortbo_constrained.f90` weights a base acquisition by the probability of
   feasibility, or divides it by cost to the power `alpha`. Both are weightings,
