@@ -383,7 +383,7 @@ contains
         type(fortbo_turbo_config_t) :: config
         type(fortbo_turbo_driver_t) :: driver
         type(fortnum_status_t) :: status
-        real(dp) :: points(2, 2), values(2), pool(4, 2)
+        real(dp) :: points(2, 2), values(2), pool(4, 2), center(2)
         integer :: regions(2), i
         logical :: distinct
 
@@ -405,14 +405,20 @@ contains
         do i = 1, 2
             values(i) = sum((points(i, :) - 0.5_dp)**2)
         end do
+        if (values(1) <= values(2)) then
+            center = points(1, :)
+        else
+            center = points(2, :)
+        end if
         call driver%tell(points, regions, values, status)
         call expect(status%code == FORTNUM_OK, &
             "the batch-qEI initial design is recorded", failures)
 
-        pool(1, :) = points(1, :)
-        pool(2, :) = min(1.0_dp, points(1, :) + 0.01_dp)
-        pool(3, :) = max(0.0_dp, points(1, :) - 0.01_dp)
-        pool(4, :) = points(2, :)
+        pool(1, :) = center
+        pool(2, :) = min(1.0_dp, center + 0.01_dp)
+        pool(3, :) = max(0.0_dp, center - 0.01_dp)
+        pool(4, :) = [min(1.0_dp, center(1) + 0.005_dp), &
+            max(0.0_dp, center(2) - 0.005_dp)]
         driver%config%frozen_candidates = pool
         call driver%ask(points, regions, status)
         call expect(status%code == FORTNUM_OK, &

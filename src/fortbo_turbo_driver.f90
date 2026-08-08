@@ -41,6 +41,8 @@ module fortbo_turbo_driver
     use fortnum_status, only: fortnum_status_t, status_set, FORTNUM_OK, &
         FORTNUM_DOMAIN_ERROR, FORTNUM_NOT_IMPLEMENTED
     use fortnum_rng, only: rng_t, rng_seed, rng_uniform
+    use fortnum_sobol, only: sobol_t, sobol_initialize, sobol_next, &
+        SOBOL_MAX_DIMENSION
     use fortbo_posterior, only: fortbo_posterior_t
     use fortbo_history, only: fortbo_history_t
     use fortbo_trust_region, only: fortbo_trust_region_t
@@ -86,7 +88,10 @@ module fortbo_turbo_driver
         integer :: failure_tolerance = 0
         !! Relative improvement threshold used by the upstream Turbo state.
         real(dp) :: improvement_tolerance = 0.0_dp
-        !! Draw candidates from a Sobol sequence rather than the generator.
+        !! Draw initial-design and generated candidates from Sobol sequences
+        !! rather than the generator. The initial design uses a seeded digital
+        !! shift; exact upstream LMS/Owen scramble matching remains a separate
+        !! replay requirement.
         logical :: quasi_random = .true.
         !! Optional caller-owned candidate pool for cross-language replay. The
         !! rows are unit-cube candidates and are scored by the normal posterior
@@ -102,6 +107,9 @@ module fortbo_turbo_driver
         !! surrogate is a *local* model, and pooling would defeat the point.
         type(fortbo_history_t), allocatable :: histories(:)
         type(rng_t) :: generator
+        type(sobol_t) :: initial_sequence
+        real(dp), allocatable :: initial_shift(:)
+        logical :: initial_quasi_ready = .false.
         integer :: evaluations = 0
         integer :: restarts = 0
         logical :: started = .false.
@@ -152,6 +160,12 @@ contains
                 return
             end if
         end if
+        if (config%quasi_random .and. n_inputs > SOBOL_MAX_DIMENSION) then
+            call status_set(status, FORTNUM_NOT_IMPLEMENTED, &
+                "fortbo turbo driver: seeded Sobol initial design exceeds "// &
+                "the FortNum dimension limit")
+            return
+        end if
         if (allocated(config%frozen_candidates)) then
             if (size(config%frozen_candidates, 1) < config%batch_size .or. &
                     size(config%frozen_candidates, 2) /= n_inputs .or. &
@@ -200,6 +214,22 @@ contains
         end do
         call rng_seed(self%generator, int(seed, kind(1_8)), status)
         if (status%code /= FORTNUM_OK) return
+        if (config%quasi_random) then
+            call sobol_initialize(self%initial_sequence, n_inputs, status)
+            if (status%code /= FORTNUM_OK) return
+            allocate (self%initial_shift(n_inputs))
+            block
+                type(rng_t) :: scramble_generator
+                integer :: j
+
+                call rng_seed(scramble_generator, int(seed, kind(1_8)), status)
+                if (status%code /= FORTNUM_OK) return
+                do j = 1, n_inputs
+                    call rng_uniform(scramble_generator, self%initial_shift(j))
+                end do
+            end block
+            self%initial_quasi_ready = .true.
+        end if
         self%started = .true.
         call status_set(status, FORTNUM_OK, "")
     end subroutine driver_initialize
@@ -256,8 +286,9 @@ contains
         required = self%config%n_initial
         if (required == 0) required = 2*self%n_inputs
 
-        ! A region short of its initial design proposes uniform points. Regions
-        ! are served round-robin rather than one at a time, so that with several
+        ! A region short of its initial design proposes seeded digital-shifted
+        ! Sobol points when quasi-random mode is enabled. Regions are served
+        ! round-robin rather than one at a time, so that with several
         ! regions the designs advance together and the bandit starts with
         ! comparable evidence about each.
         filled = 0
@@ -267,10 +298,16 @@ contains
         do while (filled < self%config%batch_size)
             k = next_region_needing_design(self, required, assigned)
             if (k == 0) exit
-            do j = 1, self%n_inputs
-                call rng_uniform(self%generator, uniform)
-                draw(j) = uniform
-            end do
+            if (self%initial_quasi_ready) then
+                call sobol_next(self%initial_sequence, draw, status)
+                if (status%code /= FORTNUM_OK) return
+                draw = modulo(draw + self%initial_shift, 1.0_dp)
+            else
+                do j = 1, self%n_inputs
+                    call rng_uniform(self%generator, uniform)
+                    draw(j) = uniform
+                end do
+            end if
             filled = filled + 1
             points(filled, :) = draw
             regions(filled) = k
