@@ -15,6 +15,12 @@ from typing import Any, Dict, Iterable, List, Mapping, Optional, Tuple
 
 SHA256 = re.compile(r"^[0-9a-f]{64}$")
 KINDS = {"file", "archive_member"}
+STATUSES = {"ready-for-replay", "literature-only"}
+RESULT_LABELS = {
+    "fortbo-value-only",
+    "fortbo-exact-derivative",
+    "published-parity-dturbo",
+}
 
 
 class ManifestError(ValueError):
@@ -38,6 +44,15 @@ def load_manifest(path: Path) -> Mapping[str, Any]:
     _require(isinstance(manifest.get("config_id"), str), "config_id is required")
     _require(isinstance(manifest.get("config_revision"), str),
              "config_revision is required")
+    if "status" in manifest:
+        _require(manifest["status"] in STATUSES,
+                 "status must be ready-for-replay or literature-only")
+    if "fortbo_result_label" in manifest:
+        _require(manifest["fortbo_result_label"] in RESULT_LABELS,
+                 "fortbo_result_label is not a recognized evidence label")
+    if manifest.get("published_derivative_parity") == "blocked":
+        _require(manifest.get("fortbo_result_label") != "published-parity-dturbo",
+                 "blocked published derivative parity cannot be labeled published-parity-dturbo")
     _require(isinstance(manifest.get("source"), list) and manifest["source"],
              "source must be a non-empty array")
     _require(isinstance(manifest.get("parameters"), dict),

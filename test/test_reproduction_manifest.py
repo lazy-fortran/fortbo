@@ -110,6 +110,22 @@ class ReproductionManifestTests(unittest.TestCase):
             self.assertEqual(result.returncode, 0, result.stderr + result.stdout)
             self.assertIn("OK member", result.stdout)
 
+    def test_blocked_published_derivative_lane_cannot_claim_parity(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            directory = Path(temporary)
+            manifest = self.make_manifest(
+                directory, digest(b"independent source bytes\n"))
+            data = json.loads(manifest.read_text(encoding="utf-8"))
+            data.update({
+                "fortbo_result_label": "published-parity-dturbo",
+                "published_derivative_parity": "blocked",
+            })
+            manifest.write_text(json.dumps(data), encoding="utf-8")
+            result = self.run_checker(manifest, "--metadata-only")
+            self.assertEqual(result.returncode, 2)
+            self.assertIn("cannot be labeled published-parity-dturbo",
+                          result.stderr)
+
 
 if __name__ == "__main__":
     unittest.main()
