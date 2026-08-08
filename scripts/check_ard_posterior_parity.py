@@ -11,9 +11,9 @@ from typing import Iterable, Optional
 import numpy as np
 
 try:
-    from .landreman_reference import gp_posterior
+    from .landreman_reference import gp_posterior, matern52
 except ImportError:  # direct execution from the scripts directory
-    from landreman_reference import gp_posterior
+    from landreman_reference import gp_posterior, matern52
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -28,6 +28,32 @@ def expected() -> tuple[np.ndarray, np.ndarray]:
         TRAIN_X, TRAIN_Y, QUERY_X, LENGTHSCALES,
         variance=1.2, noise_variance=0.04,
     )
+
+
+def expected_gradients() -> tuple[np.ndarray, np.ndarray]:
+    gram = matern52(
+        TRAIN_X, TRAIN_X, LENGTHSCALES, variance=1.2
+    )
+    gram += 0.04*np.eye(len(TRAIN_X))
+    cross = matern52(
+        TRAIN_X, QUERY_X, LENGTHSCALES, variance=1.2
+    )
+    alpha = np.linalg.solve(gram, TRAIN_Y)
+    solved = np.linalg.solve(gram, cross)
+    mean_gradient = np.empty((len(QUERY_X), len(LENGTHSCALES)))
+    sd_gradient = np.empty_like(mean_gradient)
+    for i, query in enumerate(QUERY_X):
+        difference = query[None, :] - TRAIN_X
+        scaled = np.sqrt(5.0*np.sum((difference/LENGTHSCALES)**2, axis=1))
+        kernel_gradient = (
+            (-5.0*1.2*(1.0 + scaled)*np.exp(-scaled)/3.0)[:, None]
+            * difference/LENGTHSCALES**2
+        )
+        mean_gradient[i] = kernel_gradient.T @ alpha
+        variance_gradient = -2.0*(kernel_gradient.T @ solved[:, i])
+        _, variance = expected()
+        sd_gradient[i] = variance_gradient/(2.0*np.sqrt(variance[i]))
+    return mean_gradient, sd_gradient
 
 
 def parse_moments(output: str) -> tuple[np.ndarray, np.ndarray]:
@@ -48,11 +74,33 @@ def parse_moments(output: str) -> tuple[np.ndarray, np.ndarray]:
             np.array([row[2] for row in rows]))
 
 
+def parse_gradients(output: str) -> tuple[np.ndarray, np.ndarray]:
+    rows = []
+    for line in output.splitlines():
+        fields = line.split()
+        if fields and fields[0] == "GRADIENT":
+            if len(fields) != 5:
+                raise ValueError("malformed ARD gradient record")
+            rows.append((int(fields[1]), int(fields[2]), float(fields[3]), float(fields[4])))
+    rows.sort()
+    expected_rows = [(i, j) for i in range(1, len(QUERY_X) + 1) for j in range(1, 3)]
+    if [(row[0], row[1]) for row in rows] != expected_rows:
+        raise ValueError("ARD posterior output has missing or duplicate gradients")
+    return (np.array([[row[2] for row in rows[2*i:2*i + 2]] for i in range(len(QUERY_X))]),
+            np.array([[row[3] for row in rows[2*i:2*i + 2]] for i in range(len(QUERY_X))]))
+
+
 def check(output: str, atol: float = 1.0e-12) -> None:
     observed_mean, observed_variance = parse_moments(output)
     expected_mean, expected_variance = expected()
     np.testing.assert_allclose(observed_mean, expected_mean, atol=atol, rtol=0.0)
     np.testing.assert_allclose(observed_variance, expected_variance, atol=atol, rtol=0.0)
+    observed_mean_gradient, observed_sd_gradient = parse_gradients(output)
+    expected_mean_gradient, expected_sd_gradient = expected_gradients()
+    np.testing.assert_allclose(observed_mean_gradient, expected_mean_gradient,
+                               atol=atol, rtol=0.0)
+    np.testing.assert_allclose(observed_sd_gradient, expected_sd_gradient,
+                               atol=atol, rtol=0.0)
 
 
 def main(argv: Optional[Iterable[str]] = None) -> int:

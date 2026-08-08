@@ -407,7 +407,7 @@ contains
         !! Force the branch. Absent means "use gradients when the history has
         !! them", which is the behavior the roadmap requires.
         logical, intent(in), optional :: use_gradients
-        !! When present, select the exact value-only ARD parity adapter. This
+        !! When present, select the exact fixed-hyperparameter ARD parity adapter. This
         !! is intentionally explicit: a caller must opt in rather than
         !! receiving a different model merely because a vector happens to be
         !! available.
@@ -420,7 +420,7 @@ contains
         integer, allocatable :: components(:)
         real(dp) :: noise, signal
         integer :: d, n, i, j, row, expanded
-        logical :: wanted
+        logical :: wanted, wanted_ard
 
         d = history%n_inputs
         if (d < 1) then
@@ -432,17 +432,22 @@ contains
         if (present(lengthscales)) then
             if (present(use_gradients)) then
                 if (use_gradients) then
-                    call status_set(status, FORTNUM_NOT_IMPLEMENTED, &
-                        "fortbo fortml: ARD parity adapter is value-only")
-                    return
+                    if (history%gradient_count() == 0) then
+                        call status_set(status, FORTNUM_NOT_IMPLEMENTED, &
+                            "fortbo fortml: gradients were requested but the history has none")
+                        return
+                    end if
                 end if
             end if
+            wanted_ard = history%gradient_count() > 0
+            if (present(use_gradients)) wanted_ard = use_gradients
             noise = 1.0e-6_dp
             if (present(noise_variance)) noise = noise_variance
             signal = 1.0_dp
             if (present(signal_variance)) signal = signal_variance
             call fortbo_fit_ard_posterior(history, posterior, lengthscales, status, &
-                signal_variance=signal, noise_variance=noise)
+                signal_variance=signal, noise_variance=noise, &
+                use_gradients=wanted_ard)
             return
         end if
 
