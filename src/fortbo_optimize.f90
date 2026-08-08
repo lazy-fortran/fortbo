@@ -31,6 +31,7 @@ module fortbo_optimize
     private
 
     public :: fortbo_optimize_acquisition
+    public :: fortbo_search_acquisition
     public :: fortbo_acquisition_context_t
 
     !! Context handed to the FortOpt callback. Holds references, not copies:
@@ -144,6 +145,83 @@ contains
         end if
         call status_set(status, FORTNUM_OK, "")
     end subroutine fortbo_optimize_acquisition
+
+    !! Derivative-free acquisition search over a caller-supplied candidate set.
+    !!
+    !! This exists because `fortbo_optimize_acquisition` refuses a surrogate
+    !! without `moment_gradient` and tells the caller to use a sampling search
+    !! instead -- advice that was, until this routine, impossible to follow. A
+    !! value-only GP is the common case, so the gradient-free path is not a
+    !! fallback for exotic models; it is what most runs need.
+    !!
+    !! The candidates are the caller's, not generated here, and that is
+    !! deliberate. Whoever is running a benchmark has to be able to state
+    !! exactly which points were scored, and a routine that invented its own
+    !! quasi-random set would make the search unreproducible from the outside
+    !! for no gain.
+    !!
+    !! Ties go to the lowest row, so the result does not depend on the order a
+    !! future vectorized implementation happens to reduce in.
+    subroutine fortbo_search_acquisition(acquisition, posterior, lower, upper, &
+            candidates, best_point, best_value, status)
+        class(fortbo_acquisition_t), intent(in) :: acquisition
+        class(fortbo_posterior_t), intent(in) :: posterior
+        real(dp), intent(in) :: lower(:)
+        real(dp), intent(in) :: upper(:)
+        real(dp), intent(in) :: candidates(:, :)
+        real(dp), intent(out) :: best_point(:)
+        real(dp), intent(out) :: best_value
+        type(fortnum_status_t), intent(out) :: status
+        real(dp), allocatable :: values(:), clamped(:, :)
+        integer :: n_inputs, n_candidates, k, best_index
+
+        n_inputs = size(lower)
+        n_candidates = size(candidates, 1)
+        best_value = -huge(1.0_dp)
+        best_point = 0.0_dp
+
+        if (n_inputs < 1 .or. size(upper) /= n_inputs) then
+            call status_set(status, FORTNUM_DOMAIN_ERROR, &
+                "fortbo search: bounds do not agree")
+            return
+        end if
+        if (any(upper < lower)) then
+            call status_set(status, FORTNUM_DOMAIN_ERROR, &
+                "fortbo search: upper bound below lower bound")
+            return
+        end if
+        if (n_candidates < 1 .or. size(candidates, 2) /= n_inputs) then
+            call status_set(status, FORTNUM_DOMAIN_ERROR, &
+                "fortbo search: candidate shape does not match the bounds")
+            return
+        end if
+        if (size(best_point) /= n_inputs) then
+            call status_set(status, FORTNUM_DOMAIN_ERROR, &
+                "fortbo search: the result has the wrong width")
+            return
+        end if
+
+        ! Clamped rather than refused: a candidate a hair outside the box is a
+        ! rounding artefact of whatever generated it, and rejecting the whole
+        ! set for one would be unhelpful. The returned point is inside the box
+        ! either way, which is the property the caller depends on.
+        allocate (clamped(n_candidates, n_inputs))
+        do k = 1, n_candidates
+            clamped(k, :) = min(max(candidates(k, :), lower), upper)
+        end do
+
+        allocate (values(n_candidates))
+        call acquisition%value(posterior, clamped, values, status)
+        if (status%code /= FORTNUM_OK) return
+
+        best_index = 1
+        do k = 2, n_candidates
+            if (values(k) > values(best_index)) best_index = k
+        end do
+        best_value = values(best_index)
+        best_point = clamped(best_index, :)
+        call status_set(status, FORTNUM_OK, "")
+    end subroutine fortbo_search_acquisition
 
     !! FortOpt callback. Returns the negated acquisition and its negated
     !! gradient, because the optimizer descends and the acquisition is to be

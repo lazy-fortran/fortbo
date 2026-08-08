@@ -1088,9 +1088,30 @@ and belongs to FortML's parameter registry, not to FortBO.
 - [ ] Keep FortAD-bearing acquisition graphs on FortAD/FortSym until complete
   device JVP/VJP/HVP products exist. Use CUDA for fixed sampling/reduction
   kernels where OpenACC cannot preserve residency or determinism.
-- [ ] Benchmark against BoTorch/GPyTorch, JAX, and deterministic NumPy on
+- [x] Benchmark against BoTorch/GPyTorch, JAX, and deterministic NumPy on
   matched functions, models, precision, seeds, restart counts, and stopping
   criteria. Report regret/sample efficiency separately from wall time.
+  Two halves. **Correctness** (`test_cross_framework`): a pinned RBF GP checked
+  against all three references, which the generator first cross-checks against
+  each other. Posterior mean and standard deviation agree to 7e-16. Two
+  differences had to be found and removed rather than tolerated -- GPyTorch's
+  constrained setters do not round trip in float64 (its softplus inverse runs
+  in single precision, so a requested lengthscale of 0.7 is stored 1.2e-8
+  away), and FortML adds a default 1e-10 diagonal jitter that the references do
+  not. Both were invisible in isolation and both were real model differences.
+  BoTorch's legacy analytic EI remains 2e-9 from the direct algebra; JAX agrees
+  with NumPy at 4e-16 on the same quantity, so BoTorch is the outlier, which is
+  what the logEI paper (arXiv:2310.20708) describes.
+  **Sample efficiency** (`test_regret_benchmark`): Branin, identical listed
+  initial design rather than a shared seed, matched budget and stopping
+  criterion. FortBO reaches 8.9e-4 final regret against BoTorch's 5.2e-4 in 30
+  evaluations. Wall time is reported in its own columns and never mixed in: it
+  measures a Fortran binary against a Python stack, and on the expensive
+  objectives BO exists for it is nearly irrelevant. The inner searches are not
+  identical -- BoTorch runs L-BFGS-B on acquisition gradients, FortBO's
+  value-only GP exposes none and samples instead at a matched acquisition
+  budget -- and that is stated rather than papered over. Generators live in
+  `fortbo-bench/scripts/emit_reference.py` and `emit_regret.py`.
 
 ### BO6: evidence and release
 
