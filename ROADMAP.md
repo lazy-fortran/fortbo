@@ -259,9 +259,32 @@ Concretely, and binding on every work package below:
   uncertain incumbent leaves *less* improvement available, not more, because
   the minimum of several random variables sits below the minimum of their
   means. Jensen decides that, not intuition.
-- [ ] Implement entropy search and predictive entropy search. Both need the
-  one-dimensional inner optimization and the expectation over fantasized
-  observations that BO1's Monte Carlo item provides.
+- [x] Implement **max-value entropy search**. `src/fortbo_entropy.f90` asks how
+  much the next observation will *tell us* about the optimum rather than how
+  much better it will be. The two disagree whenever an evaluation is
+  informative without being good — a point that will turn out mediocre but
+  whose value rules out a region is worth an evaluation, and expected
+  improvement cannot say so. `test_entropy` pins exactly that: relevance beats
+  raw uncertainty, so a moderately uncertain point near the sampled optimum
+  outranks a very uncertain one far from it.
+
+  MES targets the distribution over the optimum's *value*, which is
+  one-dimensional whatever the input dimension is, so the acquisition is closed
+  form. FortBO minimizes, so `y*` is the minimum and conditioning truncates the
+  posterior from *below*; the maximization form in the literature has the
+  opposite truncation and the opposite sign on its second term, and
+  transcribing it unchanged is the obvious way to get this wrong. The samples
+  of `y*` are supplied by the caller for the same reason knowledge gradient's
+  reference set is: which sampler produced them is a decision about the
+  problem, and hiding it would make two runs incomparable without either saying
+  why.
+
+  The oracle is numerical integration of `-p log p` over the truncated density
+  by Simpson's rule, applied both to the entropy itself and to the difference
+  `H(f) - H(f | f >= y*)` that MES is defined as — the definition of entropy
+  rather than a rearrangement of the closed form.
+- [ ] Implement predictive entropy search, which targets the optimum's location
+  rather than its value and needs the nested approximation MES avoids.
 - [x] Implement Monte Carlo acquisition evaluation with common random numbers,
   antithetic draws, reparameterized posterior samples, and exact gradients.
   `src/fortbo_monte_carlo.f90` freezes the standard normal base draws once,
