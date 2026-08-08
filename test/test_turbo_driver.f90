@@ -34,6 +34,7 @@ program test_turbo_driver
     call check_bandit_reallocates(failures)
     call check_restart_clears_history(failures)
     call check_replayable(failures)
+    call check_driver_uses_gradients(failures)
     call check_frozen_initial_design(failures)
     call check_frozen_candidate_pool(failures)
     call check_batch_qei(failures)
@@ -337,6 +338,61 @@ contains
             "a different seed gives a different run", failures)
     end subroutine check_replayable
 
+    !! A gradient-bearing history must select the derivative-observation ARD
+    !! posterior by default. The explicit value-only mode remains available so
+    !! ignoring gradients is deliberate rather than an accidental default.
+    subroutine check_driver_uses_gradients(failures)
+        integer, intent(inout) :: failures
+        type(fortbo_turbo_config_t) :: automatic_config, explicit_config, value_config
+        type(fortbo_turbo_driver_t) :: automatic, explicit, value_only
+        type(fortnum_status_t) :: status
+        real(dp) :: points(1, 2), values(1), gradients(1, 2)
+        real(dp) :: selected_automatic(1, 2), selected_explicit(1, 2), &
+            selected_value(1, 2), pool(4, 2)
+        integer :: region(1), selected_region(1), i
+
+        automatic_config%n_regions = 1
+        automatic_config%batch_size = 1
+        automatic_config%n_initial = 1
+        automatic_config%use_ard = .true.
+        allocate (automatic_config%lengthscales(2), &
+            automatic_config%frozen_candidates(4, 2))
+        automatic_config%lengthscales = [0.3_dp, 0.3_dp]
+        pool = reshape([0.35_dp, 0.45_dp, 0.55_dp, 0.65_dp, &
+            0.45_dp, 0.45_dp, 0.55_dp, 0.55_dp], [4, 2])
+        automatic_config%frozen_candidates = pool
+        explicit_config = automatic_config
+        explicit_config%use_gradients = .true.
+        value_config = automatic_config
+        value_config%ignore_gradients = .true.
+
+        call automatic%initialize(2, automatic_config, 8080, status)
+        call explicit%initialize(2, explicit_config, 8080, status)
+        call value_only%initialize(2, value_config, 8080, status)
+        points(1, :) = [0.5_dp, 0.5_dp]
+        region = 1
+        values(1) = 0.0_dp
+        gradients(1, :) = [1.0_dp, -0.5_dp]
+        do i = 1, 3
+            points(1, 1) = 0.5_dp + 0.08_dp*real(i - 2, dp)
+            points(1, 2) = 0.5_dp - 0.06_dp*real(i - 2, dp)
+            values(1) = 0.02_dp*real(i - 2, dp)**2
+            gradients(1, :) = [0.2_dp*real(i, dp), -0.1_dp*real(i, dp)]
+            call automatic%tell(points, region, values, status, gradients)
+            call explicit%tell(points, region, values, status, gradients)
+            call value_only%tell(points, region, values, status, gradients)
+        end do
+
+        call automatic%ask(selected_automatic, selected_region, status)
+        call explicit%ask(selected_explicit, selected_region, status)
+        call value_only%ask(selected_value, selected_region, status)
+        call expect(maxval(abs(selected_automatic - selected_explicit)) == 0.0_dp, &
+            "automatic gradient use matches explicit derivative mode", failures)
+        call expect(maxval(abs(selected_automatic - selected_value)) > 1.0e-12_dp, &
+            "explicit value-only mode differs when gradients are informative", &
+            failures)
+    end subroutine check_driver_uses_gradients
+
     !! A caller-supplied initial design takes precedence over the local Sobol
     !! implementation. This is the exact-replay escape hatch for upstream
     !! scrambled sequences whose bits are not available in FortNum.
@@ -508,6 +564,12 @@ contains
         call driver%tell(points, regions, values, status)
         call expect(status%code == FORTNUM_DOMAIN_ERROR, &
             "an out-of-range region index is refused", failures)
+
+        config%use_gradients = .true.
+        config%ignore_gradients = .true.
+        call driver%initialize(2, config, 1, status)
+        call expect(status%code == FORTNUM_DOMAIN_ERROR, &
+            "conflicting gradient modes are refused", failures)
     end subroutine check_refusals
 
     subroutine expect(condition, description, failures)

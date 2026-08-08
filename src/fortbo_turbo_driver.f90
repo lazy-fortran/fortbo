@@ -76,9 +76,12 @@ module fortbo_turbo_driver
         logical :: use_ard = .false.
         real(dp) :: noise_variance = 1.0e-6_dp
         !! Use measured gradients when the history carries them. Left to the
-        !! caller rather than inferred, because ignoring gradients is a
-        !! legitimate choice and should be a visible one.
+        !! caller rather than forced, because requesting gradients from an
+        !! empty history is an error.
         logical :: use_gradients = .false.
+        !! Explicitly keep a value-only surrogate when histories contain
+        !! gradients. The default is automatic derivative-observation use.
+        logical :: ignore_gradients = .false.
         !! Thompson sampling is the historical default. EI is analytic at q=1
         !! and greedy Monte Carlo qEI at larger batch sizes.
         integer :: acquisition = FORTBO_TURBO_ACQUISITION_TS
@@ -176,6 +179,11 @@ contains
                     "fortbo turbo driver: ARD lengthscales must match inputs")
                 return
             end if
+        end if
+        if (config%use_gradients .and. config%ignore_gradients) then
+            call status_set(status, FORTNUM_DOMAIN_ERROR, &
+                "fortbo turbo driver: gradient-use and gradient-ignore modes conflict")
+            return
         end if
         if (config%quasi_random .and. n_inputs > SOBOL_MAX_DIMENSION) then
             call status_set(status, FORTNUM_NOT_IMPLEMENTED, &
@@ -412,15 +420,27 @@ contains
             call standardized_copy(self%histories(k), scratch, shift, scale, status)
             if (status%code /= FORTNUM_OK) return
             if (self%config%use_ard) then
-                call fortbo_fit_from_history(scratch, posterior, status, &
-                    noise_variance=self%config%noise_variance, &
-                    use_gradients=self%config%use_gradients, &
-                    lengthscales=lengthscales)
+                if (self%config%use_gradients .or. self%config%ignore_gradients) then
+                    call fortbo_fit_from_history(scratch, posterior, status, &
+                        noise_variance=self%config%noise_variance, &
+                        use_gradients=self%config%use_gradients, &
+                        lengthscales=lengthscales)
+                else
+                    call fortbo_fit_from_history(scratch, posterior, status, &
+                        noise_variance=self%config%noise_variance, &
+                        lengthscales=lengthscales)
+                end if
             else
-                call fortbo_fit_from_history(scratch, posterior, status, &
-                    lengthscale=self%config%lengthscale, &
-                    noise_variance=self%config%noise_variance, &
-                    use_gradients=self%config%use_gradients)
+                if (self%config%use_gradients .or. self%config%ignore_gradients) then
+                    call fortbo_fit_from_history(scratch, posterior, status, &
+                        lengthscale=self%config%lengthscale, &
+                        noise_variance=self%config%noise_variance, &
+                        use_gradients=self%config%use_gradients)
+                else
+                    call fortbo_fit_from_history(scratch, posterior, status, &
+                        lengthscale=self%config%lengthscale, &
+                        noise_variance=self%config%noise_variance)
+                end if
             end if
             if (status%code /= FORTNUM_OK) return
             call posterior%moments(candidates, mean, variance, status)
