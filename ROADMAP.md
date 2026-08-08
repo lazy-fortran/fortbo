@@ -274,8 +274,27 @@ Concretely, and binding on every work package below:
   check measures the derivative instead of sampling noise. These are the
   marginal estimators; the joint reparameterization through `reparam_sample`
   belongs to the batch item below, where the utility couples the rows.
-- [ ] Implement batch qEI/qNEI, qUCB, qKG, Thompson sampling, and fantasy
-  observations with deterministic seeded fixtures.
+- [x] Implement batch **qEI/qNEI and qUCB** with deterministic seeded fixtures.
+  `src/fortbo_batch.f90` scores a set of `q` points under one **joint**
+  posterior draw, which is the only thing separating a batch acquisition from
+  `q` separate ones. Correlated points share their randomness, so two nearby
+  candidates rise and fall together and the second adds almost nothing to the
+  maximum — the estimator penalizes redundancy with no explicit diversity term
+  anywhere. Scoring the same batch under independent marginals would rate `q`
+  copies of one point as `q` times as good as one, which is exactly backwards,
+  and a posterior offering only marginal moments therefore refuses by
+  capability rather than pretending the points are independent.
+
+  `test_batch` anchors the estimators to the already-validated analytic EI via
+  a batch of one, then measures the two behaviors that matter: a duplicate adds
+  nothing, and a diverse pair beats a clustered one. The duplicate check
+  surfaced something worth recording — two copies of a point agree only to
+  about `sqrt(jitter)`, not to rounding, because a covariance with a repeated
+  point is singular and the jitter that makes it factorizable is exactly what
+  lets the copy wander, entering the draw through a Cholesky factor.
+- [ ] Implement batch **qKG**, Thompson sampling as a batch rule, and fantasy
+  observations. qKG needs the fantasy machinery over `q` simultaneous
+  observations, which is a different construction from the three above.
 - [ ] Implement constrained, cost-aware, multi-fidelity, multi-objective,
   preference, and risk-sensitive acquisitions.
 
