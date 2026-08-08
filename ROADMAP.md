@@ -698,8 +698,29 @@ and belongs to FortML's parameter registry, not to FortBO.
   which they are not under a shared surrogate; the test asserts the direction
   the approximation errs in (it understates) rather than an equality that does
   not hold, and checks the one-member case where it is exact.
-- [ ] Implement active learning, level-set estimation, contour finding,
+- [x] Implement active learning, level-set estimation, contour finding,
   feasibility search, and Bayesian calibration/design of experiments.
+  `src/fortbo_active.f90` covers the goals that are *not* optimization. Using
+  an optimization acquisition for any of them concentrates evaluations near the
+  optimum, which is the wrong place when the answer lives elsewhere.
+
+  The straddle rule for level sets is `|mu - t| - kappa sigma`, and the two
+  terms genuinely disagree: one wants uncertainty, the other proximity to the
+  threshold. `test_active` constructs the case where they conflict and shows
+  that pure variance sampling picks a different point entirely — the failure
+  the rule exists to avoid. Both degenerate limits are reachable and pinned:
+  `kappa = 0` collapses to sampling nearest the contour and stops learning once
+  one crossing is found, and large `kappa` forgets the contour altogether.
+
+  Feasibility search is level-set estimation at `t = 0` on a constraint and
+  gets no separate routine, because adding one would suggest it were a
+  different thing. Maximin design is scored rather than sampled, since spread
+  is a property of the design alone; it supplies the model-free starting design
+  and the baseline any adaptive method has to beat.
+
+  Every score follows the lower-is-better convention, and the test checks that
+  rather than assuming it: a sign error would silently make every optimizer
+  seek the *most* certain point and would still run cleanly.
 - [x] Add stopping rules based on target value, stall, posterior uncertainty,
   acquisition magnitude, budget, cost, and wall time, with machine-readable
   diagnostics. `src/fortbo_stopping.f90` answers with a *reason*, not a
