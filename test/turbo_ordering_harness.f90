@@ -73,6 +73,7 @@ module turbo_ordering_harness
     private
 
     public :: check_ordering
+    public :: check_against_pinned_reference
 
     integer, parameter, public :: PROBLEM_ACKLEY = 1
     integer, parameter, public :: PROBLEM_ROVER = 2
@@ -274,12 +275,15 @@ contains
     !! claim it does not support is the honest option, and it leaves a number
     !! for a longer run to be compared against.
     subroutine check_ordering(problem, label, failures, single_region_only, &
-            report_only)
+            report_only, single_median)
         integer, intent(in) :: problem
         character(len=*), intent(in) :: label
         integer, intent(inout) :: failures
         logical, intent(in), optional :: single_region_only
         logical, intent(in), optional :: report_only
+        !! The measured single-region median, so a caller can compare it
+        !! against an external baseline without re-running the arm.
+        real(dp), intent(out), optional :: single_median
         logical :: skip_multi, measure_only
         type(fortnum_status_t) :: status
         real(dp) :: single(N_SEEDS), several(N_SEEDS), random(N_SEEDS)
@@ -329,6 +333,7 @@ contains
         ! The claim the paper makes and this can check: local trust-region
         ! search beats undirected search in high dimensions. If this fails the
         ! method is not doing anything, whatever the other numbers say.
+        if (present(single_median)) single_median = median_single
         if (measure_only) then
             print *, "    (recorded, not asserted: this budget is too small "// &
                 "to test the ordering)"
@@ -368,6 +373,85 @@ contains
                 "small budget is split across regions)"
         end if
     end subroutine check_ordering
+
+    !! FortBO's Ackley-200 result against the pinned `uber-research/TuRBO`.
+    !!
+    !! Ackley is stated in closed form and both implementations use the same
+    !! box, so this is the one place the two are provably optimizing the
+    !! identical function -- the rover and pushing fixtures are structurally
+    !! faithful but numerically ours, and comparing there would measure the
+    !! fixtures rather than the optimizers.
+    !!
+    !! **What is asserted is agreement in kind, not in value.** The reference
+    !! fits GP hyperparameters with Adam at every step; FortBO runs a fixed
+    !! lengthscale. That is a real difference in the surrogate, not in the
+    !! trust-region logic under comparison, so demanding matching numbers would
+    !! be demanding that two different models agree. What must hold is that
+    !! FortBO lands in the same region of the objective the reference does --
+    !! Ackley at 200 dimensions runs from 0 to about 22, and a method that had
+    !! its trust-region bookkeeping wrong would not land near a method that has
+    !! it right.
+    subroutine check_against_pinned_reference(fortbo_best, failures)
+        real(dp), intent(in) :: fortbo_best
+        integer, intent(inout) :: failures
+        real(dp) :: reference_turbo, reference_random
+        integer :: budget, n_initial, dimension, unit, ios
+        logical :: present_on_disk
+
+        inquire (file="test/fixtures/turbo_baseline.txt", exist=present_on_disk)
+        if (.not. present_on_disk) then
+            ! A missing baseline is a failure, not a skip: a comparison that
+            ! passes with nothing to compare against looks exactly like one
+            ! that ran.
+            print *, "  FAIL: the pinned baseline is missing; regenerate it "// &
+                "with fortbo-bench/scripts/run_turbo_baselines.py"
+            failures = failures + 1
+            return
+        end if
+
+        open (newunit=unit, file="test/fixtures/turbo_baseline.txt", &
+            status="old", action="read", iostat=ios)
+        if (ios /= 0) then
+            print *, "  FAIL: the pinned baseline could not be opened"
+            failures = failures + 1
+            return
+        end if
+        call skip_comment_lines(unit)
+        read (unit, *) budget, n_initial, dimension
+        call skip_comment_lines(unit)
+        read (unit, *) reference_turbo, reference_random
+        close (unit)
+
+        print *, "  ackley-200 against the pinned uber-research/TuRBO:"
+        print *, "    fortbo    turbo-1 ", fortbo_best
+        print *, "    reference turbo-1 ", reference_turbo
+        print *, "    reference random  ", reference_random
+
+        ! The budgets must actually be the same, or the comparison is not one.
+        call expect(budget == 16 .and. n_initial == 5 .and. dimension == 200, &
+            "the pinned baseline was run at FortBO's own budget", failures)
+
+        ! Same region of the objective. Ackley at 200 dimensions spans roughly
+        ! 0 to 22, so two points agreeing within a couple of units are doing
+        ! the same kind of thing; a broken trust region would sit far off.
+        call expect(abs(fortbo_best - reference_turbo) < 3.0_dp, &
+            "fortbo lands in the same region as the pinned reference", failures)
+    end subroutine check_against_pinned_reference
+
+    subroutine skip_comment_lines(unit)
+        integer, intent(in) :: unit
+        character(len=256) :: line
+        integer :: ios
+
+        do
+            read (unit, "(a)", iostat=ios) line
+            if (ios /= 0) return
+            if (len_trim(line) == 0) cycle
+            if (line(1:1) == "#") cycle
+            backspace (unit)
+            return
+        end do
+    end subroutine skip_comment_lines
 
     subroutine expect(condition, description, failures)
         logical, intent(in) :: condition
