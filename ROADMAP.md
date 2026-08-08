@@ -840,30 +840,43 @@ Concretely, and binding on every work package below:
   computed primitive polynomials, checked by exact equidistribution in all 200
   coordinates — so what remains is the harness and the pinned baselines.
 
-  **Partly done.** `test/turbo_ordering_harness.f90` plus
-  `test_turbo_ordering_push_slow` runs the 14D pushing arm: three seeds,
-  matched budgets and initial designs, median best value. Both TuRBO variants
-  beat quasi-random search decisively (−3.37 and −2.73 against −1.63), which
-  is the paper's central claim and the one this can honestly check.
+  **Harness done, all three problems wired up.**
+  `test/turbo_ordering_harness.f90` with `test_turbo_ordering_push_slow`,
+  `_rover_slow` and `_ackley_slow`: three seeds each, matched budgets, matched
+  initial designs, medians rather than single runs.
 
-  Two things are deliberately *not* claimed. The third arm is quasi-random
-  search, named as such rather than dressed up as the paper's global-BO
-  baselines, which are out of reach at these dimensions. And the TuRBO-m over
-  TuRBO-1 ordering is **not** reproduced: at ninety evaluations split across
-  three regions, TuRBO-1 wins, which is what should happen when a small budget
-  is divided — the paper's advantage comes from thousands of evaluations.
-  Tuning the budget until the expected ordering appeared would have made the
-  test a record of that search rather than evidence.
+  On **push-14** the paper's central claim holds and is asserted: both TuRBO
+  variants beat quasi-random search decisively (-3.37 and -2.73 against
+  -1.63). On **rover-60** and **ackley-200** the comparison is recorded but
+  *not* asserted, because the budget that fits inside `fo`'s five-minute cap
+  cannot test the ordering. Rover-60 at 22 evaluations has TuRBO-1 scoring
+  1331 against random search's 1190 — it loses, and it should: a GP fitted to
+  a couple of dozen points in sixty dimensions carries almost no information,
+  so the trust region contracts around an arbitrary point while undirected
+  search still covers the space. The paper runs thousands of evaluations.
+  Asserting its ordering at these budgets would mean either tuning until it
+  appeared or shipping a test that fails for a correct implementation.
 
-  Remaining: the rover-60 and Ackley-200 arms. Driven through this harness all
-  three methods returned bit-identical values on the rover, which cannot be a
-  real result; the fixture is fine when probed directly (1654 to 2212 over
-  random trajectories, 82 to 110 collisions), so the defect is in the harness
-  plumbing and is not yet found. Ackley-200 additionally needs its own budget:
-  the paper's `min(100d, 5000)` candidate rule makes each ask there cost about
-  fifty times what it costs at 14 dimensions. The pinned `uber-research/TuRBO`
-  and BoTorch `turbo_1` baselines are also still outstanding — the reference
-  is fetched into provenance and read, but nothing runs against it yet.
+  One real defect was found and is now enforced rather than merely fixed.
+  TuRBO-`m` spends `m * n_initial` evaluations before any region has a usable
+  surrogate; when the budget does not clear that, the run emits nothing but
+  initial-design points, and because those come from the same seeded uniform
+  stream the random arm draws from, TuRBO-`m` and random search return
+  **bit-identical** values. That looked exactly like a plumbing bug. The
+  harness now checks `budget > 2 * n_regions * n_initial` at run time, because
+  the failure is silent and produces numbers that look like a tie.
+
+  Also recorded: the third arm is quasi-random search and is named as such,
+  not dressed up as the paper's global-BO baselines, which are out of reach at
+  these dimensions.
+
+  **Still outstanding, and the reason this stays unchecked:** the pinned
+  `uber-research/TuRBO` and BoTorch `turbo_1` baselines. The reference is
+  fetched into `fortbo-bench` provenance and was read — its restart
+  bookkeeping and its `y_cand = inf` rule for never reselecting a candidate
+  within a batch — but nothing runs against it yet. Doing so needs budgets in
+  the thousands, which belongs in `fortbo-bench` as a long-running benchmark
+  rather than in the test suite.
 
 #### DTuRBO (derivative-enabled TuRBO)
 
