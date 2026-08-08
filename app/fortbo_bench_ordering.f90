@@ -35,6 +35,8 @@ program fortbo_bench_ordering
     integer :: problem, budget, n_initial, n_regions, n_seeds
     integer :: s, length, status_code
     real(dp), allocatable :: single(:), several(:), random(:)
+    real(dp), allocatable :: single_wall(:), several_wall(:), random_wall(:)
+    real(dp) :: started, finished
     real(dp) :: value
     type(fortnum_status_t) :: status
     logical :: ok
@@ -73,20 +75,34 @@ program fortbo_bench_ordering
     end if
 
     allocate (single(n_seeds), several(n_seeds), random(n_seeds))
+    ! Timed here rather than by an outside wrapper, so the wall time and the
+    ! objective value come from the same run and cannot drift apart. Process
+    ! start-up and the build are excluded, which is what makes this comparable
+    ! against a Python reference that also times only its optimization loop.
+    allocate (single_wall(n_seeds), several_wall(n_seeds), random_wall(n_seeds))
     do s = 1, n_seeds
+        call cpu_time(started)
         call bench_run_turbo(problem, 1, 100 + s, budget, n_initial, &
             single(s), status)
+        call cpu_time(finished)
+        single_wall(s) = finished - started
         if (status%code /= FORTNUM_OK) then
             print *, "turbo-1 failed: ", trim(status%msg)
             error stop 1
         end if
+        call cpu_time(started)
         call bench_run_turbo(problem, n_regions, 100 + s, budget, n_initial, &
             several(s), status)
+        call cpu_time(finished)
+        several_wall(s) = finished - started
         if (status%code /= FORTNUM_OK) then
             print *, "turbo-m failed: ", trim(status%msg)
             error stop 1
         end if
+        call cpu_time(started)
         call bench_run_random(problem, 100 + s, budget, random(s), status)
+        call cpu_time(finished)
+        random_wall(s) = finished - started
         if (status%code /= FORTNUM_OK) then
             print *, "random failed: ", trim(status%msg)
             error stop 1
@@ -99,5 +115,7 @@ program fortbo_bench_ordering
     print *, "RESULT ", trim(problem_name), budget, n_initial, n_regions, &
         n_seeds, bench_median(single), bench_median(several), &
         bench_median(random)
+    print *, "TIMING ", trim(problem_name), bench_median(single_wall), &
+        bench_median(several_wall), bench_median(random_wall)
 
 end program fortbo_bench_ordering
