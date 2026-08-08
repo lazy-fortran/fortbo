@@ -25,14 +25,12 @@ program fortbo_bench_acquisitions
     use fortnum_status, only: fortnum_status_t, FORTNUM_OK
     use fortnum_rng, only: rng_t, rng_seed, rng_uniform
     use fortml_kernels, only: kernel_t, make_rbf_kernel
-    use fortml_gaussian_process, only: gp_regression_t
     use fortbo_acquisition, only: fortbo_acquisition_t, fortbo_ei_t, fortbo_log_ei_t, fortbo_pi_t, &
         fortbo_ucb_t
     use fortbo_monte_carlo, only: fortbo_mc_base_t, fortbo_mc_ei_t, &
         fortbo_mc_pi_t, fortbo_mc_noisy_ei_t
     use fortbo_entropy, only: fortbo_max_value_entropy_search
     use fortbo_fortml, only: fortbo_gp_posterior_t
-    use fortbo_posterior, only: fortbo_posterior_t
     use, intrinsic :: iso_fortran_env, only: real64
     implicit none
 
