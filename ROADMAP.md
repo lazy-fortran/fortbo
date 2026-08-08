@@ -820,8 +820,35 @@ into the headline number.
   optimum, and Ackley's gradient is checked at the origin, which is
   simultaneously its optimum and the removable singularity where the natural
   expression divides by zero.
-- [ ] Add constrained synthetic functions, noisy objectives, and
+- [x] Add constrained synthetic functions, noisy objectives, and
   multi-objective fixtures with known Pareto fronts or dense reference grids.
+  `src/fortbo_fixtures.f90` holds the Gardner and Townsend constrained problems
+  and the ZDT1/ZDT2 multi-objective pair.
+
+  Constraints are kept as separate functions, never folded into the objective
+  as a penalty: a pre-penalized fixture makes a method that respects the
+  constraint indistinguishable from one that ignores it, which is the only
+  thing a constrained benchmark is for. `test_fixtures` checks the property
+  that makes each fixture worth having — the unconstrained optimum over the box
+  must be *infeasible*, so the constraint actually bites. A fixture whose
+  constraint is slack at the optimum is worthless as evidence.
+
+  The Pareto fronts are analytic rather than gridded. Two checks keep them
+  honest: every stated front point must be attained by a real input, and no
+  sampled input may dominate one — a "front" that a random draw beats would
+  make every hypervolume comparison meaningless. The front's hypervolume is
+  computed through `fortbo_pareto`, so fixture and indicator agree.
+
+  ZDT2 is in the suite because its front is *concave*. A weighted-sum
+  scalarization reaches only the convex hull, so on ZDT2 it collapses to the
+  endpoints however the weights are swept — which the test demonstrates
+  alongside ZDT1, where the same sweep does cross the interior. A suite of
+  convex fronts alone would report scalarization methods as complete when they
+  are not.
+
+  Noise is a standard deviation the caller applies, not a draw taken inside the
+  fixture: a fixture that drew its own noise would be unreplayable and two
+  methods could not be compared on the same realizations.
 - [x] Add the high-dimensional trust-region fixtures with exact gradients:
   Ackley-200 on `[-5,10]^200`, Levy and Rosenbrock at `d = 100..500`. The
   functions and their analytic gradients were already in
