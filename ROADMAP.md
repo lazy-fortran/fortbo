@@ -437,7 +437,23 @@ and belongs to FortML's parameter registry, not to FortBO.
   and symmetrized exactly. `FORTBO_CAP_MEAN_HESSIAN` is a separate bit from
   `FORTBO_CAP_MOMENT_HESSIAN` because a model can honestly have the mean's
   curvature and not the standard deviation's, and that is exactly the situation
-  here — the standard deviation's second derivative is still refused.
+  here.
+
+  **The standard deviation's curvature is now supplied too**, once FortML
+  gained `predict_input_hvp` (see *Resolved upstream defects*). It is not a
+  predicted quantity but the square root's chain rule applied to the variance's
+  curvature, `d2 sd = v_jk/(2 sd) - v_j v_k/(4 sd^3)`, so it needs the
+  variance's gradient as well as its Hessian: the square root contributes a term
+  that no accuracy in `v_jk` can supply. The pair costs `d` Hessian-vector
+  products rather than the `d^2` JVPs the mean-only route needs, and
+  `test_fortml_adapter` cross-checks the mean half against `mean_hessian`, which
+  reaches the same matrix by a completely different route. At a training site of
+  a noiseless model the cusp makes the curvature genuinely infinite, and it is
+  refused rather than reported as a number of order 1e18 that a Newton step
+  would follow silently. Reaching that state takes a deliberate construction:
+  the jitter `fortbo_fit_from_history` adds holds the posterior standard
+  deviation near 1e-5, so ordinary use never lands on the cusp — worth knowing,
+  and worth testing anyway.
 - [ ] Derive the posterior gradient and Hessian expressions for each supported
   kernel through FortSym and emit them; block-matrix work blocks on FortSym M9
   and must be fixed there.

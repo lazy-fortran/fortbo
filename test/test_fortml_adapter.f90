@@ -23,10 +23,12 @@ program test_fortml_adapter
     use fortnum_status, only: fortnum_status_t, FORTNUM_OK, FORTNUM_DOMAIN_ERROR, &
         FORTNUM_NOT_IMPLEMENTED
     use fortbo_posterior, only: fortbo_posterior_t, FORTBO_CAP_MOMENTS, &
-        FORTBO_CAP_MOMENT_GRADIENT, FORTBO_CAP_MEAN_HESSIAN
+        FORTBO_CAP_MOMENT_GRADIENT, FORTBO_CAP_MEAN_HESSIAN, &
+        FORTBO_CAP_MOMENT_HESSIAN
     use fortbo_history, only: fortbo_history_t
     use fortbo_fortml, only: fortbo_fit_from_history, fortbo_gp_posterior_t, &
         fortbo_derivative_gp_posterior_t
+    use fortml_kernels, only: kernel_t, make_matern52_kernel
     use fortbo_acquisition, only: fortbo_ei_t, fortbo_ucb_t
     implicit none
 
@@ -39,6 +41,7 @@ program test_fortml_adapter
     call check_acquisitions_are_indistinguishable(failures)
     call check_moment_gradients(failures)
     call check_mean_hessian(failures)
+    call check_moment_hessian(failures)
     call check_refusals(failures)
 
     if (failures == 0) then
@@ -429,6 +432,136 @@ contains
         call expect(status%code == FORTNUM_NOT_IMPLEMENTED, &
             "the value-only GP refuses the mean Hessian by name", failures)
     end subroutine check_mean_hessian
+
+    !! The pair DTuRBO's quadratic model consumes. The standard deviation's
+    !! Hessian is the interesting half: it is not a predicted quantity but the
+    !! square root's chain rule applied to the variance's curvature, so it has a
+    !! term the variance's Hessian alone cannot supply. Central differences of
+    !! the *reported* sd gradient are the oracle, and the mean half is
+    !! cross-checked against `mean_hessian`, which reaches the same matrix by a
+    !! completely different route through the model.
+    subroutine check_moment_hessian(failures)
+        integer, intent(inout) :: failures
+        type(fortbo_history_t) :: history
+        class(fortbo_posterior_t), allocatable :: informed, plain
+        type(fortnum_status_t) :: status
+        real(dp) :: point(2), query(1, 2), shifted(1, 2)
+        real(dp) :: mean_hess(2, 2), sd_hess(2, 2), cross_check(2, 2)
+        real(dp) :: gradient_plus(1, 2), gradient_minus(1, 2)
+        real(dp) :: sd_plus(1, 2), sd_minus(1, 2)
+        real(dp) :: numeric
+        real(dp), parameter :: step = 1.0e-5_dp
+        integer :: k, j, c
+        logical :: mean_matches, sd_matches
+
+        call history%initialize(2, 0, status)
+        do k = 1, 16
+            call training_site(k, point)
+            call history%add(point, status, objective=objective(point), &
+                gradient=objective_gradient(point))
+        end do
+        call fortbo_fit_from_history(history, informed, status, lengthscale=0.4_dp, &
+            noise_variance=1.0e-6_dp, use_gradients=.true.)
+
+        call expect(informed%supports(FORTBO_CAP_MOMENT_HESSIAN), &
+            "the derivative surrogate declares the moment Hessian pair", failures)
+
+        query(1, :) = [0.33_dp, 0.51_dp]
+        call informed%moment_hessian(query(1, :), mean_hess, sd_hess, status)
+        call expect(status%code == FORTNUM_OK, "the moment Hessians evaluate", &
+            failures)
+        call expect(maxval(abs(mean_hess - transpose(mean_hess))) == 0.0_dp .and. &
+            maxval(abs(sd_hess - transpose(sd_hess))) == 0.0_dp, &
+            "both moment Hessians are exactly symmetric", failures)
+
+        ! The mean half must agree with the d^2-JVP route, which shares no code
+        ! with the Hessian-vector product this routine uses.
+        call informed%mean_hessian(query(1, :), cross_check, status)
+        call expect(maxval(abs(mean_hess - cross_check)) < 1.0e-8_dp, &
+            "both routes to the mean Hessian agree", failures)
+
+        mean_matches = .true.
+        sd_matches = .true.
+        do c = 1, 2
+            shifted = query
+            shifted(1, c) = query(1, c) + step
+            call informed%moment_gradient(shifted, gradient_plus, sd_plus, status)
+            shifted(1, c) = query(1, c) - step
+            call informed%moment_gradient(shifted, gradient_minus, sd_minus, status)
+            do j = 1, 2
+                numeric = (gradient_plus(1, j) - gradient_minus(1, j))/(2.0_dp*step)
+                if (abs(mean_hess(j, c) - numeric) > &
+                    2.0e-3_dp*max(1.0_dp, abs(numeric))) mean_matches = .false.
+                numeric = (sd_plus(1, j) - sd_minus(1, j))/(2.0_dp*step)
+                if (abs(sd_hess(j, c) - numeric) > &
+                    5.0e-3_dp*max(1.0_dp, abs(numeric))) sd_matches = .false.
+            end do
+        end do
+        call expect(mean_matches, &
+            "the mean Hessian matches differences of the reported gradient", &
+            failures)
+        call expect(sd_matches, &
+            "the sd Hessian matches differences of the reported sd gradient", &
+            failures)
+
+        ! At a training site of a *noiseless* model the standard deviation has a
+        ! cusp and no finite curvature exists. Reaching that state takes a
+        ! deliberate construction, because `fortbo_fit_from_history` adds jitter
+        ! that keeps the posterior standard deviation near 1e-5 — comfortably
+        ! above the floor — so ordinary use never lands on the cusp. That the
+        ! guard is hard to reach is worth knowing; that it is correct when
+        ! reached is worth testing, since the alternative is a Newton step
+        ! following a number of order 1e18.
+        call check_cusp_refusal(failures)
+
+        ! With the usual jitter the same query is a perfectly ordinary point.
+        call training_site(3, point)
+        call informed%moment_hessian(point, mean_hess, sd_hess, status)
+        call expect(status%code == FORTNUM_OK, &
+            "a jittered model has finite curvature at a training site", failures)
+
+        call fortbo_fit_from_history(history, plain, status, lengthscale=0.4_dp, &
+            use_gradients=.false.)
+        call expect(.not. plain%supports(FORTBO_CAP_MOMENT_HESSIAN), &
+            "the value-only GP claims no moment Hessian", failures)
+        call plain%moment_hessian(query(1, :), mean_hess, sd_hess, status)
+        call expect(status%code == FORTNUM_NOT_IMPLEMENTED, &
+            "the value-only GP refuses the moment Hessian by name", failures)
+    end subroutine check_moment_hessian
+
+    !! Drive the standard deviation genuinely to zero by fitting the underlying
+    !! model directly with no noise and negligible jitter, then confirm the
+    !! curvature is refused rather than reported as an enormous finite number.
+    subroutine check_cusp_refusal(failures)
+        integer, intent(inout) :: failures
+        type(fortbo_derivative_gp_posterior_t) :: bare
+        type(fortnum_status_t) :: status
+        real(dp) :: point(2), inputs(9, 2), values(9, 1)
+        real(dp) :: mean_hess(2, 2), sd_hess(2, 2)
+        type(kernel_t) :: kernel
+        integer :: components(9)
+        integer :: k
+
+        do k = 1, 9
+            call training_site(k, point)
+            inputs(k, :) = point
+            values(k, 1) = objective(point)
+            components(k) = 0
+        end do
+        bare%dimension = 2
+        kernel = make_matern52_kernel(2, 1.0_dp, 0.4_dp, status)
+        call expect(status%code == FORTNUM_OK, "the cusp kernel builds", failures)
+        call bare%model%fit(inputs, components, values, kernel, 1.0e-16_dp, status, &
+            jitter=1.0e-16_dp)
+        call expect(status%code == FORTNUM_OK, "the noiseless model fits", failures)
+        bare%fitted = .true.
+
+        call training_site(4, point)
+        call bare%moment_hessian(point, mean_hess, sd_hess, status)
+        call expect(status%code == FORTNUM_DOMAIN_ERROR, &
+            "the sd Hessian is refused at a cusp rather than returned as huge", &
+            failures)
+    end subroutine check_cusp_refusal
 
     subroutine check_refusals(failures)
         integer, intent(inout) :: failures

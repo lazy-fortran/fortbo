@@ -30,7 +30,7 @@ module fortbo_fortml
     use fortml_derivative_gaussian_process, only: gp_derivative_regression_t
     use fortbo_posterior, only: fortbo_posterior_t, FORTBO_CAP_MOMENTS, &
         FORTBO_CAP_NOISY_MOMENTS, FORTBO_CAP_MOMENT_GRADIENT, &
-        FORTBO_CAP_MEAN_HESSIAN
+        FORTBO_CAP_MEAN_HESSIAN, FORTBO_CAP_MOMENT_HESSIAN
     use fortbo_history, only: fortbo_history_t
     implicit none
     private
@@ -38,6 +38,12 @@ module fortbo_fortml
     public :: fortbo_gp_posterior_t
     public :: fortbo_derivative_gp_posterior_t
     public :: fortbo_fit_from_history
+
+    !! Below this standard deviation the square root's cusp dominates and no
+    !! finite curvature exists. The bound is not a tuning knob: the second term
+    !! of the chain rule scales as `1/sd^3`, so at this value it already reaches
+    !! about 1e18 and any Newton step built on it is meaningless.
+    real(dp), parameter, public :: FORTBO_SD_HESSIAN_FLOOR = 1.0e-6_dp
 
     !! Value-only GP presented as a posterior.
     type, extends(fortbo_posterior_t) :: fortbo_gp_posterior_t
@@ -61,6 +67,7 @@ module fortbo_fortml
         procedure, public :: capabilities => derivative_gp_capabilities
         procedure, public :: moments => derivative_gp_moments
         procedure, public :: moment_gradient => derivative_gp_moment_gradient
+        procedure, public :: moment_hessian => derivative_gp_moment_hessian
         procedure, public :: mean_hessian => derivative_gp_mean_hessian
     end type fortbo_derivative_gp_posterior_t
 
@@ -123,7 +130,8 @@ contains
         caps = 0
         if (self%fitted) then
             caps = FORTBO_CAP_MOMENTS + FORTBO_CAP_NOISY_MOMENTS &
-                + FORTBO_CAP_MOMENT_GRADIENT + FORTBO_CAP_MEAN_HESSIAN
+                + FORTBO_CAP_MOMENT_GRADIENT + FORTBO_CAP_MEAN_HESSIAN &
+                + FORTBO_CAP_MOMENT_HESSIAN
         end if
     end function derivative_gp_capabilities
 
@@ -280,6 +288,109 @@ contains
         hessian = 0.5_dp*(raw + transpose(raw))
         call status_set(status, FORTNUM_OK, "")
     end subroutine derivative_gp_mean_hessian
+
+    !! Hessians of the marginal mean and standard deviation, the pair DTuRBO's
+    !! local quadratic model consumes.
+    !!
+    !! Both come from FortML's query-input Hessian-vector product, one call per
+    !! coordinate, so the whole pair costs `d` products rather than the `d^2`
+    !! JVPs the mean-only route needs. The standard deviation's curvature is
+    !! then chain-ruled from the variance's:
+    !!
+    !!     sd = sqrt(v),  d2 sd = v_jk/(2 sd) - v_j v_k/(4 sd^3),
+    !!
+    !! which needs the variance's *gradient* as well as its Hessian, because the
+    !! square root's own curvature contributes a term that no amount of accuracy
+    !! in `v_jk` can supply.
+    !!
+    !! At a training site the standard deviation has a cusp: `sd` goes to zero
+    !! and the second term diverges. `moment_gradient` reports the
+    !! least-magnitude subgradient there, but no finite Hessian exists, so this
+    !! routine refuses by name rather than returning a large number that a
+    !! Newton step would silently follow off a cliff.
+    subroutine derivative_gp_moment_hessian(self, point, mean_hessian, sd_hessian, &
+            status)
+        class(fortbo_derivative_gp_posterior_t), intent(in) :: self
+        real(dp), intent(in) :: point(:)
+        real(dp), intent(out) :: mean_hessian(:, :)
+        real(dp), intent(out) :: sd_hessian(:, :)
+        type(fortnum_status_t), intent(out) :: status
+        real(dp), allocatable :: query(:, :), direction(:, :)
+        real(dp), allocatable :: mean(:, :), mean_dot(:, :)
+        real(dp), allocatable :: variance(:), variance_dot(:)
+        real(dp), allocatable :: mean_hvp(:, :), variance_hvp(:)
+        real(dp), allocatable :: variance_gradient(:)
+        real(dp), allocatable :: raw_mean(:, :), raw_variance(:, :)
+        integer, allocatable :: components(:)
+        real(dp) :: standard_deviation
+        integer :: d, j, k
+
+        mean_hessian = 0.0_dp
+        sd_hessian = 0.0_dp
+        d = self%dimension
+        if (.not. self%fitted) then
+            call status_set(status, FORTNUM_DOMAIN_ERROR, &
+                "fortbo fortml: surrogate has not been fitted")
+            return
+        end if
+        if (size(point) /= d .or. size(mean_hessian, 1) /= d .or. &
+            size(mean_hessian, 2) /= d .or. size(sd_hessian, 1) /= d .or. &
+            size(sd_hessian, 2) /= d) then
+            call status_set(status, FORTNUM_DOMAIN_ERROR, &
+                "fortbo fortml: hessian width does not match the surrogate")
+            return
+        end if
+
+        allocate (query(1, d), direction(1, d), mean(1, 1), mean_dot(1, 1))
+        allocate (variance(1), variance_dot(1), components(1))
+        allocate (mean_hvp(d, 1), variance_hvp(d), variance_gradient(d))
+        allocate (raw_mean(d, d), raw_variance(d, d))
+        query(1, :) = point
+        components = 0
+
+        ! The variance's gradient, needed for the square root's own curvature.
+        do j = 1, d
+            direction = 0.0_dp
+            direction(1, j) = 1.0_dp
+            call self%model%predict_input_jvp(query, components, direction, mean, &
+                mean_dot, variance, variance_dot, status)
+            if (status%code /= FORTNUM_OK) return
+            variance_gradient(j) = variance_dot(1)
+        end do
+
+        standard_deviation = sqrt(max(variance(1), 0.0_dp))
+        if (standard_deviation <= FORTBO_SD_HESSIAN_FLOOR) then
+            call status_set(status, FORTNUM_DOMAIN_ERROR, &
+                "fortbo fortml: moment_hessian undefined at a cusp")
+            return
+        end if
+
+        do k = 1, d
+            direction(1, :) = 0.0_dp
+            direction(1, k) = 1.0_dp
+            call self%model%predict_input_hvp(point, direction(1, :), mean_hvp, &
+                variance_hvp, status)
+            if (status%code /= FORTNUM_OK) return
+            raw_mean(:, k) = mean_hvp(:, 1)
+            raw_variance(:, k) = variance_hvp
+        end do
+
+        ! Symmetrize: the two triangles travel different routes through the
+        ! kernel and agree to rounding rather than to the last bit, and a
+        ! Newton step wants an exactly symmetric matrix. Averaging is the
+        ! projection onto the symmetric matrices in the Frobenius norm.
+        raw_mean = 0.5_dp*(raw_mean + transpose(raw_mean))
+        raw_variance = 0.5_dp*(raw_variance + transpose(raw_variance))
+        mean_hessian = raw_mean
+        do j = 1, d
+            do k = 1, d
+                sd_hessian(j, k) = raw_variance(j, k)/(2.0_dp*standard_deviation) &
+                    - variance_gradient(j)*variance_gradient(k) &
+                    /(4.0_dp*standard_deviation**3)
+            end do
+        end do
+        call status_set(status, FORTNUM_OK, "")
+    end subroutine derivative_gp_moment_hessian
 
     !! Fit whichever surrogate the history's contents justify, and return it as
     !! an allocatable posterior. The caller receives `fortbo_posterior_t` and
