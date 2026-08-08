@@ -14,6 +14,10 @@ shims. A roadmap checkbox is complete only when the API, implementation,
 independent oracle, documentation, device refusal behavior, and benchmark
 record exist.
 
+The active cross-repository FortBO reproduction and performance campaign is
+documented in [FortBO reproduction and performance campaign](#fortbo-reproduction-and-performance-campaign)
+near the end of this roadmap.
+
 ## Architecture contract
 
 | Concern | Owner | Required interface |
@@ -1549,3 +1553,510 @@ ones plain global BO fails on.
 - C. E. Rasmussen, C. K. I. Williams. *Gaussian processes for machine
   learning.* MIT Press 2006. Posterior and derivative-observation identities
   that FortSym must derive rather than FortBO transcribe.
+
+## FortBO reproduction and performance campaign
+
+This is the execution plan for the cross-repository experiment requested in
+August 2026: reproduce the published Landreman TuRBO configuration and the
+Glas--Padidar--Kellison--Bindel DTuRBO configuration, then replace only the
+optimizer with FortBO and measure parity, cost, and performance. It extends
+the completed derivative-free campaign below; it does not retroactively label
+the earlier literature audit as an implementation or performance result.
+
+The campaign repository is this checkout,
+`/mnt/storage/code/simsopt-dfo`, at
+`git@gitlab.tugraz.at:D461BDE997455AF1/simsopt-dfo.git`. Authenticated GitLab
+search found no `simsopt-dfo` project below `plasma/proj` or
+`plasma/proj/stel`; the existing owner-namespace project is therefore reused.
+Moving it to a group later is a GitLab administration task, not a reason to
+duplicate the checkout or change the experiment. The FortBO library remains
+at `/mnt/storage/code/lazy-fortran/fortbo`; generic package benchmarks remain
+in `/mnt/storage/code/lazy-fortran/fortbo-bench`. Large source archives,
+environments, scratch directories, and numerical ledgers stay outside Git.
+
+### 1. Frozen provenance
+
+Every run must begin by recording the following values in a manifest. A
+manifest with a missing digest is not a reproduction.
+
+| Item | Frozen value |
+| --- | --- |
+| This campaign repository | `D461BDE997455AF1/simsopt-dfo`, `main` |
+| Landreman Zenodo source archive | `/home/ert/data/landreman-data-informed-2026/20260514-01-zenodo_for_data_informed_spaces_paper.20260617.tar` |
+| Landreman archive SHA-256 | `7037bb0abbaaa7ccc4bc7b9f5434e41b18ecdf97af04cf8ae244ea2ae20c428f` |
+| Landreman driver | `software/alpha_opt/scripts/driver_turbo_PCA_unconstrained.py` inside that archive |
+| Landreman PCA data SHA-256 | `745548e503beda2f8794b169b8a8abd55adeddfa4acc71c2a76045b61acaac7c` |
+| Landreman VMEC input SHA-256 | `88318d8b2ab17741110a11bc5141ecfbbd862eb5ff02b47f808bc527c6bf263e` |
+| Bindel/Glas paper | `/home/ert/proj/stellopt-talk/literature/glas2022_coil-dturbo.pdf` |
+| Bindel/Glas paper SHA-256 | `24cc2600e8b20b74b80b96ce294286c66bea19c2e96808e516abae5f960f8d0b` |
+| Bindel/Glas local harvest | `/home/ert/data/simsopt-dfo-harvest/coil-dturbo-paper-2110.07464/2110.07464.tar` |
+| Bindel/Glas harvest SHA-256 | `61e1dc8912ddb4825b6ac5ad5d26c2a0d86280fb71d86f2ef3991dfb5c40a693` |
+| FortBO at this audit | `/mnt/storage/code/lazy-fortran/fortbo`, commit `b094bc1daa8b10eaee2ad5f8211cd7d09264fcff` |
+| Simsopt-dfo at this audit | commit `d69565dadcb8c2eaf47527e61a9c89155ce2e650` |
+
+The commands to verify the archive-level pins are:
+
+~~~
+sha256sum \
+  /home/ert/data/landreman-data-informed-2026/20260514-01-zenodo_for_data_informed_spaces_paper.20260617.tar \
+  /home/ert/proj/stellopt-talk/literature/glas2022_coil-dturbo.pdf \
+  /home/ert/data/simsopt-dfo-harvest/coil-dturbo-paper-2110.07464/2110.07464.tar
+
+tar -xOf /home/ert/data/landreman-data-informed-2026/20260514-01-zenodo_for_data_informed_spaces_paper.20260617.tar \
+  20260514-01-zenodo_for_data_informed_spaces_paper/software/alpha_opt/data/20260402-01_prepare_weighted_data_nfpAtLeast3_PCA.h5 | sha256sum
+tar -xOf /home/ert/data/landreman-data-informed-2026/20260514-01-zenodo_for_data_informed_spaces_paper.20260617.tar \
+  20260514-01-zenodo_for_data_informed_spaces_paper/software/alpha_opt/data/input.vmec | sha256sum
+~~~
+
+The current `simsopt-dfo` B5 and B6 campaigns are useful controls but are not
+silently substituted for the two requested papers:
+
+- B5 is the ConStellaration simple-to-build QI problem at upstream commit
+  `112b20ae07193910d467d26033fe51022e641b9f`, with existing five-seed
+  BoTorch TuRBO-1 and TuRBO-m ledgers. It is the first real-physics place to
+  test a value-only FortBO substitution after the synthetic gates.
+- B6 is the Bindel/Landreman/Padidar alpha-loss case at
+  `alpha_particle_opt` commit `b04ad48c22a32e8c8d5561f9b025e5360f3a122a`.
+  It is a separate fast-ion comparator and does not reproduce the Glas et al.
+  coil DTuRBO paper.
+- The Glas et al. paper and harvest contain figures and manuscript material,
+  but no FOCUS source, W7-X input, perturbation covariance file, or optimizer
+  ledger. A numerical claim on that case is blocked until those inputs are
+  recovered or a separately labeled reimplementation is accepted.
+
+### 2. The exact upstream configurations
+
+#### 2.1 Landreman data-informed PCA TuRBO
+
+The source is the archived script, not a newly written approximation. Extract
+it and inspect the source before every replay:
+
+~~~
+export LANDREMAN_ARCHIVE=/home/ert/data/landreman-data-informed-2026/20260514-01-zenodo_for_data_informed_spaces_paper.20260617.tar
+export LANDREMAN_RUN=/home/ert/data/landreman-reproduction/20260514-01
+mkdir -p $LANDREMAN_RUN
+tar -xf $LANDREMAN_ARCHIVE -C $LANDREMAN_RUN
+export LANDREMAN_ROOT=$LANDREMAN_RUN/20260514-01-zenodo_for_data_informed_spaces_paper/software/alpha_opt
+sed -n '1,760p' $LANDREMAN_ROOT/scripts/driver_turbo_PCA_unconstrained.py
+~~~
+
+The original contract to preserve is:
+
+- aspect ratio `6.0`; `minor_radius = 3.1 / aspect_ratio**0.38`;
+  `major_radius` derived from it; vacuum disabled; `max_B_target=12.0`; one
+  max-B iteration;
+- data-informed `SurfaceWeightedPCA`, `dim_x=20`, unit box `[0,1]^20`, with
+  the archived PCA file above; no alternate PCA fit or reordering;
+- `n_particles=25000`, `t_max=1e-1`, `tau=0.1`, `maxloss=0.02`,
+  `t_block=1e-3`, `tol=1e-6`, `min_dt=1e-9`, and the exact
+  `compute_alpha_loss`/VMEC++ evaluator;
+- failure-as-value semantics exactly as the source: VMEC failures become
+  `fail_val=5.5`, the DMerc failure value is `-0.5`, and no failed result is
+  dropped from the training ledger;
+- `num_evals=10000`, `batch_size=1`, five minutes of wall-clock reserve in a
+  three-hour job, save frequency one, and CPU-only GP fitting on rank zero;
+- the manager uses MPI rank zero plus `size-1` workers. The initial design is
+  `max(2*dim, 2*(size-1))` scrambled Sobol points with `seed=0`, and only
+  completed observations enter the GP;
+- the trust state is `length=0.8`, `length_min=0.5**7`, `length_max=1.6`,
+  success tolerance `10`, and failure tolerance
+  `ceil(max(4/batch_size, dim/batch_size))`;
+- the local candidate count is `min(5000, max(2000, 200*dim))`, therefore
+  `2000` at `dim=20`; the TS mask probability is `min(20/dim,1)` and every
+  candidate is forced to perturb at least one coordinate;
+- the archived production path uses qEI (`acqf="ei"`), `q=batch_size=1`,
+  `num_restarts=10`, `raw_samples=512`, with the commented TS path retained
+  as a separate ablation, not mixed into the primary result;
+- the GP is BoTorch `SingleTaskGP` with a `MaternKernel(nu=2.5,
+  ard_num_dims=20)` inside a `ScaleKernel`, `GaussianLikelihood` noise
+  interval `[1e-8,1e-3]`, lengthscale interval `[0.005,4.0]`, standardized
+  observations, `ExactMarginalLogLikelihood`, and unlimited Cholesky size;
+- the manager's completion order, Sobol stream, source update order, and
+  current state-update behavior are part of the historical replay. A clean
+  reimplementation may correct a source bug only in a named ablation and must
+  preserve the unmodified replay row.
+
+The unmodified upstream smoke command is:
+
+~~~
+cd $LANDREMAN_ROOT
+OMP_NUM_THREADS=12 mpiexec -n 9 python scripts/driver_turbo_PCA_unconstrained.py
+~~~
+
+The `9` is a placeholder for the original allocation only if the source run
+manifest proves that allocation; otherwise use the recorded original MPI size.
+Do not claim an exact run by changing the hard-coded PCA path, resolution,
+failure values, or worker count without recording that as a deviation. The
+portable reproduction copies the two archived data files to a run-local path,
+changes only the path binding, and records both original and resolved paths and
+their digests.
+
+The FortBO replacement must expose the same normalized `x`, objective values,
+failure values, Sobol seed, initial points, completion-driven `ask`/`tell`
+schedule, qEI or TS choice, trust-state transitions, GP fit data, and stopping
+condition. It must not call the alpha evaluator from Fortran directly until a
+separately tested C/Python or file-based ABI exists; the first parity driver
+may keep the evaluator in Python and use FortBO as a library policy.
+
+#### 2.2 Glas--Padidar--Kellison--Bindel DTuRBO/AdamCV
+
+The paper's W7-X-like configuration is:
+
+- five distinct modular coils per field period, stellarator symmetry and five
+  field periods, 50 physical coils;
+- Fourier order `NF=6`, `N=3*5*(2*6+1)=195` free coefficients for one field
+  period; `Nseg=64`, `Ntheta=Nzeta=64`;
+- perturbations `U ~ N(0,C)` from the periodic GP/Fourier covariance;
+  perturbation amplitudes `p=5 mm` and `p=10 mm` are separate experiments;
+- `omega_B=100`, `omega_L=0.5`, target coil length `8.0`, separation
+  `epsilon_c=0.23 m`, quadratic penalty `lambda=100`, and alpha-quasimax
+  `alpha=10000`;
+- the stage-one box is centered at circular coils of radius `1.5 m` and has
+  `lb,ub=x0 +/- delta*sqrt(Var[U])`, with `delta` chosen so the translational
+  mode has half-width `1.5/2 m`;
+- DTuRBO stage one has `200` initial evaluations, batch size `100`, and a
+  maximum of `100000` objective evaluations;
+- stage two is AdamCV, at most `2000` iterations, gradient batch size `10`,
+  `eta=0.001`, `gamma=0.01`, `beta1=beta2=0.95`, and `epsilon_A=1e-10`;
+- the separate local control uses `50000` gradient evaluations, ten gradient
+  evaluations per step, `eta=0.04`, `gamma=0.1`, the same beta values and
+  epsilon, and the paper's SAA/BFGS comparison. It must not be pooled with
+  the global DTuRBO result.
+
+Published DTuRBO is not merely “TuRBO with a gradient flag”: it uses a
+stochastic variational GP with inducing structure and conditions on paired
+function/gradient observations. The current FortBO derivative-observation GP
+is an exact dense derivative GP, and `fortbo_dturbo` currently implements a
+Newton-BO-style posterior-derivative trust-region step. Those are valuable
+components but are not yet paper-level DTuRBO parity. Until the gates below
+pass, report three distinct rows: paper DTuRBO (literature or recovered
+source), FortBO exact derivative mode, and value-only FortBO/TuRBO.
+
+The paper-level run command is intentionally a required interface, not a
+pretence that missing FOCUS inputs already exist:
+
+~~~
+export COIL_ROOT=/home/ert/data/simsopt-dfo-harvest/coil-dturbo-paper-2110.07464
+test "$(sha256sum $COIL_ROOT/2110.07464.tar | awk '{print $1}')" = \
+  61e1dc8912ddb4825b6ac5ad5d26c2a0d86280fb71d86f2ef3991dfb5c40a693
+# After the FOCUS source, W7-X input, covariance, and driver are recovered:
+cd $COIL_ROOT/recovered-focus
+mpiexec -n 14 python run_dturbo_adamcv.py \
+  --nf 6 --nseg 64 --ntheta 64 --nzeta 64 \
+  --coils-per-period 5 --field-periods 5 --dimension 195 \
+  --omega-b 100 --omega-l 0.5 --length-target 8.0 \
+  --separation 0.23 --lambda-penalty 100 --alpha-quasimax 10000 \
+  --perturbation-mm 5 --global-budget 100000 --global-batch 100 \
+  --global-initial 200 --local-iterations 2000 --local-batch 10 \
+  --eta 0.001 --gamma 0.01 --beta1 0.95 --beta2 0.95 --epsilon 1e-10 \
+  --seed SEED --output results/bindel/dturbo-5mm-SEED.json
+~~~
+
+The recovered driver must also be run with `--perturbation-mm 10` and with
+the local SAA/BFGS control. `SEED` is not invented: it comes from the
+recovered source or the paper's experiment manifest. If no source and seed
+ledger are recovered, the result is literature-only and the FortBO run is a
+matched reimplementation, never an “exact reproduction.”
+
+### 3. FortBO feature-parity gates
+
+The FortBO substitution is admitted to a real-physics comparison only after
+these independent behavioral gates pass. Each gate gets a small synthetic
+fixture with an oracle independent of the FortBO implementation and a JSON
+record containing the requested and actual calls.
+
+1. **Space and mapping.** Reproduce the same `[0,1]^20` PCA chart, the same
+   195-coefficient coil chart, bounds, coordinate ordering, clipped trust
+   region, and physical-to-normalized chain rule. Round-trip and boundary
+   tests must agree with Python/NumPy to `1e-13` in float64.
+2. **Randomness.** Match Sobol direction, scramble, seed, point numbering,
+   candidate mask, minimum-one-coordinate rule, TS draw ordering, and region
+   seed splitting. If exact Sobol bits cannot be shared across languages,
+   freeze a common candidate file and compare policy behavior on that file;
+   do not compare two independently generated random streams as if they were
+   identical.
+3. **Trust state.** Match initial radius, success/failure counters, relative
+   improvement threshold, expansion/shrink factors, minimum-radius restart,
+   and multi-region placement. Replay a recorded answer stream and compare
+   every radius and counter, not only the final best value.
+4. **Surrogate.** Match standardized-output convention, Matern-5/2 ARD
+   covariance, likelihood noise bounds, lengthscale bounds, exact-vs-sparse
+   inference choice, fit tolerance, Cholesky policy, and tie handling. First
+   compare posterior mean, variance, derivative blocks, and sampled paths on a
+   frozen training set against BoTorch/GPyTorch. This is a numerical parity
+   gate, not a test that merely reads FortBO's own output.
+5. **Acquisition.** Match qEI and TS as separate methods. For qEI compare the
+   objective, gradient, optimizer bounds, restarts, raw samples, and q=1
+   selection. For TS compare joint rather than independent posterior draws,
+   candidate pooling, no-replacement selection, and the perturbation mask.
+6. **Scheduling.** Reproduce the original completion-driven behavior: initial
+   points are submitted, the next point is generated only from completed
+   observations, the tell is associated with the originating region, and
+   worker completion order is preserved in the ledger. Compare a deterministic
+   delay fixture with one, two, eight, and 32 workers.
+7. **Failures.** Preserve failure-as-value for Landreman and structured
+   failure rows for the SIMSOPT cases. A timeout, process loss, retry, solver
+   failure, non-finite value, and user cancellation must remain distinct. The
+   charged budget counts the truth attempt exactly once; infrastructure retry
+   counts separately.
+8. **Derivatives/DTuRBO.** For the Glas comparison, implement the published
+   inducing-point variational derivative GP, paired value-plus-gradient action,
+   Thompson sampling policy, and its bound/trust-region rules, or explicitly
+   mark the row as FortBO exact-derivative mode rather than DTuRBO. Validate
+   kernel value/value, value/gradient, gradient/value, and gradient/gradient
+   blocks against an independent finite-difference or automatic-differentiation
+   oracle at ordinary and coincident points.
+9. **Restart and persistence.** Stop and resume after every initial wave and
+   after a worker failure. The resumed ledger, posterior training set, random
+   state, trust state, and final result must match an uninterrupted run for a
+   deterministic evaluator.
+10. **Objective ABI.** The physics evaluator must be callable without changing
+    its code, compiler flags, resolution, tolerances, or failure semantics.
+    For the first integration the Python or MPI evaluator may remain the
+    worker; only candidate proposal and tell state move to FortBO. Benchmark
+    the ABI itself so wrapper overhead is not hidden inside physics time.
+
+The parity result is a table of maximum absolute/relative differences for
+points, posterior quantities, acquisition quantities, state traces, and
+ledger rows. “It found a similar minimum” is not feature parity.
+
+### 4. Exact commands in this repository
+
+The existing BoTorch controls and common physics ledgers are the starting
+point. Run them at a clean commit and publish results outside the checkout:
+
+~~~
+export DFO=/mnt/storage/code/simsopt-dfo
+export RESULT_ROOT=/home/ert/data/simsopt-dfo-fortbo/results/$(git -C $DFO rev-parse HEAD)
+cd $DFO
+uv sync --frozen --extra bayesopt --extra mhd --inexact
+uv lock --check
+uv run pytest tests/test_bayesopt.py tests/test_async_turbo.py \
+  tests/test_async_turbo_m.py tests/test_b5_constellaration.py \
+  tests/test_b5_async_turbo.py tests/test_b6_alpha_particle.py
+uv run ruff check .
+~~~
+
+The existing value-only controls are:
+
+~~~
+# B5: raw and data-informed TuRBO-1; five paired seeds, 256 truth calls, 8 workers.
+SIMSOPT_DFO_CLUSTER=acluster ./scripts/submit_acluster_b5_async_turbo.sh 1,2,3,4,5 1
+
+# B5: data-informed TuRBO-m; four regions, 40 initial points per region,
+# 256 truth calls, the same five seeds and eight workers.
+SIMSOPT_DFO_CLUSTER=acluster ./scripts/submit_acluster_b5_async_turbo.sh 1,2,3,4,5 4
+
+# B6: existing matched TuRBO control, five seeds and the frozen alpha oracle.
+SIMSOPT_DFO_CLUSTER=acluster ./scripts/submit_acluster_b6_matched_turbo.sh 101,102,103,104,105
+~~~
+
+The exact B5 configuration is in `scripts/run_b5_async_turbo.py` and
+`src/simsopt_dfo/async_turbo.py`: budget `256`, workers `8`, initial points
+`2*d`, length `0.8`, minimum `0.5**7`, maximum `1.6`, success tolerance `10`,
+failure tolerance `d`, and completion-driven TS. These existing scripts are
+controls for the new FortBO runner; their configuration must not be changed
+to make a FortBO result look better.
+
+The new runner shall have one command-line contract for both implementations:
+
+~~~
+uv run python scripts/run_fortbo_reproduction.py \
+  --case landreman-pca-turbo \
+  --implementation fortbo \
+  --config configs/landreman-pca-turbo.json \
+  --seed SEED --workers WORKERS --budget 10000 \
+  --scratch $RESULT_ROOT/landreman/fortbo/seed-SEED \
+  --output $RESULT_ROOT/landreman/fortbo/seed-SEED.json
+
+uv run python scripts/run_fortbo_reproduction.py \
+  --case b5-constellaration \
+  --implementation fortbo \
+  --config configs/b5-data-informed-turbo.json \
+  --seed SEED --workers 8 --budget 256 \
+  --scratch $RESULT_ROOT/b5/fortbo/seed-SEED \
+  --output $RESULT_ROOT/b5/fortbo/seed-SEED.json
+~~~
+
+The script and configs are a work item below, not files that may be silently
+assumed to exist today. Before they land, use the existing B5 scripts and a
+small synthetic FortBO driver to validate the ABI. The production script must
+accept `--implementation botorch` as a control and write the same schema for
+both implementations, so comparison code cannot infer method identity from
+different ledgers.
+
+For exact Landreman replay the command must additionally accept
+`--upstream-script`, `--pca-file`, `--vmec-input`, `--mpi-size`, and
+`--acquisition {ei,ts}` and record the source script digest. The FortBO row
+uses the same arguments and evaluator, with only the policy implementation
+changed. The source's qEI configuration is primary; TS is an explicit second
+row.
+
+For the Bindel/Glas case the corresponding command must accept
+`--derivative-mode {value-only,exact-derivative,svd-dturbo}` and refuse
+`svd-dturbo` until the variational derivative model and FOCUS inputs have
+passed the gates. A refusal is preferable to silently labeling the current
+Newton-style `fortbo_dturbo` implementation as published DTuRBO.
+
+### 5. What is measured
+
+Every row contains a machine-readable run manifest and candidate ledger. At
+minimum record:
+
+- objective, best-so-far, best feasible objective, constraint violation,
+  target reached, and time/calls to each fixed checkpoint;
+- requested budget, successful calls, failed calls, timeout/retry counts,
+  initial calls, gradient calls, derivative components, and out-of-sample
+  validation calls;
+- wall time, truth/evaluator time, model-fit time, acquisition-search time,
+  serialization/ABI time, queue wait, worker busy time, idle-worker time,
+  peak and mean concurrency, and rank/thread layout;
+- CPU model, GPU model and UUID if allocated, memory high-water mark, power
+  or energy if the scheduler exposes it, compiler, MPI, BLAS, Python/Fortran
+  runtime versions, package lock or commit IDs, and Slurm job/step IDs;
+- exact input digests, objective settings, coordinate chart, seeds, random
+  stream state/checkpoints, trust-region trace, model hyperparameters, and
+  candidate ordering;
+- for DTuRBO, value and gradient work separately, number of derivative rows,
+  inducing-point count, variational fit time, posterior predictive error, and
+  cost per paired value/gradient observation.
+
+The primary statistical report uses paired seeds and fixed truth-call
+checkpoints `32, 64, 128, 256, 512, 1000, 2000, 5000, 10000` for Landreman
+and `32, 64, 128, 256` for B5. Bindel stage one additionally reports `200,
+1000, 5000, 10000, 50000, 100000` and stage-two combined cost up to `116000`
+charged-equivalent calls. Plot median and fixed-seed paired bootstrap 90%
+intervals, probability of beating the control, time to target, failure
+fraction, and performance profiles. Never rank by wall time without reporting
+truth-call and gradient-call work; never rank by objective without reporting
+the cost used to obtain it.
+
+Performance claims require the same evaluator and a two-part comparison:
+
+1. **Policy cost:** run the two policies against a frozen candidate/evaluator
+   trace and measure fit, acquisition, memory, and proposal throughput with
+   physics removed.
+2. **End-to-end cost:** run the same physical problem with the same allocation,
+   evaluator, failure semantics, and charged budget. Report total wall time,
+   useful physics time, and utilization separately.
+
+The claim “FortBO is faster” is accepted only if it wins a predeclared metric
+with a paired interval excluding zero, or if it achieves the same objective
+target with fewer charged calls and no statistically significant increase in
+failure or constraint violation. One favorable seed is not a claim.
+
+### 6. Cluster execution protocol
+
+Use `/home/ert/data/simsopt-dfo-fortbo` for archives, environments, run
+directories, and results. Use a commit-addressed detached worktree on a
+compute host; never run from a dirty home checkout. Keep source and result
+roots distinct so a failed job cannot modify the repository. Every submission
+must capture `scontrol show job -dd`, `sacct`, `lscpu`, `nvidia-smi` when a GPU
+is allocated, source status, package freeze, linked libraries, and the full
+stdout/stderr.
+
+Current toolchain/resource facts from the August 2026 audit:
+
+| Host | Use | Toolchain and resource rule |
+| --- | --- | --- |
+| aCluster | first smoke and CPU controls; node 34 was the only observed node with an unallocated T4 | CUDA `11.8`/`nvcc`, `gfortran 12.2`, Intel `ifx` under `/opt/intel/oneapi/compiler/`; no usable `nvfortran`/`nvc`; request `--gres=gpu:1` and never assume a GPU on a login node |
+| sCluster | preferred GPU campaign when a GPU frees; much more idle CPU capacity, but all observed GPUs were allocated | CUDA `13.1` at `/usr/local/cuda`, also 12.8/12.9; `gfortran 12.2`; no `nvfortran`/`nvc`; request the Blackwell GPU GRES explicitly |
+| faepmac1 | SSH proxy/login only | do not benchmark or build a physics result there |
+| faepkub4 | source/bootstrap and inspection only | current environment exposes GCC and Intel modules, but no NVIDIA compiler or CUDA compiler |
+
+The current FortBO Fortran build therefore uses `gfortran` or Intel `ifx`; an
+NVIDIA Fortran compiler is not available on the audited hosts. GPU speedups
+must use the existing CUDA/OpenACC-capable Fortran path and be reported as
+GPU runs only after `nvidia-smi`, device placement, and kernel residency are
+captured. A CPU-only FortBO policy comparison is valid and should be done
+first.
+
+The standard aCluster smoke route is:
+
+~~~
+export HOST=acluster
+export CHECKOUT=/home/ert/proj/simsopt-dfo-fortbo-checkouts/$(git -C $DFO rev-parse HEAD)
+ssh $HOST 'mkdir -p /home/ert/data/simsopt-dfo-fortbo /home/ert/proj'
+ssh $HOST "git clone --no-checkout git@gitlab.tugraz.at:D461BDE997455AF1/simsopt-dfo.git /home/ert/proj/simsopt-dfo-fortbo || true"
+ssh $HOST "git -C /home/ert/proj/simsopt-dfo-fortbo fetch origin main && git -C /home/ert/proj/simsopt-dfo-fortbo worktree add --detach $CHECKOUT $(git -C \"$DFO\" rev-parse HEAD)"
+
+# CPU policy smoke: no GPU is needed for the first parity gate.
+ssh $HOST "cd $CHECKOUT && sbatch --parsable --partition=compute --nodes=1 \
+  --ntasks=1 --cpus-per-task=32 --time=04:00:00 \
+  --wrap='export OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1; \
+  uv run python scripts/run_fortbo_reproduction.py --case b5-constellaration \
+  --implementation fortbo --config configs/b5-data-informed-turbo.json \
+  --seed 1 --workers 8 --budget 32 --scratch /home/ert/data/simsopt-dfo-fortbo/smoke \
+  --output /home/ert/data/simsopt-dfo-fortbo/smoke.json'"
+~~~
+
+The above is a submission template and becomes executable only after the
+runner/config work item lands. For the existing B5 controls, use the checked
+in `scripts/submit_acluster_b5_async_turbo.sh` route, which already pins the
+source, external ConStellaration commit, environment, result root, and test
+set. Do not use an untracked ad-hoc `srun` command for a published result.
+
+The sCluster route is the same, with `SIMSOPT_DFO_CLUSTER=scluster`, an
+explicit Blackwell GPU request in a dedicated sbatch file, and a recorded
+CUDA device. Use sCluster for full Landreman GPU workers only when the GRES is
+actually available; the current Landreman source uses rank-zero CPU model
+fitting and one GPU-capable worker per MPI rank, so the allocation must be
+designed around the actual worker count rather than inferred from nominal
+cluster size. Never request more physics workers than allocated GPUs.
+
+Do not launch a 100,000-call Bindel reproduction until the FOCUS source,
+covariance, and input are recovered and a short one-call value/gradient smoke
+matches an independent oracle. The full run is a later reservation, not a
+placeholder job to occupy the cluster.
+
+### 7. Work packages and acceptance gates
+
+- [ ] **F0: source/config freeze.** Add `configs/landreman-pca-turbo.json`,
+  `configs/bindel-dturbo.json`, archive/source digests, and a manifest schema.
+  Add a checker that rejects changed physics, bounds, seeds, dimensions,
+  evaluator settings, or worker semantics. Gate: two clean source extractions
+  produce identical normalized configuration documents.
+- [ ] **F1: common runner and independent replay oracle.** Add
+  `scripts/run_fortbo_reproduction.py` and a Python reference adapter that
+  can run the original BoTorch policy and the FortBO policy with identical
+  `ask`/`tell` traces. Gate: deterministic delay and analytic objectives agree
+  on every candidate and state row; tests do not merely compare FortBO output
+  to itself.
+- [ ] **F2: FortBO value-only TuRBO parity.** Implement the Landreman qEI and
+  TS configuration, including exact GP fit settings, candidate generation,
+  trust-state rules, Sobol behavior, and q=1 completion scheduling. Gate:
+  posterior/acquisition/state tolerances and recorded schedule pass before
+  any real physics run.
+- [ ] **F3: B5 real-physics substitution.** Run five paired seeds for raw and
+  data-informed TuRBO-1, then five paired data-informed TuRBO-m controls, at
+  the existing 256-call/8-worker budget. Gate: common schema, zero source
+  drift, B5 start parity, complete ledgers, and utilization report.
+- [ ] **F4: Landreman end-to-end replay.** Run the unmodified source and
+  FortBO at the original worker count and at a resource-matched one-GPU smoke.
+  Gate: same start/objective/failure semantics, exact initial-design digest,
+  and paired metrics at 32 through 10,000 calls. A different MPI size is a
+  scaling row, not an exact reproduction.
+- [ ] **F5: published DTuRBO model.** Recover FOCUS and the covariance/input
+  artifacts, implement or bind the variational derivative GP and paired
+  function/gradient action, then compare its posterior and policy trace to an
+  independent reference. Gate: value/gradient covariance, trust region,
+  Thompson selection, and gradient-cost accounting pass.
+- [ ] **F6: Bindel/Glas two-stage run.** Run 5 mm and 10 mm with the exact
+  100,000/200/100 global and 2,000/10 local settings, plus local SAA/BFGS.
+  Gate: recovered source and seeds, 14-core allocation or a labeled matched
+  allocation, out-of-sample stochastic validation, and all 195-coordinate
+  ledgers. If inputs remain unavailable, close F6 as blocked/literature-only;
+  do not fabricate a reproduction.
+- [ ] **F7: performance analysis.** Run policy-only and end-to-end controls at
+  identical node/CPU/GPU layouts, repeat at least five paired seeds for each
+  stochastic real case, and publish tables/plots under `results/fortbo/`.
+  Gate: fixed-checkpoint paired bootstrap, time-to-target, call efficiency,
+  fit/acquisition breakdown, concurrency, memory, and energy where available.
+- [ ] **F8: release and integration decision.** Add a concise report linking
+  all manifests, jobs, ledgers, parity tables, negative results, and blockers.
+  Only after F0--F7 pass may the result claim feature parity or superiority.
+
+The existing “external method reproduction” checkboxes further down remain
+historical context. These F0--F8 checkboxes are the active FortBO campaign and
+must be updated one at a time with a behavioral test, evidence, commit, and
+push.
