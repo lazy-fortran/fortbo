@@ -26,9 +26,11 @@ environments, scratch directories, and result ledgers belong in
 
 ## Active blockers
 
-1. The Landreman archive contains the driver, VMEC input, and PCA data, but the
-   original absolute run path and MPI allocation are not available as a
-   complete manifest. A portable replay must record those deviations.
+1. The Landreman archive and its historical Slurm job are now pinned in the
+   manifest, including the 5-rank allocation (one manager plus four workers)
+   and four GPUs. The archived driver still names an absolute `/pscratch` data
+   path, so a live exact replay requires a declared path remap and an allocated
+   equivalent environment; the deviation is recorded rather than hidden.
 2. The Glas et al. harvest contains manuscript and figures, but no FOCUS
    source, W7-X input, perturbation covariance, or optimizer ledger. Its
    reproduction is literature-only until those artifacts are recovered.

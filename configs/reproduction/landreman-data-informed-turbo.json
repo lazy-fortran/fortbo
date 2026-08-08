@@ -30,6 +30,13 @@
       "archive": "landreman_archive",
       "member": "20260514-01-zenodo_for_data_informed_spaces_paper/software/alpha_opt/data/input.vmec",
       "sha256": "88318d8b2ab17741110a11bc5141ecfbbd862eb5ff02b47f808bc527c6bf263e"
+    },
+    {
+      "id": "landreman_execution_job",
+      "kind": "archive_member",
+      "archive": "landreman_archive",
+      "member": "20260514-01-zenodo_for_data_informed_spaces_paper/calculations/20260402-01-alpha_optimization_unconstrained_parameter_scans/20260402-01-038_Ax_PCA_20dofs_allNfp_aspect6/job",
+      "sha256": "b297330823b948cdd265903af8adb00cc10daa00da3dc4dbbfa7fa9c8f69e972"
     }
   ],
   "parameters": {
@@ -73,7 +80,21 @@
       },
       "mpi": {
         "rank_zero_fits_cpu_gp": true,
-        "workers_evaluate_asynchronously": true
+        "workers_evaluate_asynchronously": true,
+        "historical_job_source": "landreman_execution_job",
+        "historical_mpi_ranks": 5,
+        "historical_worker_ranks": 4,
+        "historical_gpus": 4,
+        "historical_cpus_per_task": 13,
+        "historical_scheduler": "slurm",
+        "historical_partition": "regular",
+        "historical_constraint": "gpu&hbm40g",
+        "historical_account": "m4505"
+      },
+      "path_remapping": {
+        "source_absolute_path_in_archive": "/pscratch/sd/l/landrema/20260402-01-alpha_optimization_unconstrained_parameter_scans/20260402-01_prepare_weighted_data_nfpAtLeast3_PCA.h5",
+        "portable_source": "landreman_pca_data",
+        "reason": "the historical absolute path is not portable outside the archived allocation"
       }
     },
     "trust_region": {
