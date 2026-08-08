@@ -840,6 +840,31 @@ Concretely, and binding on every work package below:
   computed primitive polynomials, checked by exact equidistribution in all 200
   coordinates — so what remains is the harness and the pinned baselines.
 
+  **Partly done.** `test/turbo_ordering_harness.f90` plus
+  `test_turbo_ordering_push_slow` runs the 14D pushing arm: three seeds,
+  matched budgets and initial designs, median best value. Both TuRBO variants
+  beat quasi-random search decisively (−3.37 and −2.73 against −1.63), which
+  is the paper's central claim and the one this can honestly check.
+
+  Two things are deliberately *not* claimed. The third arm is quasi-random
+  search, named as such rather than dressed up as the paper's global-BO
+  baselines, which are out of reach at these dimensions. And the TuRBO-m over
+  TuRBO-1 ordering is **not** reproduced: at ninety evaluations split across
+  three regions, TuRBO-1 wins, which is what should happen when a small budget
+  is divided — the paper's advantage comes from thousands of evaluations.
+  Tuning the budget until the expected ordering appeared would have made the
+  test a record of that search rather than evidence.
+
+  Remaining: the rover-60 and Ackley-200 arms. Driven through this harness all
+  three methods returned bit-identical values on the rover, which cannot be a
+  real result; the fixture is fine when probed directly (1654 to 2212 over
+  random trajectories, 82 to 110 collisions), so the defect is in the harness
+  plumbing and is not yet found. Ackley-200 additionally needs its own budget:
+  the paper's `min(100d, 5000)` candidate rule makes each ask there cost about
+  fifty times what it costs at 14 dimensions. The pinned `uber-research/TuRBO`
+  and BoTorch `turbo_1` baselines are also still outstanding — the reference
+  is fetched into provenance and read, but nothing runs against it yet.
+
 #### DTuRBO (derivative-enabled TuRBO)
 
 DTuRBO is the variant that exploits derivative information the lazy-fortran
