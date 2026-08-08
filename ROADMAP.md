@@ -237,7 +237,7 @@ device identity and kernel-residency evidence.
 
 - [x] F0: add versioned Landreman and Glas JSON configs, source digests, and
   a manifest checker.
-- [ ] F1: add scripts/run_fortbo_reproduction.py with implementation
+- [x] F1: add scripts/run_fortbo_reproduction.py with implementation
   botorch|fortbo, identical output schema, and an independent analytic/delay
   replay oracle.
 - [ ] F2: match Landreman qEI and TS posterior, acquisition, candidate,
