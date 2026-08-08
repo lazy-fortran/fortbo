@@ -1,0 +1,84 @@
+{
+  "schema_version": 1,
+  "config_id": "glas-bindel-dturbo-adamcv",
+  "config_revision": "2026-08-08",
+  "status": "literature-only",
+  "source": [
+    {
+      "id": "glas_bindel_paper",
+      "kind": "file",
+      "path": "/home/ert/proj/stellopt-talk/literature/glas2022_coil-dturbo.pdf",
+      "sha256": "24cc2600e8b20b74b80b96ce294286c66bea19c2e96808e516abae5f960f8d0b"
+    },
+    {
+      "id": "glas_bindel_harvest",
+      "kind": "file",
+      "path": "/home/ert/data/simsopt-dfo-harvest/coil-dturbo-paper-2110.07464/2110.07464.tar",
+      "sha256": "61e1dc8912ddb4825b6ac5ad5d26c2a0d86280fb71d86f2ef3991dfb5c40a693"
+    }
+  ],
+  "missing_inputs": [
+    "FOCUS source",
+    "W7-X input",
+    "periodic GP/Fourier perturbation covariance",
+    "optimizer source and experiment seed ledger"
+  ],
+  "parameters": {
+    "geometry": {
+      "coils_per_period": 5,
+      "field_periods": 5,
+      "physical_coils": 50,
+      "nf": 6,
+      "free_coefficients": 195,
+      "nseg": 64,
+      "ntheta": 64,
+      "nzeta": 64
+    },
+    "perturbations": {
+      "distribution": "periodic_gp_fourier",
+      "amplitudes_mm": [5, 10],
+      "covariance_source_required": true
+    },
+    "objective": {
+      "omega_B": 100.0,
+      "omega_L": 0.5,
+      "length_target": 8.0,
+      "separation": 0.23,
+      "quadratic_penalty": 100.0,
+      "alpha_quasimax": 10000.0
+    },
+    "bounds": {
+      "center": "circular_coils",
+      "center_radius_m": 1.5,
+      "scaling": "perturbation_variance",
+      "translational_mode_half_width_m": 0.75
+    },
+    "dturbo": {
+      "initial_evaluations": 200,
+      "batch_size": 100,
+      "evaluation_budget": 100000,
+      "model": "inducing_variational_derivative_gp",
+      "observations": "paired_function_and_gradient",
+      "policy": "thompson_sampling"
+    },
+    "adamcv": {
+      "iterations": 2000,
+      "batch_size": 10,
+      "eta": 0.001,
+      "gamma": 0.01,
+      "beta1": 0.95,
+      "beta2": 0.95,
+      "epsilon": 1.0e-10
+    },
+    "local_control": {
+      "gradient_evaluations": 50000,
+      "gradients_per_step": 10,
+      "eta": 0.04,
+      "gamma": 0.1,
+      "beta1": 0.95,
+      "beta2": 0.95,
+      "epsilon": 1.0e-10,
+      "methods": ["SAA", "BFGS"]
+    }
+  }
+}

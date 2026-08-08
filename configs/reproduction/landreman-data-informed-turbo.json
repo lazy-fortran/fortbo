@@ -1,0 +1,111 @@
+{
+  "schema_version": 1,
+  "config_id": "landreman-data-informed-turbo",
+  "config_revision": "2026-08-08",
+  "status": "ready-for-replay",
+  "source": [
+    {
+      "id": "landreman_archive",
+      "kind": "file",
+      "path": "/home/ert/data/landreman-data-informed-2026/20260514-01-zenodo_for_data_informed_spaces_paper.20260617.tar",
+      "sha256": "7037bb0abbaaa7ccc4bc7b9f5434e41b18ecdf97af04cf8ae244ea2ae20c428f"
+    },
+    {
+      "id": "landreman_driver",
+      "kind": "archive_member",
+      "archive": "landreman_archive",
+      "member": "20260514-01-zenodo_for_data_informed_spaces_paper/software/alpha_opt/scripts/driver_turbo_PCA_unconstrained.py",
+      "sha256": "bafbaaa897325c84859213493288774417e61fefbf2e65d3e8af6e4700d8cfb9"
+    },
+    {
+      "id": "landreman_pca_data",
+      "kind": "archive_member",
+      "archive": "landreman_archive",
+      "member": "20260514-01-zenodo_for_data_informed_spaces_paper/software/alpha_opt/data/20260402-01_prepare_weighted_data_nfpAtLeast3_PCA.h5",
+      "sha256": "745548e503beda2f8794b169b8a8abd55adeddfa4acc71c2a76045b61acaac7c"
+    },
+    {
+      "id": "landreman_vmec_input",
+      "kind": "archive_member",
+      "archive": "landreman_archive",
+      "member": "20260514-01-zenodo_for_data_informed_spaces_paper/software/alpha_opt/data/input.vmec",
+      "sha256": "88318d8b2ab17741110a11bc5141ecfbbd862eb5ff02b47f808bc527c6bf263e"
+    }
+  ],
+  "parameters": {
+    "coordinate_map": {
+      "type": "SurfaceWeightedPCA",
+      "dimension": 20,
+      "bounds": [0.0, 1.0],
+      "refit": false,
+      "reorder": false,
+      "pca_source": "landreman_pca_data"
+    },
+    "equilibrium": {
+      "aspect_ratio": 6.0,
+      "max_B_target": 12.0,
+      "max_B_iterations": 1,
+      "vacuum": false
+    },
+    "alpha_loss": {
+      "n_particles": 25000,
+      "t_max": 0.1,
+      "tau": 0.1,
+      "maxloss": 0.02,
+      "t_block": 0.001,
+      "tol": 1.0e-6,
+      "min_dt": 1.0e-9,
+      "vmec_failure_value": 5.5,
+      "dmerc_failure_value": -0.5,
+      "failures_are_values": true,
+      "vmec_input_source": "landreman_vmec_input"
+    },
+    "run": {
+      "evaluations": 10000,
+      "batch_size": 1,
+      "wall_limit_hours": 3.0,
+      "wall_reserve_minutes": 5,
+      "save_frequency": 1,
+      "initial_design": {
+        "type": "scrambled_sobol",
+        "seed": 0,
+        "formula": "max(2*dimension, 2*(mpi_size-1))"
+      },
+      "mpi": {
+        "rank_zero_fits_cpu_gp": true,
+        "workers_evaluate_asynchronously": true
+      }
+    },
+    "trust_region": {
+      "initial_length": 0.8,
+      "minimum_length": "0.5**7",
+      "maximum_length": 1.6,
+      "success_tolerance": 10,
+      "failure_tolerance": "ceil(max(4/batch_size, dimension/batch_size))"
+    },
+    "candidate_generation": {
+      "count_formula": "min(5000, max(2000, 200*dimension))",
+      "count_at_dimension_20": 2000,
+      "thompson_mask_probability": "min(20/dimension, 1)",
+      "force_at_least_one_changed_coordinate": true
+    },
+    "acquisition": {
+      "primary": "qEI",
+      "q": 1,
+      "num_restarts": 10,
+      "raw_samples": 512,
+      "thompson_sampling_is_separate_ablation": true
+    },
+    "posterior": {
+      "implementation": "botorch.SingleTaskGP",
+      "kernel": "Matern",
+      "matern_nu": 2.5,
+      "ard_dimensions": 20,
+      "noise_interval": [1.0e-8, 1.0e-3],
+      "lengthscale_interval": [0.005, 4.0],
+      "standardize_outputs": true,
+      "marginal_likelihood": "ExactMarginalLogLikelihood",
+      "inference": "cholesky"
+    }
+  }
+}

@@ -235,7 +235,7 @@ device identity and kernel-residency evidence.
 
 ## Delivery plan
 
-- [ ] F0: add versioned Landreman and Glas JSON configs, source digests, and
+- [x] F0: add versioned Landreman and Glas JSON configs, source digests, and
   a manifest checker.
 - [ ] F1: add scripts/run_fortbo_reproduction.py with implementation
   botorch|fortbo, identical output schema, and an independent analytic/delay
