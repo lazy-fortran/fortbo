@@ -43,6 +43,7 @@ module fortbo_turbo
     public :: fortbo_perturbation_probability
     public :: fortbo_turbo_candidates
     public :: fortbo_thompson_select
+    public :: fortbo_qei_select
     public :: fortbo_thompson_gradient_refusal
 
     !! Coordinates expected to move per candidate, from the reference
@@ -229,6 +230,70 @@ contains
         end do
         call status_set(status, FORTNUM_OK, "")
     end subroutine fortbo_thompson_select
+
+    !! Greedy Monte Carlo qEI selection from a frozen joint draw matrix.
+    !!
+    !! `samples(c, s)` is one objective-space draw at candidate `c`. At each
+    !! slot, add the candidate with the largest expected improvement of the
+    !! set already selected. This is the replayable discrete reduction used
+    !! by the driver for q>1; q=1 remains the analytic EI path there.
+    subroutine fortbo_qei_select(samples, threshold, selected, status)
+        real(dp), intent(in) :: samples(:, :)
+        real(dp), intent(in) :: threshold
+        integer, intent(out) :: selected(:)
+        type(fortnum_status_t), intent(out) :: status
+        logical, allocatable :: taken(:)
+        real(dp) :: score, best_score, improvement, best_value
+        integer :: n_candidates, n_samples, batch_size, slot, c, s, prior, best
+
+        n_candidates = size(samples, 1)
+        n_samples = size(samples, 2)
+        batch_size = size(selected)
+        selected = 0
+        if (n_candidates < 1 .or. n_samples < 1) then
+            call status_set(status, FORTNUM_DOMAIN_ERROR, &
+                "fortbo turbo: qEI needs at least one candidate and draw")
+            return
+        end if
+        if (batch_size < 1 .or. batch_size > n_candidates) then
+            call status_set(status, FORTNUM_DOMAIN_ERROR, &
+                "fortbo turbo: qEI batch does not fit the candidate set")
+            return
+        end if
+
+        allocate (taken(n_candidates))
+        taken = .false.
+        do slot = 1, batch_size
+            best = 0
+            best_score = -huge(1.0_dp)
+            do c = 1, n_candidates
+                if (taken(c)) cycle
+                score = 0.0_dp
+                do s = 1, n_samples
+                    best_value = 0.0_dp
+                    do prior = 1, slot - 1
+                        best_value = max(best_value, threshold - &
+                            samples(selected(prior), s))
+                    end do
+                    improvement = max(best_value, threshold - samples(c, s))
+                    score = score + improvement
+                end do
+                score = score/real(n_samples, dp)
+                if (score > best_score) then
+                    best_score = score
+                    best = c
+                end if
+            end do
+            if (best == 0) then
+                call status_set(status, FORTNUM_DOMAIN_ERROR, &
+                    "fortbo turbo: qEI candidate set exhausted")
+                return
+            end if
+            selected(slot) = best
+            taken(best) = .true.
+        end do
+        call status_set(status, FORTNUM_OK, "")
+    end subroutine fortbo_qei_select
 
     !! Thompson selection is an arg-min over a discrete set. It has no
     !! derivative with respect to the candidates, and any value a caller

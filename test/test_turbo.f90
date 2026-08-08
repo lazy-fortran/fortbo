@@ -11,6 +11,7 @@ program test_turbo
     !!     independently in the test, and must differ from the center;
     !!   * Thompson selection is checked against a brute-force arg-min written
     !!     in the test, including the distinctness and tie-breaking rules;
+    !!   * greedy qEI is checked against an explicit set-improvement oracle;
     !!   * the across-region bandit behavior is checked by the observable
     !!     consequence: a region whose realizations are uniformly better must
     !!     win the whole batch, and two equally good regions must split it.
@@ -23,6 +24,7 @@ program test_turbo
     use fortbo_trust_region, only: fortbo_trust_region_t
     use fortbo_turbo, only: fortbo_candidate_count, fortbo_perturbation_probability, &
         fortbo_turbo_candidates, fortbo_thompson_select, &
+        fortbo_qei_select, &
         fortbo_thompson_gradient_refusal
     implicit none
 
@@ -34,6 +36,7 @@ program test_turbo
     call check_perturbation_sparsity(failures)
     call check_candidates_are_replayable(failures)
     call check_thompson_matches_brute_force(failures)
+    call check_qei_matches_greedy_oracle(failures)
     call check_thompson_is_a_bandit(failures)
     call check_refusals(failures)
 
@@ -234,6 +237,55 @@ contains
         call expect(all(selected == [1, 2, 3, 4, 5, 6]), &
             "ties resolve to the lowest index", failures)
     end subroutine check_thompson_matches_brute_force
+
+    subroutine check_qei_matches_greedy_oracle(failures)
+        integer, intent(inout) :: failures
+        type(fortnum_status_t) :: status
+        real(dp) :: samples(5, 3)
+        integer :: selected(2), expected(2)
+        logical :: taken(5)
+        real(dp) :: score, best_score, improvement, best_value
+        integer :: slot, candidate, sample, prior, best
+
+        samples = reshape([ &
+            0.1_dp, 0.2_dp, 0.4_dp, 0.9_dp, 0.3_dp, &
+            0.5_dp, 0.1_dp, 0.4_dp, 0.9_dp, 0.2_dp, &
+            0.4_dp, 0.6_dp, 0.4_dp, 0.9_dp, 0.7_dp], [5, 3])
+        expected = 0
+        taken = .false.
+        do slot = 1, size(expected)
+            best = 0
+            best_score = -huge(1.0_dp)
+            do candidate = 1, size(samples, 1)
+                if (taken(candidate)) cycle
+                score = 0.0_dp
+                do sample = 1, size(samples, 2)
+                    best_value = 0.0_dp
+                    do prior = 1, slot - 1
+                        best_value = max(best_value, 0.5_dp - &
+                            samples(expected(prior), sample))
+                    end do
+                    improvement = max(best_value, 0.5_dp - &
+                        samples(candidate, sample))
+                    score = score + improvement
+                end do
+                score = score/real(size(samples, 2), dp)
+                if (score > best_score) then
+                    best_score = score
+                    best = candidate
+                end if
+            end do
+            expected(slot) = best
+            taken(best) = .true.
+        end do
+
+        call fortbo_qei_select(samples, 0.5_dp, selected, status)
+        call expect(status%code == FORTNUM_OK, "greedy qEI selection succeeds", failures)
+        call expect(all(selected == expected), &
+            "greedy qEI selection matches the independent set oracle", failures)
+        call expect(selected(1) /= selected(2), &
+            "greedy qEI selection keeps the batch distinct", failures)
+    end subroutine check_qei_matches_greedy_oracle
 
     !! The bandit behavior is emergent, so it is checked by consequence: with
     !! two regions' candidates concatenated, a uniformly better region takes the

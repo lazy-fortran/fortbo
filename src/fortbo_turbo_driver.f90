@@ -39,14 +39,14 @@ module fortbo_turbo_driver
 
     use fortnum_kinds, only: dp
     use fortnum_status, only: fortnum_status_t, status_set, FORTNUM_OK, &
-        FORTNUM_DOMAIN_ERROR
+        FORTNUM_DOMAIN_ERROR, FORTNUM_NOT_IMPLEMENTED
     use fortnum_rng, only: rng_t, rng_seed, rng_uniform
     use fortbo_posterior, only: fortbo_posterior_t
     use fortbo_history, only: fortbo_history_t
     use fortbo_trust_region, only: fortbo_trust_region_t
     use fortbo_acquisition, only: fortbo_expected_improvement
     use fortbo_turbo, only: fortbo_turbo_candidates, fortbo_candidate_count, &
-        fortbo_thompson_select
+        fortbo_thompson_select, fortbo_qei_select
     use fortbo_fortml, only: fortbo_fit_from_history
     use fortbo_normal, only: fortbo_inverse_normal
     implicit none
@@ -77,8 +77,8 @@ module fortbo_turbo_driver
         !! caller rather than inferred, because ignoring gradients is a
         !! legitimate choice and should be a visible one.
         logical :: use_gradients = .false.
-        !! Thompson sampling is the historical default. EI is the q=1
-        !! Landreman path; q>1 remains a no-replacement candidate reduction.
+        !! Thompson sampling is the historical default. EI is analytic at q=1
+        !! and greedy Monte Carlo qEI at larger batch sizes.
         integer :: acquisition = FORTBO_TURBO_ACQUISITION_TS
         !! Trust-state tolerances. A zero failure tolerance selects the
         !! dimension/batch rule; nonzero values pin a replay configuration.
@@ -169,9 +169,9 @@ contains
             return
         end if
         if (config%acquisition == FORTBO_TURBO_ACQUISITION_EI .and. &
-                config%batch_size /= 1) then
-            call status_set(status, FORTNUM_DOMAIN_ERROR, &
-                "fortbo turbo driver: EI replay currently requires q=1")
+                config%batch_size > 1 .and. .not. config%use_ard) then
+            call status_set(status, FORTNUM_NOT_IMPLEMENTED, &
+                "fortbo turbo driver: batch qEI requires an ARD joint-sample posterior")
             return
         end if
         if (config%success_tolerance < 1 .or. config%failure_tolerance < 0 .or. &
@@ -364,7 +364,9 @@ contains
             variance = variance*scale*scale
             if (allocated(joint_samples)) deallocate (joint_samples)
             if (self%config%use_ard .and. &
-                    self%config%acquisition == FORTBO_TURBO_ACQUISITION_TS) then
+                    (self%config%acquisition == FORTBO_TURBO_ACQUISITION_TS .or. &
+                    (self%config%acquisition == FORTBO_TURBO_ACQUISITION_EI .and. &
+                    self%config%batch_size > 1))) then
                 allocate (joint_samples(per_region, needed))
                 call posterior%joint_sample(candidates, self%generator, &
                     joint_samples, status)
@@ -374,7 +376,8 @@ contains
                 offset = offset + 1
                 pooled(offset, :) = candidates(i, :)
                 pooled_region(offset) = k
-                if (self%config%acquisition == FORTBO_TURBO_ACQUISITION_EI) then
+                if (self%config%acquisition == FORTBO_TURBO_ACQUISITION_EI .and. &
+                        self%config%batch_size == 1) then
                     ! Landreman's production q=1 path is analytic EI. The
                     ! pooled reduction is a no-replacement arg-max of EI,
                     ! represented as a negated score for the common selector.
@@ -410,7 +413,12 @@ contains
         end if
 
         allocate (chosen(needed))
-        call fortbo_thompson_select(realizations(:offset, :), chosen, status)
+        if (self%config%acquisition == FORTBO_TURBO_ACQUISITION_EI) then
+            call fortbo_qei_select(realizations(:offset, :), self%best_value, &
+                chosen, status)
+        else
+            call fortbo_thompson_select(realizations(:offset, :), chosen, status)
+        end if
         if (status%code /= FORTNUM_OK) return
         do i = 1, size(chosen)
             filled = filled + 1

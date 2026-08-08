@@ -19,9 +19,11 @@ program test_turbo_driver
 
     use, intrinsic :: iso_fortran_env, only: int64
     use fortnum_kinds, only: dp
-    use fortnum_status, only: fortnum_status_t, FORTNUM_OK, FORTNUM_DOMAIN_ERROR
+    use fortnum_status, only: fortnum_status_t, FORTNUM_OK, FORTNUM_DOMAIN_ERROR, &
+        FORTNUM_NOT_IMPLEMENTED
     use fortnum_rng, only: rng_t, rng_seed, rng_uniform
-    use fortbo_turbo_driver, only: fortbo_turbo_driver_t, fortbo_turbo_config_t
+    use fortbo_turbo_driver, only: fortbo_turbo_driver_t, fortbo_turbo_config_t, &
+        FORTBO_TURBO_ACQUISITION_EI
     use fortbo_benchmarks, only: fortbo_benchmark_t, FORTBO_BENCH_BRANIN
     implicit none
 
@@ -33,6 +35,7 @@ program test_turbo_driver
     call check_restart_clears_history(failures)
     call check_replayable(failures)
     call check_frozen_candidate_pool(failures)
+    call check_batch_qei(failures)
     call check_refusals(failures)
 
     if (failures == 0) then
@@ -375,6 +378,50 @@ contains
         call expect(found, "selection returns one of the frozen candidates", failures)
     end subroutine check_frozen_candidate_pool
 
+    subroutine check_batch_qei(failures)
+        integer, intent(inout) :: failures
+        type(fortbo_turbo_config_t) :: config
+        type(fortbo_turbo_driver_t) :: driver
+        type(fortnum_status_t) :: status
+        real(dp) :: points(2, 2), values(2), pool(4, 2)
+        integer :: regions(2), i
+        logical :: distinct
+
+        config%n_regions = 1
+        config%batch_size = 2
+        config%n_initial = 2
+        config%acquisition = FORTBO_TURBO_ACQUISITION_EI
+        config%use_ard = .true.
+        allocate (config%lengthscales(2), config%frozen_candidates(4, 2))
+        config%lengthscales = [0.25_dp, 0.25_dp]
+        config%frozen_candidates = 0.5_dp
+
+        call driver%initialize(2, config, 1234, status)
+        call expect(status%code == FORTNUM_OK, &
+            "the ARD batch-qEI driver starts", failures)
+        call driver%ask(points, regions, status)
+        call expect(status%code == FORTNUM_OK, &
+            "the batch-qEI initial design succeeds", failures)
+        do i = 1, 2
+            values(i) = sum((points(i, :) - 0.5_dp)**2)
+        end do
+        call driver%tell(points, regions, values, status)
+        call expect(status%code == FORTNUM_OK, &
+            "the batch-qEI initial design is recorded", failures)
+
+        pool(1, :) = points(1, :)
+        pool(2, :) = min(1.0_dp, points(1, :) + 0.01_dp)
+        pool(3, :) = max(0.0_dp, points(1, :) - 0.01_dp)
+        pool(4, :) = points(2, :)
+        driver%config%frozen_candidates = pool
+        call driver%ask(points, regions, status)
+        call expect(status%code == FORTNUM_OK, &
+            "batch qEI selects from a frozen pool", failures)
+        distinct = maxval(abs(points(1, :) - points(2, :))) > 0.0_dp
+        call expect(distinct, "batch qEI returns distinct points", failures)
+        call expect(all(regions == 1), "batch qEI preserves the region labels", failures)
+    end subroutine check_batch_qei
+
     subroutine check_refusals(failures)
         integer, intent(inout) :: failures
         type(fortbo_turbo_config_t) :: config
@@ -390,6 +437,12 @@ contains
         call expect(status%code == FORTNUM_DOMAIN_ERROR, &
             "a zero-width problem is refused", failures)
 
+        config%batch_size = 2
+        config%acquisition = FORTBO_TURBO_ACQUISITION_EI
+        call driver%initialize(2, config, 1, status)
+        call expect(status%code == FORTNUM_NOT_IMPLEMENTED, &
+            "batch qEI without an ARD joint posterior is refused by name", failures)
+
         config%n_regions = 0
         call driver%initialize(2, config, 1, status)
         call expect(status%code == FORTNUM_DOMAIN_ERROR, &
@@ -400,6 +453,7 @@ contains
             "asking an uninitialized driver is refused", failures)
 
         config%n_regions = 1
+        config%batch_size = 1
         call driver%initialize(2, config, 1, status)
         wide_regions = 1
         call driver%ask(wide, wide_regions, status)
