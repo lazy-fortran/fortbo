@@ -33,6 +33,8 @@ module fortbo_fortml_sparse
     use fortml_sparse_gp, only: sparse_gp_t
     use fortml_multi_output_gp, only: multi_output_gp_t
     use fortml_student_t_process, only: student_t_process_t
+    use fortml_heteroskedastic_gp, only: heteroskedastic_gp_t
+    use fortml_gp_classification, only: gp_classification_t
     use fortbo_posterior, only: fortbo_posterior_t, FORTBO_CAP_MOMENTS, &
         FORTBO_CAP_NOISY_MOMENTS, FORTBO_CAP_COVARIANCE, FORTBO_CAP_JOINT_SAMPLE
     implicit none
@@ -41,6 +43,8 @@ module fortbo_fortml_sparse
     public :: fortbo_sparse_gp_posterior_t
     public :: fortbo_multi_output_posterior_t
     public :: fortbo_student_t_posterior_t
+    public :: fortbo_heteroskedastic_posterior_t
+    public :: fortbo_classification_posterior_t
 
     !! Jitter added before factorizing a joint covariance for sampling. A
     !! multi-output covariance restricted to one output is often near-singular
@@ -78,6 +82,48 @@ module fortbo_fortml_sparse
         procedure, public :: capabilities => student_t_capabilities
         procedure, public :: moments => student_t_moments
     end type fortbo_student_t_posterior_t
+
+    !! Heteroskedastic GP behind the contract.
+    !!
+    !! This one is a *better* fit for the contract than a plain GP, not a worse
+    !! one. FortBO's noisy-moments capability says the surrogate knows its
+    !! observations are noisy; a heteroskedastic model additionally knows the
+    !! noise varies, and reports the latent signal variance the acquisition
+    !! actually wants. `observation_noise` exposes the model's belief about the
+    !! measurement noise separately, so a cost-aware or replication policy can
+    !! ask where another measurement is worth taking.
+    type, extends(fortbo_posterior_t) :: fortbo_heteroskedastic_posterior_t
+        type(heteroskedastic_gp_t) :: model
+        integer :: dimension = 0
+        logical :: fitted = .false.
+    contains
+        procedure, public :: n_inputs => hetero_n_inputs
+        procedure, public :: capabilities => hetero_capabilities
+        procedure, public :: moments => hetero_moments
+        procedure, public :: observation_noise => hetero_observation_noise
+    end type fortbo_heteroskedastic_posterior_t
+
+    !! Classification GP behind the contract, presenting its *latent* moments.
+    !!
+    !! The latent process is what an acquisition can use: it is Gaussian, and
+    !! its mean and variance are the quantities every FortBO acquisition
+    !! integrates against. The class probability is not — it is a squashed
+    !! latent, bounded in `[0, 1]`, and an expected-improvement computed on it
+    !! would be measuring improvement in probability rather than in the
+    !! objective.
+    !!
+    !! That makes this adapter the right tool for exactly one job: searching for
+    !! the *decision boundary*, where the latent crosses zero. Level-set
+    !! estimation in `fortbo_active` is the intended consumer, not `fortbo_ei`.
+    type, extends(fortbo_posterior_t) :: fortbo_classification_posterior_t
+        type(gp_classification_t) :: model
+        integer :: dimension = 0
+        logical :: fitted = .false.
+    contains
+        procedure, public :: n_inputs => classification_n_inputs
+        procedure, public :: capabilities => classification_capabilities
+        procedure, public :: moments => classification_moments
+    end type fortbo_classification_posterior_t
 
     type, extends(fortbo_posterior_t) :: fortbo_multi_output_posterior_t
         type(multi_output_gp_t) :: model
@@ -170,6 +216,98 @@ contains
         end if
         call self%model%predict(points, mean, variance, status)
     end subroutine student_t_moments
+
+    pure integer function hetero_n_inputs(self) result(n)
+        class(fortbo_heteroskedastic_posterior_t), intent(in) :: self
+
+        n = self%dimension
+    end function hetero_n_inputs
+
+    pure integer function hetero_capabilities(self) result(caps)
+        class(fortbo_heteroskedastic_posterior_t), intent(in) :: self
+
+        caps = 0
+        if (self%fitted) caps = FORTBO_CAP_MOMENTS + FORTBO_CAP_NOISY_MOMENTS
+    end function hetero_capabilities
+
+    subroutine hetero_moments(self, points, mean, variance, status)
+        class(fortbo_heteroskedastic_posterior_t), intent(in) :: self
+        real(dp), intent(in) :: points(:, :)
+        real(dp), intent(out) :: mean(:)
+        real(dp), intent(out) :: variance(:)
+        type(fortnum_status_t), intent(out) :: status
+
+        mean = 0.0_dp
+        variance = 0.0_dp
+        if (.not. self%fitted) then
+            call status_set(status, FORTNUM_DOMAIN_ERROR, &
+                "fortbo heteroskedastic: surrogate has not been fitted")
+            return
+        end if
+        if (size(points, 2) /= self%dimension .or. size(mean) /= size(points, 1) &
+            .or. size(variance) /= size(points, 1)) then
+            call status_set(status, FORTNUM_DOMAIN_ERROR, &
+                "fortbo heteroskedastic: query shape does not match the surrogate")
+            return
+        end if
+        call self%model%predict(points, mean, variance, status)
+    end subroutine hetero_moments
+
+    !! What the model believes the *measurement* noise is, as opposed to its
+    !! uncertainty about the signal. A replication policy needs both: a point
+    !! whose signal is uncertain because it is unmeasured deserves a first
+    !! evaluation, while one uncertain because it is noisy deserves a repeat.
+    subroutine hetero_observation_noise(self, points, noise, status)
+        class(fortbo_heteroskedastic_posterior_t), intent(in) :: self
+        real(dp), intent(in) :: points(:, :)
+        real(dp), intent(out) :: noise(:)
+        type(fortnum_status_t), intent(out) :: status
+
+        noise = 0.0_dp
+        if (.not. self%fitted) then
+            call status_set(status, FORTNUM_DOMAIN_ERROR, &
+                "fortbo heteroskedastic: surrogate has not been fitted")
+            return
+        end if
+        call self%model%noise_at(points, noise, status)
+    end subroutine hetero_observation_noise
+
+    pure integer function classification_n_inputs(self) result(n)
+        class(fortbo_classification_posterior_t), intent(in) :: self
+
+        n = self%dimension
+    end function classification_n_inputs
+
+    pure integer function classification_capabilities(self) result(caps)
+        class(fortbo_classification_posterior_t), intent(in) :: self
+
+        caps = 0
+        if (self%fitted) caps = FORTBO_CAP_MOMENTS
+    end function classification_capabilities
+
+    subroutine classification_moments(self, points, mean, variance, status)
+        class(fortbo_classification_posterior_t), intent(in) :: self
+        real(dp), intent(in) :: points(:, :)
+        real(dp), intent(out) :: mean(:)
+        real(dp), intent(out) :: variance(:)
+        type(fortnum_status_t), intent(out) :: status
+
+        mean = 0.0_dp
+        variance = 0.0_dp
+        if (.not. self%fitted) then
+            call status_set(status, FORTNUM_DOMAIN_ERROR, &
+                "fortbo classification: surrogate has not been fitted")
+            return
+        end if
+        if (size(points, 2) /= self%dimension .or. size(mean) /= size(points, 1) &
+            .or. size(variance) /= size(points, 1)) then
+            call status_set(status, FORTNUM_DOMAIN_ERROR, &
+                "fortbo classification: query shape does not match the surrogate")
+            return
+        end if
+        ! The *latent* moments, deliberately. See the type's note.
+        call self%model%predict_latent(points, mean, variance, status)
+    end subroutine classification_moments
 
     pure integer function multi_n_inputs(self) result(n)
         class(fortbo_multi_output_posterior_t), intent(in) :: self

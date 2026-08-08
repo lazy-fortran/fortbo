@@ -24,7 +24,8 @@ program test_fortml_sparse
     use fortbo_posterior, only: FORTBO_CAP_MOMENTS, FORTBO_CAP_COVARIANCE, &
         FORTBO_CAP_JOINT_SAMPLE
     use fortbo_fortml_sparse, only: fortbo_multi_output_posterior_t, &
-        fortbo_student_t_posterior_t
+        fortbo_student_t_posterior_t, fortbo_heteroskedastic_posterior_t, &
+        fortbo_classification_posterior_t
     use fortbo_acquisition, only: fortbo_ei_t
     use fortbo_batch, only: fortbo_batch_samples_t, fortbo_qei
     implicit none
@@ -36,6 +37,8 @@ program test_fortml_sparse
     call check_multi_output_samples_match_its_covariance(failures)
     call check_student_t_differs_from_a_gaussian(failures)
     call check_acquisitions_run_unchanged(failures)
+    call check_heteroskedastic_separates_its_two_uncertainties(failures)
+    call check_classification_presents_the_latent(failures)
     call check_refusals(failures)
 
     if (failures == 0) then
@@ -262,6 +265,106 @@ contains
         call expect(status%code == FORTNUM_OK .and. all(values >= 0.0_dp), &
             "expected improvement runs against the Student-t adapter", failures)
     end subroutine check_acquisitions_run_unchanged
+
+    !! The distinction a heteroskedastic surrogate exists to make: uncertainty
+    !! about the *signal* is not the same as uncertainty in the *measurement*.
+    !! A point unmeasured deserves a first evaluation; a point measured badly
+    !! deserves a repeat. A plain GP cannot tell a policy which it is looking at.
+    subroutine check_heteroskedastic_separates_its_two_uncertainties(failures)
+        integer, intent(inout) :: failures
+        type(fortbo_heteroskedastic_posterior_t) :: model
+        type(kernel_t) :: signal, noise_kernel
+        type(fortnum_status_t) :: status
+        real(dp) :: x(10, 1), y(10), variances(10)
+        real(dp) :: probe(2, 1), mean(2), variance(2), noise(2)
+        integer :: k
+
+        ! Left half measured precisely, right half poorly.
+        do k = 1, 10
+            x(k, 1) = -2.0_dp + 0.4_dp*real(k - 1, dp)
+            y(k) = 0.5_dp*x(k, 1)
+            if (x(k, 1) < 0.0_dp) then
+                variances(k) = 1.0e-4_dp
+            else
+                variances(k) = 1.0_dp
+            end if
+        end do
+
+        signal = make_rbf_kernel(1, 1.0_dp, 0.6_dp, status)
+        noise_kernel = make_rbf_kernel(1, 1.0_dp, 1.2_dp, status)
+        call model%model%fit(x, y, variances, signal, noise_kernel, status)
+        call expect(status%code == FORTNUM_OK, "the heteroskedastic model fits", &
+            failures)
+        model%dimension = 1
+        model%fitted = .true.
+
+        probe(1, 1) = -1.4_dp
+        probe(2, 1) = 1.4_dp
+        call model%moments(probe, mean, variance, status)
+        call expect(status%code == FORTNUM_OK, "the adapter reports moments", &
+            failures)
+        call model%observation_noise(probe, noise, status)
+        call expect(status%code == FORTNUM_OK, "the adapter reports noise", failures)
+
+        call expect(variance(1) < variance(2), &
+            "signal uncertainty is lower where the data are precise", failures)
+        call expect(noise(1) < noise(2), &
+            "measurement noise is lower where the data are precise", failures)
+        call expect(all(noise > 0.0_dp), &
+            "reported noise is positive, as the log construction guarantees", &
+            failures)
+        call expect(model%supports(FORTBO_CAP_MOMENTS), &
+            "the heteroskedastic adapter declares moments", failures)
+    end subroutine check_heteroskedastic_separates_its_two_uncertainties
+
+    !! The classification adapter presents the *latent* moments, not the class
+    !! probability. The latent is Gaussian and unbounded, which is what every
+    !! FortBO acquisition integrates against; a probability is neither.
+    subroutine check_classification_presents_the_latent(failures)
+        integer, intent(inout) :: failures
+        type(fortbo_classification_posterior_t) :: model
+        type(kernel_t) :: kernel
+        type(fortnum_status_t) :: status
+        real(dp) :: x(10, 1), probe(3, 1), mean(3), variance(3)
+        integer :: labels(10), k
+
+        ! A boundary at zero: negative inputs one class, positive the other.
+        do k = 1, 10
+            x(k, 1) = -2.0_dp + 0.4_dp*real(k - 1, dp)
+            if (x(k, 1) < 0.0_dp) then
+                labels(k) = 0
+            else
+                labels(k) = 1
+            end if
+        end do
+
+        kernel = make_rbf_kernel(1, 1.0_dp, 0.8_dp, status)
+        call model%model%fit(x, labels, kernel, status)
+        call expect(status%code == FORTNUM_OK, "the classification model fits", &
+            failures)
+        model%dimension = 1
+        model%fitted = .true.
+
+        probe(1, 1) = -1.5_dp
+        probe(2, 1) = 0.0_dp
+        probe(3, 1) = 1.5_dp
+        call model%moments(probe, mean, variance, status)
+        call expect(status%code == FORTNUM_OK, "the latent moments evaluate", &
+            failures)
+
+        ! A latent, not a probability: it must be signed and may leave [0, 1].
+        call expect(mean(1) < 0.0_dp .and. mean(3) > 0.0_dp, &
+            "the latent is signed, separating the two classes", failures)
+        call expect(abs(mean(2)) < abs(mean(1)) .and. abs(mean(2)) < abs(mean(3)), &
+            "the latent is nearest zero at the decision boundary", failures)
+        call expect(all(variance >= 0.0_dp), "the latent variance is a variance", &
+            failures)
+
+        ! Only marginal moments: the contract must not claim a joint route the
+        ! Laplace approximation does not supply here.
+        call expect(.not. model%supports(FORTBO_CAP_JOINT_SAMPLE), &
+            "the classification adapter claims no joint sampling", failures)
+    end subroutine check_classification_presents_the_latent
 
     subroutine check_refusals(failures)
         integer, intent(inout) :: failures

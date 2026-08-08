@@ -474,8 +474,33 @@ Concretely, and binding on every work package below:
   what catches a wrong stride where symmetry alone would not.
 - [ ] Adapt the FortML multi-task and deep-kernel GPs, which have no posterior
   contract route yet.
-- [ ] Add heteroskedastic, Student-t, classification, count, and robust
-  surrogate likelihood adapters.
+- [x] Add heteroskedastic, Student-t, and classification surrogate likelihood
+  adapters. As with the sparse family, the *models* live in FortML —
+  `fortml_heteroskedastic_gp.f90` is new generic code, written there rather than
+  in FortBO because nothing about it is Bayesian-optimization specific.
+
+  **Heteroskedastic.** One noise variance for the whole domain is wrong whenever
+  measurement quality varies with the input, and fitting a single noise does not
+  average the regimes — it lands between them and is then overconfident where
+  the data are noisy and underconfident where they are clean, which is worse
+  than either. Noise is a second latent process on the *log* scale: a process on
+  the variance directly would put mass on negatives, and clipping those would
+  bias exactly the quiet regions the model exists to represent. Centring the log
+  values makes extrapolation revert to the mean noise level rather than to unit
+  variance, which nobody claimed. The adapter separates the two uncertainties a
+  policy needs to tell apart: a point unmeasured deserves a first evaluation, a
+  point measured badly deserves a repeat, and a plain GP cannot say which it is
+  looking at.
+
+  **Classification** presents the *latent* moments, deliberately, not the class
+  probability. The latent is Gaussian and unbounded, which is what every FortBO
+  acquisition integrates against; a probability is neither, and expected
+  improvement computed on one would measure improvement in probability rather
+  than in the objective. That makes this adapter right for exactly one job —
+  finding the decision boundary, where the latent crosses zero — so its intended
+  consumer is level-set estimation in `fortbo_active`, not `fortbo_ei`.
+- [ ] Add count and robust surrogate likelihood adapters, which need Poisson and
+  heavy-tailed observation models FortML does not yet carry.
 - [ ] Add fully Bayesian surrogate hyperparameter integration through FortMC
   and compare integrated versus plug-in acquisition policies.
 - [x] Support user-defined FortML posterior providers without requiring a GP.
