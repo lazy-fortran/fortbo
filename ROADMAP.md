@@ -201,9 +201,10 @@ Preserve the W7-X-like setup:
   gamma=0.1, beta1=beta2=0.95, epsilon=1e-10.
 
 The paper-level command remains non-executable because the paper-specific
-W7-X input, perturbation covariance, optimizer source, and seed ledger are
-still missing. The recovered FOCUS checkout is a source/build reference, not
-those missing artifacts:
+W7-X input, frozen covariance/realization convention, optimizer source, and
+seed ledger are still missing. The recovered FOCUS checkout is a source/build
+reference, and `scripts/glas_covariance.py` implements the published
+single-period covariance formula; neither is the missing experiment ledger:
 
 ~~~
 cd /home/ert/data/simsopt-dfo-harvest/coil-dturbo-paper-2110.07464/recovered-focus
