@@ -317,7 +317,28 @@ Concretely, and binding on every work package below:
 
   Multi-objective acquisitions are already covered by `src/fortbo_pareto.f90`
   and preference acquisitions by `src/fortbo_preference.f90`.
-- [ ] Implement multi-fidelity and risk-sensitive acquisitions.
+- [x] Implement **multi-fidelity and risk-sensitive** acquisitions.
+  `src/fortbo_risk.f90` offers mean-variance, value at risk, and conditional
+  value at risk, all under the minimization convention. CVaR is the one that
+  sees the tail it is protecting against and is coherent where VaR is not — VaR
+  can *rise* when two risks are combined, which is not a property anyone wants
+  in an objective. The ordering `CVaR >= VaR >= mean` is asserted rather than
+  assumed, since it is the cheapest way to catch a swapped formula. A negative
+  risk aversion is refused: risk *seeking* is coherent and almost never what
+  was meant.
+
+  The multi-fidelity weight is `base * rho^2 / cost^alpha`. `rho` is squared
+  because information about a Gaussian scales with variance explained, not with
+  correlation, so a fidelity with half the correlation must be four times
+  cheaper to break even rather than twice — which is exactly what the test
+  pins, and where my own arithmetic was inverted the first time.
+
+  `test_risk` checks VaR and CVaR against Monte Carlo by *counting* rather than
+  sorting. The obvious oracle — sort the draws and read off the quantile — was
+  written first and timed out, since an insertion sort over 400000 draws is
+  quadratic. Counting is both faster and a sharper check: VaR is defined by the
+  fraction of outcomes below it, so measuring that fraction tests the
+  definition instead of an artifact of how the sample was ordered.
 
 ### BO2: surrogate integration
 
