@@ -528,8 +528,40 @@ Concretely, and binding on every work package below:
   `converged` is exposed and gates the capability bits: an unsettled Laplace fit
   has moments, but they approximate around a point that is not a mode, and
   declaring them would let a policy consume them silently.
-- [ ] Add fully Bayesian surrogate hyperparameter integration through FortMC
-  and compare integrated versus plug-in acquisition policies.
+- [x] Add fully Bayesian surrogate hyperparameter integration through FortMC
+  and compare integrated versus plug-in acquisition policies. Written against
+  Snoek, Larochelle and Adams (arXiv:1206.2944), which states it plainly: the
+  expectation over hyperparameters "is the correct generalization to account
+  for uncertainty in hyperparameters", and the samples "can be acquired
+  efficiently using slice sampling".
+
+  **FortMC had no sampler**, only an abstract log-density type, so
+  `fortmc_slice.f90` was added upstream. Slice sampling needs only the log
+  density — no gradient, no proposal scale, no acceptance rate — which is why
+  it suits hyperparameter marginalization, where the density's scale differs
+  enormously between a lengthscale and a noise level. Heights are formed as
+  `log p - Exponential(1)` so the density is never exponentiated; a GP log
+  likelihood of order hundreds would overflow at once. The shrink step pulls in
+  *the end the rejected point fell on*, which is what preserves detail balance —
+  the alternatives give a chain that looks fine and has the wrong stationary
+  distribution, invisible in any single run. The correlated-normal test is the
+  one that bites: a coordinate sweep gets the marginals right almost however it
+  is written, and only a correct sweep gets the correlation right.
+
+  **The average is of acquisitions, not of moments.** Expected improvement is
+  nonlinear in the moments, so by Jensen the two disagree, and the
+  moment-averaged version systematically understates exactly the point the
+  hyperparameter samples disagree about — which is the point worth evaluating.
+  `test_integrated` measures that gap on a constructed pair and confirms the two
+  coincide when the samples agree, so the gap is attributable to the
+  disagreement rather than to the arithmetic.
+
+  The comparison the item asks for runs end to end and unmocked: a real GP log
+  marginal likelihood is slice-sampled, the surrogate refits at each draw, the
+  acquisitions blend, and the result is checked to differ from the plug-in
+  policy at the mean hyperparameter. A spread diagnostic reports when a chain
+  did not move, so a run can say that integrating bought nothing rather than
+  quietly paying for it.
 - [x] Support user-defined FortML posterior providers without requiring a GP.
   `src/fortbo_linear_posterior.f90` is a Bayesian linear model on a caller-
   supplied feature map, and it is in the tree specifically so the contract's

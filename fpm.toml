@@ -11,6 +11,10 @@ fortnum = { path = "../fortnum" }
 fortopt = { path = "../fortopt" }
 fortad = { path = "../fortad" }
 fortml = { path = "../fortml" }
+# FortMC owns posterior chains. The roadmap calls it optional, meaning a run
+# that uses only plug-in policies never invokes it; fpm has no way to express
+# that, so it is declared and simply unused by those paths.
+fortmc = { path = "../fortmc" }
 
 # FortSym is a generation-time tool. Generated kernels are committed or
 # consumed through the FortSym CLI and are not a runtime Fortran dependency.
