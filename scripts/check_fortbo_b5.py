@@ -59,6 +59,7 @@ def check_row(path: Path, *, budget: int = BUDGET) -> Mapping[str, Any]:
     dimension = 80 if mode == "raw" else 20
     _require(problem.get("dimension") == dimension,
              f"{label}: wrong dimension for {mode}")
+    scaled_dimension = 80
 
     configuration = document.get("configuration", {})
     regions = configuration.get("regions")
@@ -83,7 +84,7 @@ def check_row(path: Path, *, budget: int = BUDGET) -> Mapping[str, Any]:
         scaled = row.get("scaled_x")
         _require(isinstance(unit, list) and len(unit) == dimension,
                  f"{label}: row {index} has wrong unit width")
-        _require(isinstance(scaled, list) and len(scaled) == dimension,
+        _require(isinstance(scaled, list) and len(scaled) == scaled_dimension,
                  f"{label}: row {index} has wrong scaled width")
         _require(all(isinstance(value, (int, float)) and math.isfinite(value)
                      and 0.0 <= value <= 1.0 for value in unit),

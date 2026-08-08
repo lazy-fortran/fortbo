@@ -58,6 +58,11 @@ excluded from surrogate training and cannot become incumbents. The
 eight-worker external-evaluator bridge for the remaining value-only rows.
 Those rows are deliberately labeled batched FortBO ask/tell evidence until a
 completion-driven policy with matching failure semantics is available.
+The pinned evaluator has been exercised through that bridge: an eight-call
+raw smoke produced eight recorded truth failures, while an eight-call
+data-informed smoke produced eight successful calls in about 275 seconds on
+this host. These are bridge checks, not F3 rows; the full 256-call paired
+campaign remains an explicitly scheduled external computation.
 
 ## Active blockers
 
