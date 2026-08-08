@@ -34,6 +34,7 @@ program test_turbo_driver
     call check_bandit_reallocates(failures)
     call check_restart_clears_history(failures)
     call check_replayable(failures)
+    call check_frozen_initial_design(failures)
     call check_frozen_candidate_pool(failures)
     call check_batch_qei(failures)
     call check_refusals(failures)
@@ -335,6 +336,41 @@ contains
         call expect(maxval(abs(points_a - points_b)) > 0.0_dp, &
             "a different seed gives a different run", failures)
     end subroutine check_replayable
+
+    !! A caller-supplied initial design takes precedence over the local Sobol
+    !! implementation. This is the exact-replay escape hatch for upstream
+    !! scrambled sequences whose bits are not available in FortNum.
+    subroutine check_frozen_initial_design(failures)
+        integer, intent(inout) :: failures
+        type(fortbo_turbo_config_t) :: config
+        type(fortbo_turbo_driver_t) :: driver
+        type(fortnum_status_t) :: status
+        real(dp) :: expected(3, 2), points(1, 2), values(1)
+        integer :: regions(1), i
+
+        config%n_regions = 1
+        config%batch_size = 1
+        config%n_initial = 3
+        allocate (config%frozen_initial_design(3, 2))
+        expected = reshape([0.11_dp, 0.22_dp, 0.33_dp, 0.44_dp, &
+            0.55_dp, 0.66_dp], [3, 2])
+        config%frozen_initial_design = expected
+
+        call driver%initialize(2, config, 123, status)
+        call expect(status%code == FORTNUM_OK, &
+            "a frozen initial design is accepted", failures)
+        do i = 1, 3
+            call driver%ask(points, regions, status)
+            call expect(status%code == FORTNUM_OK, &
+                "a frozen initial point is proposed", failures)
+            call expect(maxval(abs(points(1, :) - expected(i, :))) == 0.0_dp, &
+                "the frozen initial point is reproduced exactly", failures)
+            values(1) = sum(points(1, :))
+            call driver%tell(points, regions, values, status)
+            call expect(status%code == FORTNUM_OK, &
+                "the frozen initial observation is recorded", failures)
+        end do
+    end subroutine check_frozen_initial_design
 
     !! A caller-supplied candidate pool is the cross-language replay escape
     !! hatch: the posterior and selection still run, but the candidate bits

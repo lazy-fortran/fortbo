@@ -93,6 +93,10 @@ module fortbo_turbo_driver
         !! shift; exact upstream LMS/Owen scramble matching remains a separate
         !! replay requirement.
         logical :: quasi_random = .true.
+        !! Optional caller-owned initial design for exact cross-language replay.
+        !! When present, these rows take precedence over `quasi_random` and are
+        !! consumed in ask order, including across multiple regions.
+        real(dp), allocatable :: frozen_initial_design(:, :)
         !! Optional caller-owned candidate pool for cross-language replay. The
         !! rows are unit-cube candidates and are scored by the normal posterior
         !! and acquisition path; supplying them does not bypass selection.
@@ -110,6 +114,7 @@ module fortbo_turbo_driver
         type(sobol_t) :: initial_sequence
         real(dp), allocatable :: initial_shift(:)
         logical :: initial_quasi_ready = .false.
+        integer :: initial_frozen_index = 0
         integer :: evaluations = 0
         integer :: restarts = 0
         logical :: started = .false.
@@ -134,7 +139,7 @@ contains
         type(fortbo_turbo_config_t), intent(in) :: config
         integer, intent(in) :: seed
         type(fortnum_status_t), intent(out) :: status
-        integer :: k
+        integer :: k, required
 
         if (n_inputs < 1) then
             call status_set(status, FORTNUM_DOMAIN_ERROR, &
@@ -150,6 +155,18 @@ contains
             call status_set(status, FORTNUM_DOMAIN_ERROR, &
                 "fortbo turbo driver: initial count must not be negative")
             return
+        end if
+        required = config%n_initial
+        if (required == 0) required = 2*n_inputs
+        if (allocated(config%frozen_initial_design)) then
+            if (size(config%frozen_initial_design, 1) < required*config%n_regions .or. &
+                    size(config%frozen_initial_design, 2) /= n_inputs .or. &
+                    any(config%frozen_initial_design < 0.0_dp) .or. &
+                    any(config%frozen_initial_design > 1.0_dp)) then
+                call status_set(status, FORTNUM_DOMAIN_ERROR, &
+                    "fortbo turbo driver: frozen initial design is invalid")
+                return
+            end if
         end if
         if (config%use_ard) then
             if (.not. allocated(config%lengthscales) .or. &
@@ -214,7 +231,8 @@ contains
         end do
         call rng_seed(self%generator, int(seed, kind(1_8)), status)
         if (status%code /= FORTNUM_OK) return
-        if (config%quasi_random) then
+        if (config%quasi_random .and. .not. &
+                allocated(config%frozen_initial_design)) then
             call sobol_initialize(self%initial_sequence, n_inputs, status)
             if (status%code /= FORTNUM_OK) return
             allocate (self%initial_shift(n_inputs))
@@ -298,7 +316,17 @@ contains
         do while (filled < self%config%batch_size)
             k = next_region_needing_design(self, required, assigned)
             if (k == 0) exit
-            if (self%initial_quasi_ready) then
+            if (allocated(self%config%frozen_initial_design)) then
+                if (self%initial_frozen_index >= &
+                        size(self%config%frozen_initial_design, 1)) then
+                    call status_set(status, FORTNUM_DOMAIN_ERROR, &
+                        "fortbo turbo driver: frozen initial design is exhausted")
+                    return
+                end if
+                self%initial_frozen_index = self%initial_frozen_index + 1
+                draw = self%config%frozen_initial_design(&
+                    self%initial_frozen_index, :)
+            else if (self%initial_quasi_ready) then
                 call sobol_next(self%initial_sequence, draw, status)
                 if (status%code /= FORTNUM_OK) return
                 draw = modulo(draw + self%initial_shift, 1.0_dp)
