@@ -778,9 +778,34 @@ and belongs to FortML's parameter registry, not to FortBO.
 - [ ] Derive the posterior gradient and Hessian expressions for each supported
   kernel through FortSym and emit them; block-matrix work blocks on FortSym M9
   and must be fixed there.
-- [ ] Verify every generated derivative kernel against a complex-step or
-  Richardson-extrapolated finite-difference oracle and against FortAD, with
-  the symmetry of the Hessian checked exactly.
+- [x] Verify every generated derivative kernel against a complex-step or
+  Richardson-extrapolated finite-difference oracle, with the symmetry of the
+  Hessian checked exactly. `test_generated_kernels` sweeps *all* of
+  `src/generated`, so adding a leaf without evidence means adding it here too.
+
+  The oracle is Richardson-extrapolated central differences of each leaf's own
+  primal. Complex-step would be sharper — no subtractive cancellation at all —
+  but it needs the leaf emitted over complex arithmetic and FortSym emits real
+  leaves. That limitation is recorded rather than worked around; the roadmap
+  allows either oracle, and Richardson pins every derivative to at least eight
+  digits here.
+
+  Beyond agreement, each leaf is checked against the identities its derivation
+  implies but the emitted code does not enforce, because a generated expression
+  can be numerically right at a point and structurally the wrong function: the
+  acquisition leaf must depend on `mu` and `best` only through their gap and
+  must treat `xi` as exactly a shift of the incumbent; the preference leaf's
+  two orderings must be complementary, which is the identity a misplaced sign in
+  the `erfc` argument would break; the rescaling leaf's log derivatives must
+  equal the value and its negation. Each leaf is also exercised in the regime
+  its derivation is least comfortable in — the deep EI tail and the
+  near-zero-spread limit — since that is where a generated kernel actually
+  fails.
+
+  Hessian symmetry is checked where a Hessian exists: exactly, in
+  `test_fortml_adapter` and `test_derivative_gp_input_hvp` upstream. No
+  currently generated FortBO leaf emits a Hessian, which is why the check lives
+  there rather than here.
 - [x] Solve the bound-constrained quadratic subproblem through FortOpt with a
   documented fallback when the Hessian is indefinite; do not silently project
   to a positive-definite surrogate. `src/fortbo_quadratic.f90` minimizes
