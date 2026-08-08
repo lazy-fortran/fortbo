@@ -80,6 +80,8 @@ def _base_payload(args: argparse.Namespace, status: str = "complete") -> Dict[st
             "requested_budget": args.budget,
             "initial_design": args.initial,
             "acquisition": args.acquisition,
+            "frozen_candidates": (str(args.frozen_candidates)
+                                  if args.frozen_candidates else None),
             "status": status,
         },
         "objective": objective_metadata(args.dimension),
@@ -199,15 +201,18 @@ def run_fortbo(args: argparse.Namespace) -> Dict[str, Any]:
             "the FortBO adapter currently exposes only the synthetic quadratic "
             "ABI gate; physics evaluators remain outside this repository"
         )
+    extra = [args.acquisition]
+    if args.frozen_candidates:
+        extra.append(str(args.frozen_candidates))
     command = [
         args.fortbo_command or "fo", "exec", "fortbo_reproduction",
         str(args.dimension), str(args.budget), str(args.initial), str(args.seed),
-        args.acquisition,
+        *extra,
     ]
     if args.fortbo_command:
         command = [
             args.fortbo_command, str(args.dimension), str(args.budget),
-            str(args.initial), str(args.seed), args.acquisition,
+            str(args.initial), str(args.seed), *extra,
         ]
     started = time.perf_counter()
     result = subprocess.run(
@@ -225,6 +230,12 @@ def run_fortbo(args: argparse.Namespace) -> Dict[str, Any]:
         "wall_seconds": time.perf_counter() - started,
         "objective_owner": "Python runner and Fortran adapter use the same formula",
     }
+    if args.frozen_candidates:
+        raw = args.frozen_candidates.read_bytes()
+        payload["provenance"]["adapter"]["frozen_candidate_file"] = {
+            "path": str(args.frozen_candidates),
+            "sha256": hashlib.sha256(raw).hexdigest(),
+        }
     for line in result.stdout.splitlines():
         fields = line.split()
         if not fields or fields[0] != "ROW":
@@ -375,6 +386,8 @@ def parse_args(argv: Optional[Iterable[str]] = None) -> argparse.Namespace:
     parser.add_argument("--initial", type=int, default=DEFAULT_INITIAL)
     parser.add_argument("--dimension", type=int, default=DEFAULT_DIMENSION)
     parser.add_argument("--acquisition", choices=("ei", "ts"), default="ts")
+    parser.add_argument("--frozen-candidates", type=Path,
+                        help="count/dimension candidate pool for exact replay")
     parser.add_argument("--scratch", type=Path)
     parser.add_argument("--output", type=Path)
     parser.add_argument("--timeout", type=float, default=300.0)
