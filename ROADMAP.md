@@ -798,11 +798,28 @@ into the headline number.
   expression divides by zero.
 - [ ] Add constrained synthetic functions, noisy objectives, and
   multi-objective fixtures with known Pareto fronts or dense reference grids.
-- [ ] Add the high-dimensional trust-region fixtures with exact gradients:
-  Ackley-200 on `[-5,10]^200`, Levy and Rosenbrock at `d = 100..500`, the 60D
-  rover trajectory problem, and the 14D robot pushing problem. Gradients come
-  from FortAD or a FortSym-generated kernel so DTuRBO modes are exercised on a
-  true adjoint, not on finite differences.
+- [x] Add the high-dimensional trust-region fixtures with exact gradients:
+  Ackley-200 on `[-5,10]^200`, Levy and Rosenbrock at `d = 100..500`. The
+  functions and their analytic gradients were already in
+  `src/fortbo_benchmarks.f90` at arbitrary dimension; what was missing was
+  evidence that they are correct *at those dimensions*, which
+  `test_high_dimensional` now supplies.
+
+  Gradients are checked against Richardson-extrapolated central differences at
+  random interior points — the independent statement of what a derivative is,
+  sharing no code with the analytic expressions. Coordinates are sampled rather
+  than swept, since at `d = 500` a full sweep is thousands of evaluations per
+  step size and a systematic error shows up in a sample just as surely.
+
+  Two checks catch what a value comparison alone would not. The gradient must
+  *vanish* at each stated optimum: a function can take the right value at the
+  right point and still be the wrong function. And Ackley's optimum must not sit
+  at the centre of its box — the `[-5,10]` domain is deliberately asymmetric,
+  and a fixture that silently recentred would place the answer exactly where a
+  search starts.
+- [ ] Add the 60D rover trajectory and 14D robot pushing fixtures. Both are
+  simulator-backed rather than closed form, so their gradients need FortAD
+  through the simulator rather than a written expression.
 - [x] Record simple regret, cumulative regret, best feasible value, constraint
   violations, acquisition evaluations, gradient evaluations, ESS for sampled
   policies, memory, transfers, and wall time. `src/fortbo_metrics.f90` keeps one
