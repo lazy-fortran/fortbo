@@ -137,6 +137,17 @@ class ReproductionManifestTests(unittest.TestCase):
             result = self.run_checker(manifest, "--metadata-only")
             self.assertEqual(result.returncode, 0, result.stderr)
 
+    def test_local_variational_derivative_label_is_valid(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            directory = Path(temporary)
+            manifest = self.make_manifest(
+                directory, digest(b"independent source bytes\n"))
+            data = json.loads(manifest.read_text(encoding="utf-8"))
+            data["fortbo_result_label"] = "fortbo-variational-derivative"
+            manifest.write_text(json.dumps(data), encoding="utf-8")
+            result = self.run_checker(manifest, "--metadata-only")
+            self.assertEqual(result.returncode, 0, result.stderr)
+
 
 if __name__ == "__main__":
     unittest.main()

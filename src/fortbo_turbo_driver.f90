@@ -74,6 +74,12 @@ module fortbo_turbo_driver
         !! When absent, the established isotropic FortML adapter is used.
         real(dp), allocatable :: lengthscales(:)
         logical :: use_ard = .false.
+        !! Select the fixed-hyperparameter inducing derivative adapter. This
+        !! requires `use_ard` and caller-supplied unit-coordinate inducing
+        !! points; absent this switch the established dense adapter remains the
+        !! default.
+        logical :: use_variational_derivative = .false.
+        real(dp), allocatable :: inducing_points(:, :)
         real(dp) :: noise_variance = 1.0e-6_dp
         !! Use measured gradients when the history carries them. Left to the
         !! caller rather than forced, because requesting gradients from an
@@ -178,6 +184,18 @@ contains
                     any(config%lengthscales <= 0.0_dp)) then
                 call status_set(status, FORTNUM_DOMAIN_ERROR, &
                     "fortbo turbo driver: ARD lengthscales must match inputs")
+                return
+            end if
+        end if
+        if (config%use_variational_derivative) then
+            if (.not. config%use_ard .or. .not. allocated(config%inducing_points) .or. &
+                    size(config%inducing_points, 1) < 1 .or. &
+                    size(config%inducing_points, 2) /= n_inputs .or. &
+                    any(config%inducing_points < 0.0_dp) .or. &
+                    any(config%inducing_points > 1.0_dp)) then
+                call status_set(status, FORTNUM_DOMAIN_ERROR, &
+                    "fortbo turbo driver: variational derivative mode requires "// &
+                    "unit-coordinate inducing points and ARD lengthscales")
                 return
             end if
         end if
@@ -422,7 +440,20 @@ contains
             ! mapping back into the objective's own units.
             call standardized_copy(self%histories(k), scratch, shift, scale, status)
             if (status%code /= FORTNUM_OK) return
-            if (self%config%use_ard) then
+            if (self%config%use_variational_derivative) then
+                if (self%config%use_gradients .or. self%config%ignore_gradients) then
+                    call fortbo_fit_from_history(scratch, posterior, status, &
+                        noise_variance=self%config%noise_variance, &
+                        use_gradients=self%config%use_gradients, &
+                        lengthscales=lengthscales, &
+                        inducing_points=self%config%inducing_points)
+                else
+                    call fortbo_fit_from_history(scratch, posterior, status, &
+                        noise_variance=self%config%noise_variance, &
+                        lengthscales=lengthscales, &
+                        inducing_points=self%config%inducing_points)
+                end if
+            else if (self%config%use_ard) then
                 if (self%config%use_gradients .or. self%config%ignore_gradients) then
                     call fortbo_fit_from_history(scratch, posterior, status, &
                         noise_variance=self%config%noise_variance, &

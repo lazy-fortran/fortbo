@@ -28,6 +28,8 @@ program test_fortml_adapter
     use fortbo_history, only: fortbo_history_t
     use fortbo_fortml, only: fortbo_fit_from_history, fortbo_gp_posterior_t, &
         fortbo_derivative_gp_posterior_t
+    use fortbo_variational_derivative, only: &
+        fortbo_variational_derivative_posterior_t
     use fortml_kernels, only: kernel_t, make_matern52_kernel
     use fortbo_acquisition, only: fortbo_ei_t, fortbo_ucb_t
     implicit none
@@ -37,6 +39,7 @@ program test_fortml_adapter
     failures = 0
     call check_value_only_interpolates(failures)
     call check_branch_is_chosen_from_data(failures)
+    call check_variational_branch(failures)
     call check_gradients_improve_prediction(failures)
     call check_acquisitions_are_indistinguishable(failures)
     call check_moment_gradients(failures)
@@ -175,6 +178,61 @@ contains
         call expect(.not. is_derivative_model, &
             "forcing the value-only branch is honored", failures)
     end subroutine check_branch_is_chosen_from_data
+
+    subroutine check_variational_branch(failures)
+        integer, intent(inout) :: failures
+        type(fortbo_history_t) :: history
+        class(fortbo_posterior_t), allocatable :: posterior
+        type(fortnum_status_t) :: status
+        real(dp) :: point(2), inducing(3, 2), query(2, 2)
+        real(dp) :: mean(2), variance(2)
+        integer :: k
+        logical :: is_variational
+
+        call history%initialize(2, 0, status)
+        do k = 1, 4
+            call training_site(k, point)
+            call history%add(point, status, objective=objective(point), &
+                gradient=objective_gradient(point))
+        end do
+        inducing = reshape([0.1_dp, 0.36_dp, 0.62_dp, 0.1_dp, 0.36_dp, 0.62_dp], &
+            shape(inducing))
+        query = reshape([0.22_dp, 0.71_dp, 0.62_dp, 0.19_dp], shape(query))
+
+        call fortbo_fit_from_history(history, posterior, status, &
+            noise_variance=1.0e-6_dp, lengthscales=[0.4_dp, 0.4_dp], &
+            inducing_points=inducing)
+        call expect(status%code == FORTNUM_OK, &
+            "the inducing variational branch fits through the adapter", failures)
+        is_variational = .false.
+        select type (posterior)
+            type is (fortbo_variational_derivative_posterior_t)
+            is_variational = .true.
+            call expect(posterior%n_observations == 12, &
+                "the adapter retains values and paired gradient rows", failures)
+        end select
+        call expect(is_variational, "inducing points select the variational adapter", &
+            failures)
+        call posterior%moments(query, mean, variance, status)
+        call expect(status%code == FORTNUM_OK, &
+            "the adapter's variational posterior predicts", failures)
+
+        call fortbo_fit_from_history(history, posterior, status, &
+            noise_variance=1.0e-6_dp, lengthscales=[0.4_dp, 0.4_dp], &
+            inducing_points=inducing, use_gradients=.false.)
+        call expect(status%code == FORTNUM_OK, &
+            "the variational value-only override fits", failures)
+        select type (posterior)
+            type is (fortbo_variational_derivative_posterior_t)
+            call expect(posterior%n_observations == 4, &
+                "the variational value-only override drops derivative rows", failures)
+        end select
+
+        call fortbo_fit_from_history(history, posterior, status, &
+            noise_variance=1.0e-6_dp, inducing_points=inducing)
+        call expect(status%code == FORTNUM_DOMAIN_ERROR, &
+            "inducing points without ARD lengthscales are refused", failures)
+    end subroutine check_variational_branch
 
     !! The payoff test. Same inputs, same values, same kernel, same noise; the
     !! only difference is whether the gradients were used. On a held-out grid

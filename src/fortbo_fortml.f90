@@ -33,6 +33,7 @@ module fortbo_fortml
         FORTBO_CAP_MEAN_HESSIAN, FORTBO_CAP_MOMENT_HESSIAN
     use fortbo_history, only: fortbo_history_t
     use fortbo_ard_posterior, only: fortbo_fit_ard_posterior
+    use fortbo_variational_derivative, only: fortbo_fit_variational_derivative
     implicit none
     private
 
@@ -397,7 +398,8 @@ contains
     !! an allocatable posterior. The caller receives `fortbo_posterior_t` and
     !! cannot tell which branch was taken without asking.
     subroutine fortbo_fit_from_history(history, posterior, status, lengthscale, &
-            signal_variance, noise_variance, use_gradients, lengthscales)
+            signal_variance, noise_variance, use_gradients, lengthscales, &
+            inducing_points)
         type(fortbo_history_t), intent(in) :: history
         class(fortbo_posterior_t), intent(out), allocatable :: posterior
         type(fortnum_status_t), intent(out) :: status
@@ -412,6 +414,11 @@ contains
         !! receiving a different model merely because a vector happens to be
         !! available.
         real(dp), intent(in), optional :: lengthscales(:)
+        !! When present with `lengthscales`, select the fixed-hyperparameter
+        !! inducing variational derivative adapter instead of the dense ARD
+        !! adapter. The points are in the same unit/input coordinates as the
+        !! history and are caller-owned replay state.
+        real(dp), intent(in), optional :: inducing_points(:, :)
         type(fortbo_gp_posterior_t), allocatable :: value_only
         type(fortbo_derivative_gp_posterior_t), allocatable :: with_gradients
         type(kernel_t) :: kernel
@@ -426,6 +433,27 @@ contains
         if (d < 1) then
             call status_set(status, FORTNUM_DOMAIN_ERROR, &
                 "fortbo fortml: history is not initialized")
+            return
+        end if
+
+        if (present(inducing_points)) then
+            if (.not. present(lengthscales)) then
+                call status_set(status, FORTNUM_DOMAIN_ERROR, &
+                    "fortbo fortml: inducing points require ARD lengthscales")
+                return
+            end if
+            if (present(lengthscale)) then
+                call status_set(status, FORTNUM_DOMAIN_ERROR, &
+                    "fortbo fortml: scalar and ARD lengthscales cannot be combined")
+                return
+            end if
+            noise = 1.0e-6_dp
+            if (present(noise_variance)) noise = noise_variance
+            signal = 1.0_dp
+            if (present(signal_variance)) signal = signal_variance
+            call fortbo_fit_variational_derivative(history, inducing_points, &
+                posterior, lengthscales, status, signal_variance=signal, &
+                noise_variance=noise, use_gradients=use_gradients)
             return
         end if
 

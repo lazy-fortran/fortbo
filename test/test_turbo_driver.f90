@@ -35,6 +35,7 @@ program test_turbo_driver
     call check_restart_clears_history(failures)
     call check_replayable(failures)
     call check_driver_uses_gradients(failures)
+    call check_driver_uses_variational_model(failures)
     call check_frozen_initial_design(failures)
     call check_frozen_candidate_pool(failures)
     call check_frozen_candidate_regions(failures)
@@ -393,6 +394,50 @@ contains
             "explicit value-only mode differs when gradients are informative", &
             failures)
     end subroutine check_driver_uses_gradients
+
+    subroutine check_driver_uses_variational_model(failures)
+        integer, intent(inout) :: failures
+        type(fortbo_turbo_config_t) :: config
+        type(fortbo_turbo_driver_t) :: driver
+        type(fortnum_status_t) :: status
+        real(dp) :: points(1, 2), values(1), gradients(1, 2)
+        real(dp) :: candidates(4, 2), inducing(2, 2)
+        real(dp) :: initial(1, 2)
+        integer :: regions(1)
+
+        config%n_regions = 1
+        config%batch_size = 1
+        config%n_initial = 1
+        config%use_ard = .true.
+        config%use_variational_derivative = .true.
+        allocate (config%lengthscales(2), config%inducing_points(2, 2), &
+            config%frozen_initial_design(1, 2), config%frozen_candidates(4, 2))
+        config%lengthscales = [0.3_dp, 0.3_dp]
+        inducing = reshape([0.35_dp, 0.65_dp, 0.35_dp, 0.65_dp], shape(inducing))
+        config%inducing_points = inducing
+        initial = reshape([0.5_dp, 0.5_dp], shape(initial))
+        config%frozen_initial_design = initial
+        candidates = reshape([0.35_dp, 0.45_dp, 0.55_dp, 0.65_dp, &
+            0.45_dp, 0.45_dp, 0.55_dp, 0.55_dp], shape(candidates))
+        config%frozen_candidates = candidates
+
+        call driver%initialize(2, config, 1729, status)
+        call expect(status%code == FORTNUM_OK, &
+            "variational derivative driver configuration initializes", failures)
+        call driver%ask(points, regions, status)
+        call expect(status%code == FORTNUM_OK, &
+            "variational derivative driver asks for its initial point", failures)
+        values(1) = 0.2_dp
+        gradients(1, :) = [0.4_dp, -0.3_dp]
+        call driver%tell(points, regions, values, status, gradients)
+        call expect(status%code == FORTNUM_OK, &
+            "variational derivative driver records paired observations", failures)
+        call driver%ask(points, regions, status)
+        call expect(status%code == FORTNUM_OK, &
+            "variational derivative driver predicts after paired observations", failures)
+        call expect(any(points(1, :) /= initial(1, :)), &
+            "variational derivative driver selects a candidate", failures)
+    end subroutine check_driver_uses_variational_model
 
     !! A caller-supplied initial design takes precedence over the local Sobol
     !! implementation. This is the exact-replay escape hatch for upstream

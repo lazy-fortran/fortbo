@@ -19,6 +19,7 @@ STATUSES = {"ready-for-replay", "ready-for-control-audit", "literature-only"}
 RESULT_LABELS = {
     "fortbo-value-only",
     "fortbo-exact-derivative",
+    "fortbo-variational-derivative",
     "published-parity-dturbo",
 }
 

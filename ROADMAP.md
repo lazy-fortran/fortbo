@@ -38,10 +38,13 @@ NumPy replay reference records the same restart transition. A live archived
 MPI/physics trace is still required for F2.
 
 FortBO now also has a fixed-hyperparameter inducing variational derivative
-posterior. It retains all usable value rows, appends every complete gradient
-row, exposes covariance/joint-sample/moment-gradient capabilities, and is
-checked against an independent scalar variational oracle. The published
-stochastic training procedure and paired DTuRBO action remain unchecked.
+posterior reachable through `fortbo_fit_from_history` and the TuRBO driver
+configuration. It retains all usable value rows, appends every complete
+gradient row, exposes covariance/joint-sample/moment-gradient capabilities,
+and is checked against an independent scalar variational oracle. The published
+stochastic training procedure and published paired DTuRBO action remain
+unchecked; the local ask/tell path now carries paired gradients into this
+model when configured.
 
 The external B5 control ledgers are now materialized from Git LFS and pass the
 FortBO-side audit: ten TuRBO-1 ledgers (raw and data-informed) plus ten
@@ -281,9 +284,10 @@ device identity and kernel-residency evidence.
 - [ ] F4: run archived Landreman control and FortBO at the original allocation,
   then a labeled resource-matched GPU scaling row.
 - [ ] F5: recover FOCUS artifacts and implement/check the inducing variational
-  derivative model and paired action. The local fixed-hyperparameter model and
-  independent oracle are shipped; FOCUS recovery, stochastic training parity,
-  and the paired action gate remain open.
+  derivative model and paired action. The local fixed-hyperparameter model,
+  adapter/driver path, and independent oracle are shipped; FOCUS recovery,
+  stochastic training parity, and the published paired-action gate remain
+  open.
 - [ ] F6: run both Glas/Bindel perturbation amplitudes, global/local stages,
   SAA/BFGS control, and out-of-sample validation.
 - [ ] F7: publish ledgers, parity tables, utilization, cost breakdowns,
