@@ -1233,8 +1233,40 @@ into the headline number.
   decorative and the problem reduces to writing two endpoints in sixty numbers;
   and moving the *interior* control points must change the objective, which an
   implementation reading only its endpoints would not do.
-- [ ] Add the 14D robot pushing fixture, which needs a rigid-body physics
-  simulator rather than a closed-form reward.
+- [x] Add the 14D robot pushing fixture, which needs a rigid-body physics
+  simulator rather than a closed-form reward. `src/fortbo_push.f90`.
+
+  The TuRBO paper does not define this problem; its README points at
+  `zi-w/Ensemble-Bayesian-Optimization` and lists the three changes it made.
+  That repository is now in `fortbo-bench` provenance and was read. Every
+  number comes from it: the box, the two objects' starts and goals, the
+  shapes and densities, the friction joints capped at force 5 / torque 2 for
+  objects and 2 / 2 for hands, the proportional hand controller
+  `F = m (v* - v) * 30`, the 1/100 timestep, the `int(10 x)` step
+  quantization, the 100 settling steps, and the reward. None of it is
+  derivable.
+
+  **What is ours is named.** Box2D is not reproduced, so published numbers
+  for this problem are not comparable: contact shapes are a capsule per hand
+  and a disc per object, which loses the square's corners, though masses and
+  inertias come from the true shapes. What is reproduced is the structure
+  that makes the problem hard -- fourteen interacting parameters, an
+  objective that is genuinely *discontinuous* at contact changes and at the
+  quantized duration, flat regions where a hand misses entirely, and two
+  coupled sub-problems sharing one table. The gradient is refused by name.
+
+  Two test-design errors are worth recording because both were caught by
+  mutation testing rather than reasoning. Asserting each coordinate changes
+  the objective under a single probe failed on the push-duration coordinate
+  for entirely correct physics -- extending a push after contact is lost does
+  nothing -- so the claim is now that no coordinate is inert under *every*
+  probe. And the suite claimed to pin that contact impulses act at the
+  contact point; removing that coupling left it passing, because the torque
+  coordinates also steer the hand's orientation. There is now no check for
+  it, and the reason is stated: the reference's own friction caps suppress
+  object rotation so completely (measured final spin 1.6e-15 for a
+  deliberately off-centre strike) that the application point is not
+  observable in the final state.
 - [x] Record simple regret, cumulative regret, best feasible value, constraint
   violations, acquisition evaluations, gradient evaluations, ESS for sampled
   policies, memory, transfers, and wall time. `src/fortbo_metrics.f90` keeps one
