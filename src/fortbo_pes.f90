@@ -1,48 +1,52 @@
 module fortbo_pes
     !! Predictive entropy search (ROADMAP BO1).
     !!
-    !! Max-value entropy search asks how much an observation tells us about the
-    !! optimum's *value*. Predictive entropy search asks about its *location*,
-    !! which is the quantity a run actually wants: knowing the optimum is near
-    !! -3.7 is worth much less than knowing where it is.
+    !! Written against Hernandez-Lobato, Hoffman and Ghahramani,
+    !! *Predictive Entropy Search for Efficient Global Optimization*
+    !! (arXiv:1406.2541), read rather than recalled. The paper is fetched by
+    !! `fortbo-bench/scripts/fetch_provenance.py`; nothing is transcribed from
+    !! it, but the constraints below are named as it names them so the two can
+    !! be compared.
     !!
-    !!     PES(x) = H[p(f(x))] - E_{x*}[ H[p(f(x) | x*)] ]
+    !! Conditioning on the optimum's *location* is intractable — it asserts
+    !! `f(z) >= f(x*)` for every `z` at once — so the paper replaces it with
+    !! three simplified constraints:
     !!
-    !! The expectation runs over sampled minimizer *locations*. Conditioning on
-    !! `x*` being the global minimizer is what makes this hard: the exact
-    !! condition is `f(x) >= f(x*)` for every `x` at once, plus a vanishing
-    !! gradient and a positive semidefinite Hessian at `x*`. The published
-    !! method approximates all of that with expectation propagation.
+    !!   * **C1**: `x*` is a local optimum, via `grad f(x*) = 0` and a
+    !!     definiteness condition on `diag[hess f(x*)]`;
+    !!   * **C2**: `f(x*)` is better than every past observation, softened to
+    !!     account for observation noise;
+    !!   * **C3**: `f(x)` is worse than `f(x*)` — conditioning only on the
+    !!     query at hand.
     !!
-    !! **This module is an ingredient of PES, not PES.** It keeps only the
-    !! constraint that a single query's marginal can express — `f(x) >= f(x*)` —
-    !! and computes the resulting entropy *exactly for that constraint*, by
-    !! quadrature over a stated integral rather than by moment matching.
+    !! **FortBO implements C3.** C1 and C2 need expectation propagation over a
+    !! latent vector holding `f(x*)` and the Hessian diagonal, and that is not
+    !! here. Naming them makes the gap checkable instead of leaving a reader to
+    !! infer it from behaviour.
     !!
-    !! That reduction does not reproduce PES's location-awareness, and the
-    !! measurement says so plainly. The weighting factor's dependence on `t` has
-    !! slope `sqrt((1 - rho)/(1 + rho))` when the two standard deviations agree,
-    !! so a query *strongly* correlated with the sampled minimizer gets a
-    !! *flatter* weighting and therefore a smaller entropy reduction — the
-    !! opposite of what a location-aware acquisition must do. The information
-    !! PES actually extracts comes from conditioning the whole posterior on `x*`
-    !! being a stationary minimum, which couples queries and needs expectation
-    !! propagation; none of that is here.
+    !! Under C3 the paper approximates the truncated predictive by a Gaussian of
+    !! matched variance, which makes the entropy closed form rather than a
+    !! quadrature. With `f = [f(x); f(x*)]` jointly normal with mean `m` and
+    !! covariance `V`,
     !!
-    !! What is here is correct and useful on its own: the conditional density
-    !! and its entropy under a minimum constraint, validated against simulation.
-    !! Building the full estimator on top means adding the joint conditioning,
-    !! not tuning this.
+    !!     s    = V11 + V22 - 2 V12,
+    !!     alpha = (m1 - m2) / sqrt(s),        (minimization; the paper
+    !!                                          maximizes and has m2 - m1)
+    !!     beta  = phi(alpha) / Phi(alpha),
+    !!     v     = V11 - beta (beta + alpha) (V11 - V12)^2 / s,
+    !!     H     = 0.5 log(2 pi e (v + noise)).
     !!
-    !! With `(f(x), f(x*))` jointly normal, the conditional density of `f(x)`
-    !! given `f(x) >= f(x*)` is
+    !! `s` collapses toward zero as the query approaches `x*`, where `V11` and
+    !! `V12` coincide, and the formula is then dividing two vanishing
+    !! quantities. The paper's own remedy is applied: `V12` is scaled by the
+    !! largest factor in `[0, 1]` that keeps `s` above a floor, which reads as
+    !! slightly loosening the dependence between `f(x)` and `f(x*)` exactly
+    !! where they are nearly the same variable.
     !!
-    !!     p(t) = phi((t - mu)/sigma)/sigma * Phi(a(t)) / Z,
-    !!     a(t) = (t - mu_star - rho (sigma_star/sigma) (t - mu))
-    !!            / (sigma_star sqrt(1 - rho^2)),
-    !!     Z    = Phi((mu - mu_star) / sqrt(sigma^2 + sigma_star^2 - 2 c)),
-    !!
-    !! and its entropy is integrated directly.
+    !! `fortbo_pes_conditional_entropy` keeps the earlier quadrature over the
+    !! true truncated density. It is not dead code: comparing it against the
+    !! moment-matched form *measures* the approximation the paper makes, rather
+    !! than leaving its size unstated.
 
     use fortnum_kinds, only: dp
     use fortnum_status, only: fortnum_status_t, status_set, FORTNUM_OK, &
@@ -51,6 +55,7 @@ module fortbo_pes
     private
 
     public :: fortbo_pes_conditional_entropy
+    public :: fortbo_pes_matched_variance
     public :: fortbo_predictive_entropy_search
 
     !! Quadrature half-width in standard deviations, and interval count. Eight
@@ -63,7 +68,77 @@ module fortbo_pes
     !! and its entropy is meaningless.
     real(dp), parameter, public :: FORTBO_PES_MASS_FLOOR = 1.0e-12_dp
 
+    !! Floor on `s = V11 + V22 - 2 V12`, below which the matched-variance
+    !! formula divides two vanishing quantities. The paper uses 1e-10 and so
+    !! does this.
+    real(dp), parameter, public :: FORTBO_PES_S_FLOOR = 1.0e-10_dp
+
 contains
+
+    !! Variance of `f(x)` under C3, by the paper's moment matching.
+    !!
+    !! `correlation_scale` reports the factor applied to `V12` to keep `s` above
+    !! its floor: one when nothing was needed, less than one when the query sat
+    !! close enough to `x*` that the two are nearly the same variable. Reporting
+    !! it rather than applying it silently is what lets a caller tell an honest
+    !! variance from a rescued one.
+    subroutine fortbo_pes_matched_variance(mean, sd, star_mean, star_sd, &
+            covariance, variance, correlation_scale, status)
+        real(dp), intent(in) :: mean, sd, star_mean, star_sd, covariance
+        real(dp), intent(out) :: variance
+        real(dp), intent(out) :: correlation_scale
+        type(fortnum_status_t), intent(out) :: status
+        real(dp) :: v11, v22, v12, s, alpha, beta, cdf, pdf, allowed
+
+        variance = 0.0_dp
+        correlation_scale = 1.0_dp
+        if (sd <= 0.0_dp .or. star_sd <= 0.0_dp) then
+            call status_set(status, FORTNUM_DOMAIN_ERROR, &
+                "fortbo pes: standard deviations must be positive")
+            return
+        end if
+
+        v11 = sd*sd
+        v22 = star_sd*star_sd
+        v12 = covariance
+        s = v11 + v22 - 2.0_dp*v12
+        if (s < FORTBO_PES_S_FLOOR) then
+            ! Shrink the dependence just enough to restore a usable `s`. The
+            ! largest admissible scale solves v11 + v22 - 2 k v12 = floor.
+            if (v12 == 0.0_dp) then
+                call status_set(status, FORTNUM_DOMAIN_ERROR, &
+                    "fortbo pes: the pair has no usable spread")
+                return
+            end if
+            allowed = (v11 + v22 - FORTBO_PES_S_FLOOR)/(2.0_dp*v12)
+            correlation_scale = min(max(allowed, 0.0_dp), 1.0_dp)
+            v12 = correlation_scale*v12
+            s = v11 + v22 - 2.0_dp*v12
+        end if
+        if (s <= 0.0_dp) then
+            call status_set(status, FORTNUM_DOMAIN_ERROR, &
+                "fortbo pes: the pair has no usable spread")
+            return
+        end if
+
+        ! FortBO minimizes, so the constraint is f(x) >= f(x*) and alpha carries
+        ! m1 - m2. The paper maximizes and has the opposite sign.
+        alpha = (mean - star_mean)/sqrt(s)
+        cdf = 0.5_dp*(1.0_dp + erf(alpha/sqrt(2.0_dp)))
+        if (cdf <= FORTBO_PES_MASS_FLOOR) then
+            call status_set(status, FORTNUM_DOMAIN_ERROR, &
+                "fortbo pes: the conditioning event has no usable mass")
+            return
+        end if
+        pdf = exp(-0.5_dp*alpha*alpha)/sqrt(8.0_dp*atan(1.0_dp))
+        beta = pdf/cdf
+
+        variance = v11 - beta*(beta + alpha)*(v11 - v12)**2/s
+        ! A truncation cannot raise the variance, and cannot make it negative;
+        ! either outcome here is rounding rather than a finding.
+        variance = min(max(variance, 0.0_dp), v11)
+        call status_set(status, FORTNUM_OK, "")
+    end subroutine fortbo_pes_matched_variance
 
     !! Differential entropy of `f(x)` given `f(x) >= f(x*)`, by Simpson's rule.
     subroutine fortbo_pes_conditional_entropy(mean, sd, star_mean, star_sd, &
@@ -158,6 +233,7 @@ contains
         type(fortnum_status_t), intent(out) :: status
         type(fortnum_status_t) :: local
         real(dp) :: full_entropy, conditional, contribution
+        real(dp) :: matched, scale
         integer :: n, m, i, k, used
 
         value = 0.0_dp
@@ -190,10 +266,17 @@ contains
                 + log(sd(i))
             used = 0
             do k = 1, m
-                call fortbo_pes_conditional_entropy(mean(i), sd(i), &
-                    star_mean(i, k), star_sd(i, k), &
-                    covariance(i, k), conditional, &
-                    local)
+                call fortbo_pes_matched_variance(mean(i), sd(i), &
+                    star_mean(i, k), star_sd(i, k), covariance(i, k), &
+                    matched, scale, local)
+                if (local%code == FORTNUM_OK) then
+                    if (matched <= 0.0_dp) then
+                        conditional = -huge(1.0_dp)
+                    else
+                        conditional = 0.5_dp*log(2.0_dp*exp(1.0_dp) &
+                            *4.0_dp*atan(1.0_dp)) + 0.5_dp*log(matched)
+                    end if
+                end if
                 ! A sample whose conditioning event is degenerate contributes
                 ! nothing rather than aborting the whole batch: one impossible
                 ! minimizer sample should not silently discard the others.

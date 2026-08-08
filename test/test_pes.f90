@@ -22,7 +22,7 @@ program test_pes
     use fortnum_status, only: fortnum_status_t, FORTNUM_OK, FORTNUM_DOMAIN_ERROR
     use fortnum_rng, only: rng_t, rng_seed, rng_normal
     use fortbo_pes, only: fortbo_pes_conditional_entropy, &
-        fortbo_predictive_entropy_search
+        fortbo_predictive_entropy_search, fortbo_pes_matched_variance
     implicit none
 
     integer :: failures
@@ -32,6 +32,9 @@ program test_pes
     call check_conditional_density_against_simulation(failures)
     call check_entropy_is_reduced_by_conditioning(failures)
     call check_correlation_carries_the_information(failures)
+    call check_matched_variance_against_simulation(failures)
+    call check_matched_entropy_tracks_the_exact_one(failures)
+    call check_near_coincidence_is_rescued(failures)
     call check_refusals(failures)
 
     if (failures == 0) then
@@ -245,6 +248,140 @@ contains
         call expect(value(1) == 0.0_dp, &
             "a certain point carries no information", failures)
     end subroutine check_correlation_carries_the_information
+
+    !! The paper's matched variance is the variance of the truncated
+    !! distribution, so simulation of the constrained draws is the oracle. This
+    !! is what separates a correct moment match from a plausible formula.
+    subroutine check_matched_variance_against_simulation(failures)
+        integer, intent(inout) :: failures
+        type(rng_t) :: generator
+        type(fortnum_status_t) :: status
+        integer, parameter :: n_samples = 600000
+        real(dp) :: mean, sd, star_mean, star_sd, covariance
+        real(dp) :: matched, scale, rho
+        real(dp) :: draw_one, draw_two, query, star
+        real(dp) :: total, total_squares, empirical, standard_error
+        integer :: c, k, kept
+        logical :: matches
+
+        matches = .true.
+        do c = 1, 3
+            select case (c)
+            case (1)
+                mean = 0.0_dp; sd = 1.0_dp
+                star_mean = 0.4_dp; star_sd = 1.0_dp; covariance = 0.35_dp
+            case (2)
+                mean = 1.0_dp; sd = 0.7_dp
+                star_mean = 0.0_dp; star_sd = 1.2_dp; covariance = -0.3_dp
+            case (3)
+                mean = -0.5_dp; sd = 2.0_dp
+                star_mean = -1.0_dp; star_sd = 0.5_dp; covariance = 0.4_dp
+            end select
+
+            call fortbo_pes_matched_variance(mean, sd, star_mean, star_sd, &
+                covariance, matched, scale, status)
+            if (status%code /= FORTNUM_OK) matches = .false.
+
+            rho = covariance/(sd*star_sd)
+            call rng_seed(generator, int(90210 + c, int64), status)
+            total = 0.0_dp
+            total_squares = 0.0_dp
+            kept = 0
+            do k = 1, n_samples
+                call rng_normal(generator, draw_one)
+                call rng_normal(generator, draw_two)
+                query = mean + sd*draw_one
+                star = star_mean + star_sd*(rho*draw_one &
+                    + sqrt(1.0_dp - rho*rho)*draw_two)
+                if (query < star) cycle
+                kept = kept + 1
+                total = total + query
+                total_squares = total_squares + query*query
+            end do
+            empirical = total_squares/real(kept, dp) - (total/real(kept, dp))**2
+            ! The variance of a sample variance is dominated by the fourth
+            ! moment; for a near-Gaussian sample that is about 2 v^2 / n.
+            standard_error = empirical*sqrt(2.0_dp/real(kept, dp))
+            if (abs(matched - empirical) > 6.0_dp*standard_error) matches = .false.
+        end do
+        call expect(matches, &
+            "the matched variance equals the truncated variance it approximates", &
+            failures)
+    end subroutine check_matched_variance_against_simulation
+
+    !! The paper replaces the true truncated entropy by that of a Gaussian with
+    !! the same variance. Comparing the two *measures* that approximation rather
+    !! than leaving its size unstated: they must be close, and the matched one
+    !! must be the larger, since among distributions of a given variance the
+    !! Gaussian has the greatest entropy.
+    subroutine check_matched_entropy_tracks_the_exact_one(failures)
+        integer, intent(inout) :: failures
+        type(fortnum_status_t) :: status
+        real(dp) :: matched, scale, exact, gaussian, gap, worst
+        real(dp) :: mean, sd, star_mean, star_sd, covariance
+        integer :: c
+        logical :: bounded, ordered
+
+        bounded = .true.
+        ordered = .true.
+        worst = 0.0_dp
+        do c = 1, 3
+            select case (c)
+            case (1)
+                mean = 0.0_dp; sd = 1.0_dp
+                star_mean = 0.4_dp; star_sd = 1.0_dp; covariance = 0.35_dp
+            case (2)
+                mean = 1.0_dp; sd = 0.7_dp
+                star_mean = 0.0_dp; star_sd = 1.2_dp; covariance = -0.3_dp
+            case (3)
+                mean = -0.5_dp; sd = 2.0_dp
+                star_mean = -1.0_dp; star_sd = 0.5_dp; covariance = 0.4_dp
+            end select
+
+            call fortbo_pes_matched_variance(mean, sd, star_mean, star_sd, &
+                covariance, matched, scale, status)
+            gaussian = 0.5_dp*log(2.0_dp*exp(1.0_dp)*4.0_dp*atan(1.0_dp)) &
+                + 0.5_dp*log(matched)
+            call fortbo_pes_conditional_entropy(mean, sd, star_mean, star_sd, &
+                covariance, exact, status)
+            gap = gaussian - exact
+            worst = max(worst, abs(gap))
+            ! Maximum entropy at fixed variance belongs to the Gaussian.
+            if (gap < -1.0e-9_dp) ordered = .false.
+            if (abs(gap) > 0.1_dp) bounded = .false.
+        end do
+        call expect(ordered, &
+            "the matched entropy is at least the true truncated entropy", failures)
+        call expect(bounded, &
+            "the moment-matching approximation stays under a tenth of a nat", &
+            failures)
+    end subroutine check_matched_entropy_tracks_the_exact_one
+
+    !! The paper warns that `s` collapses as the query approaches `x*`, and
+    !! prescribes shrinking the dependence to restore it. The rescue must fire,
+    !! must be reported, and must leave a usable variance.
+    subroutine check_near_coincidence_is_rescued(failures)
+        integer, intent(inout) :: failures
+        type(fortnum_status_t) :: status
+        real(dp) :: matched, scale
+
+        ! Nearly the same variable: V11, V22 and V12 all essentially one.
+        call fortbo_pes_matched_variance(0.0_dp, 1.0_dp, 0.0_dp, 1.0_dp, &
+            1.0_dp - 1.0e-14_dp, matched, scale, status)
+        call expect(status%code == FORTNUM_OK, &
+            "a near-coincident query is rescued rather than refused", failures)
+        call expect(scale < 1.0_dp, &
+            "the dependence scaling is reported when it is applied", failures)
+        call expect(matched >= 0.0_dp .and. matched <= 1.0_dp, &
+            "the rescued variance stays inside its prior bound", failures)
+
+        ! Away from coincidence nothing is rescaled, so a caller can tell an
+        ! honest variance from a rescued one.
+        call fortbo_pes_matched_variance(0.0_dp, 1.0_dp, 0.3_dp, 1.0_dp, &
+            0.2_dp, matched, scale, status)
+        call expect(scale == 1.0_dp, &
+            "no scaling is applied when none is needed", failures)
+    end subroutine check_near_coincidence_is_rescued
 
     subroutine check_refusals(failures)
         integer, intent(inout) :: failures

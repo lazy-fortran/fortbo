@@ -283,19 +283,33 @@ Concretely, and binding on every work package below:
   by Simpson's rule, applied both to the entropy itself and to the difference
   `H(f) - H(f | f >= y*)` that MES is defined as — the definition of entropy
   rather than a rearrangement of the closed form.
-- [ ] Implement predictive entropy search. **Partially built, deliberately not
-  checked off.** `src/fortbo_pes.f90` computes the conditional density and
-  entropy of `f(x)` under the constraint `f(x) >= f(x*)`, exactly for that
-  constraint and validated against simulation. It is an *ingredient* of PES and
-  not PES, and the measurement says so: the weighting factor's slope in `t` is
-  `sqrt((1 - rho)/(1 + rho))`, so a query strongly correlated with the sampled
-  minimizer gets a flatter constraint and therefore a *smaller* entropy
-  reduction — the opposite of location-aware. The information PES actually
-  extracts comes from conditioning the whole posterior on `x*` being a
-  stationary minimum, which couples queries and needs expectation propagation.
-  The test asserts the behaviour that occurs rather than the one that would be
-  convenient; asserting the convenient direction would have hidden that the
-  single-query reduction cannot carry location information at all.
+- [ ] Implement predictive entropy search. **C3 built against the paper; C1 and
+  C2 outstanding.** Written from arXiv:1406.2541 read rather than recalled — see
+  `fortbo-bench/scripts/fetch_provenance.py`, which fetches the sources FortBO
+  is built against into a gitignored `provenance/`.
+
+  The paper replaces intractable conditioning on the optimum's location with
+  three simplified constraints: **C1** that `x*` is a local optimum
+  (`grad f(x*) = 0`, definite Hessian diagonal), **C2** that `f(x*)` beats every
+  past observation, and **C3** that `f(x)` is worse than `f(x*)`.
+  `src/fortbo_pes.f90` implements **C3** using the paper's own moment-matched
+  variance rather than the quadrature written from memory first, including its
+  `s`-floor safeguard for queries near `x*` — which is now *reported* through
+  `correlation_scale` so a caller can tell an honest variance from a rescued
+  one.
+
+  **C3 alone is not location-aware, and the paper's formula confirms it.** With
+  matched variances the entropy reduction grows as the query becomes *less*
+  correlated with the sampled minimizer, which is the opposite of what a
+  location-aware acquisition needs. The location information lives in C1 and C2,
+  which need expectation propagation over a latent vector holding `f(x*)` and
+  the Hessian diagonal. Reading the paper turned a vague suspicion into a
+  precise statement of what is missing.
+
+  The earlier quadrature is kept: comparing it against the matched form
+  *measures* the paper's approximation instead of leaving its size unstated, and
+  the test confirms the matched entropy is the larger of the two, as maximum
+  entropy at fixed variance requires.
 - [x] Implement Monte Carlo acquisition evaluation with common random numbers,
   antithetic draws, reparameterized posterior samples, and exact gradients.
   `src/fortbo_monte_carlo.f90` freezes the standard normal base draws once,
@@ -491,6 +505,14 @@ Concretely, and binding on every work package below:
   moments back fixes it: the prior then says "typical for here", which is what
   a trust region means. This is why TuRBO standardizes per region, and it is
   not cosmetic.
+  **Constants checked against the paper.** arXiv:1910.01739 supplementary D
+  gives `tau_succ = 3`, `L_min = 2^-7`, `L_max = 1.6`, `L_init = 0.8`, which
+  FortBO matches. It gives `tau_fail = ceil(d/q)`, where FortBO uses
+  `ceil(max(4, d)/q)` — the authors' reference implementation applies the floor
+  of four and the paper's text does not mention it. FortBO follows the code and
+  records the divergence here rather than leaving a reader to wonder which was
+  intended.
+
 - [x] Implement **DTuRBO**, the derivative-enabled trust-region policy, in its
   three composable modes: derivative observations in the surrogate, posterior
   gradient/Hessian local quadratic models solved as bound-constrained
