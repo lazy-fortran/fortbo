@@ -15,7 +15,8 @@ module fortbo_test_posteriors
     use fortnum_rng, only: rng_t, rng_normal
     use fortbo_posterior, only: fortbo_posterior_t, FORTBO_CAP_MOMENTS, &
         FORTBO_CAP_COVARIANCE, FORTBO_CAP_JOINT_SAMPLE, FORTBO_CAP_REPARAM_SAMPLE, &
-        FORTBO_CAP_LOG_DENSITY, FORTBO_CAP_MOMENT_GRADIENT
+        FORTBO_CAP_LOG_DENSITY, FORTBO_CAP_MOMENT_GRADIENT, &
+        FORTBO_CAP_MOMENT_HESSIAN
     implicit none
     private
 
@@ -53,6 +54,8 @@ module fortbo_test_posteriors
         procedure, public :: capabilities => curved_capabilities
         procedure, public :: moments => curved_moments
         procedure, public :: moment_gradient => curved_moment_gradient
+        procedure, public :: moment_hessian => curved_moment_hessian
+        procedure, public :: minimizer => curved_minimizer
     end type curved_posterior_t
 
     type, extends(fortbo_posterior_t), public :: moments_only_posterior_t
@@ -214,7 +217,7 @@ contains
     pure integer function curved_capabilities(self) result(caps)
         class(curved_posterior_t), intent(in) :: self
 
-        caps = FORTBO_CAP_MOMENTS + FORTBO_CAP_MOMENT_GRADIENT
+        caps = FORTBO_CAP_MOMENTS + FORTBO_CAP_MOMENT_GRADIENT + FORTBO_CAP_MOMENT_HESSIAN
         if (self%dimension < 1) caps = 0
     end function curved_capabilities
 
@@ -255,6 +258,49 @@ contains
         end do
         call status_set(status, FORTNUM_OK, "")
     end subroutine curved_moment_gradient
+
+    !! Exact Hessians of the same two moments. The mean is `sum(x**2)`, so its
+    !! curvature is `2 I`. The standard deviation is `sqrt(1 + t**2)` with
+    !! `t = sum(x)`, whose second derivative works out to `1/s**3` in every
+    !! entry, since `s**2 - t**2` is one by construction. Both are written from
+    !! the definitions rather than differenced, so a test comparing against them
+    !! is comparing against an independent statement of the truth.
+    subroutine curved_moment_hessian(self, point, mean_hessian, sd_hessian, status)
+        class(curved_posterior_t), intent(in) :: self
+        real(dp), intent(in) :: point(:)
+        real(dp), intent(out) :: mean_hessian(:, :)
+        real(dp), intent(out) :: sd_hessian(:, :)
+        type(fortnum_status_t), intent(out) :: status
+        real(dp) :: total, standard_deviation
+        integer :: j
+
+        mean_hessian = 0.0_dp
+        sd_hessian = 0.0_dp
+        if (size(point) /= self%dimension .or. &
+            size(mean_hessian, 1) /= self%dimension .or. &
+            size(mean_hessian, 2) /= self%dimension .or. &
+            size(sd_hessian, 1) /= self%dimension .or. &
+            size(sd_hessian, 2) /= self%dimension) then
+            call status_set(status, FORTNUM_DOMAIN_ERROR, &
+                "curved posterior: hessian shape does not match dimension")
+            return
+        end if
+        total = sum(point)
+        standard_deviation = sqrt(1.0_dp + total**2)
+        do j = 1, self%dimension
+            mean_hessian(j, j) = 2.0_dp
+        end do
+        sd_hessian = 1.0_dp/standard_deviation**3
+        call status_set(status, FORTNUM_OK, "")
+    end subroutine curved_moment_hessian
+
+    !! The mean's minimizer, stated rather than searched for.
+    pure function curved_minimizer(self) result(point)
+        class(curved_posterior_t), intent(in) :: self
+        real(dp) :: point(self%dimension)
+
+        point = 0.0_dp
+    end function curved_minimizer
 
     pure integer function moments_only_n_inputs(self) result(n)
         class(moments_only_posterior_t), intent(in) :: self

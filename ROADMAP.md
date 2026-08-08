@@ -311,10 +311,34 @@ Concretely, and binding on every work package below:
   moments back fixes it: the prior then says "typical for here", which is what
   a trust region means. This is why TuRBO standardizes per region, and it is
   not cosmetic.
-- [ ] Implement **DTuRBO**, the derivative-enabled trust-region policy, in its
+- [x] Implement **DTuRBO**, the derivative-enabled trust-region policy, in its
   three composable modes: derivative observations in the surrogate, posterior
   gradient/Hessian local quadratic models solved as bound-constrained
   subproblems, and gradient-based acquisition optimization inside the region.
+  Modes 1 and 3 need no code of their own — mode 1 is the surrogate
+  `fortbo_fit_from_history` already selects from the data, and mode 3 is what
+  `fortbo_optimize_acquisition` already does inside the region bounds. Mode 2
+  is `src/fortbo_dturbo.f90`, and it was blocked until FortML gained
+  `predict_input_hvp`, because `hess sigma` existed nowhere in the stack.
+
+  `lambda` is drawn from a standard normal truncated to the non-negative half
+  line, by inverting that distribution's own CDF rather than by taking `abs` of
+  a normal draw: the two give the same distribution but consume the stream
+  differently, and replay against a recorded run would break. The truncation is
+  not decorative — a negative `lambda` would subtract the standard deviation's
+  gradient and steer the step *away* from uncertainty, which is the opposite of
+  an acquisition. `test_dturbo` checks the sampled distribution against
+  `2*Phi(x) - 1` with the tolerance taken from sampling error, and checks that
+  `lambda = 0` recovers exactly a Newton step on the posterior mean.
+
+  Radius adaptation uses the classical ratio test rather than the success and
+  failure counters. The distinction is behavioral and is tested as such: a step
+  that improves the objective while the model predicted ten times that
+  improvement must *shrink* the region, because the model is badly wrong. A
+  counter rule scores that as a success and would eventually expand. An
+  indefinite Hessian is still not repaired; mode 2 relies on
+  `fortbo_quadratic` following negative curvature to the boundary rather than
+  working around it.
 - [ ] Add mixed-integer and categorical optimizers with typed derivative
   refusals for discrete coordinates and continuous products for the rest.
 - [ ] Add parallel/asynchronous workers, pending-point fantasizing, retries,
