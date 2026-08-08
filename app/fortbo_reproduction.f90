@@ -47,6 +47,9 @@ program fortbo_reproduction
     config%batch_size = 1
     config%n_initial = n_initial
     config%lengthscale = 0.25_dp
+    config%success_tolerance = 10
+    config%failure_tolerance = max(4, dimension)
+    config%improvement_tolerance = 1.0e-3_dp
     call driver%initialize(dimension, config, seed, status)
     if (status%code /= FORTNUM_OK) then
         print *, "ERROR initialize ", trim(status%msg)

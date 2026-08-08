@@ -80,6 +80,8 @@ module fortbo_turbo_driver
         !! dimension/batch rule; nonzero values pin a replay configuration.
         integer :: success_tolerance = 3
         integer :: failure_tolerance = 0
+        !! Relative improvement threshold used by the upstream Turbo state.
+        real(dp) :: improvement_tolerance = 0.0_dp
         !! Draw candidates from a Sobol sequence rather than the generator.
         logical :: quasi_random = .true.
     end type fortbo_turbo_config_t
@@ -145,7 +147,8 @@ contains
                 "fortbo turbo driver: EI replay currently requires q=1")
             return
         end if
-        if (config%success_tolerance < 1 .or. config%failure_tolerance < 0) then
+        if (config%success_tolerance < 1 .or. config%failure_tolerance < 0 .or. &
+                config%improvement_tolerance < 0.0_dp) then
             call status_set(status, FORTNUM_DOMAIN_ERROR, &
                 "fortbo turbo driver: invalid trust-state tolerance")
             return
@@ -164,6 +167,7 @@ contains
             if (config%failure_tolerance > 0) then
                 self%regions(k)%failure_tolerance = config%failure_tolerance
             end if
+            self%regions(k)%improvement_tolerance = config%improvement_tolerance
             call self%histories(k)%initialize(n_inputs, 0, status)
             if (status%code /= FORTNUM_OK) return
         end do
