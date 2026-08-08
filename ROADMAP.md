@@ -51,6 +51,14 @@ FortBO-side audit: ten TuRBO-1 ledgers (raw and data-informed) plus ten
 data-informed four-region TuRBO-m ledgers, all at 256 calls and eight workers.
 FortBO B5 rows are still pending, so this closes control evidence only.
 
+FortBO's TuRBO driver now accepts an explicit success mask: failed truth calls
+remain in the history and trust accounting as imputed worst cases, but are
+excluded from surrogate training and cannot become incumbents. The
+`fortbo_b5_protocol` executable and `scripts/run_fortbo_b5.py` provide the
+eight-worker external-evaluator bridge for the remaining value-only rows.
+Those rows are deliberately labeled batched FortBO ask/tell evidence until a
+completion-driven policy with matching failure semantics is available.
+
 ## Active blockers
 
 1. The Landreman archive and its historical Slurm job are now pinned in the
@@ -280,7 +288,7 @@ device identity and kernel-residency evidence.
   trust-state, and completion traces.
 - [ ] F3: run five paired seeds for raw/data-informed TuRBO-1 and
   data-informed TuRBO-m at 256 calls and eight workers; control ledgers are
-  audited, while the FortBO rows remain pending.
+  audited, while the batched FortBO rows remain pending.
 - [ ] F4: run archived Landreman control and FortBO at the original allocation,
   then a labeled resource-matched GPU scaling row.
 - [ ] F5: recover FOCUS artifacts and implement/check the inducing variational

@@ -36,6 +36,7 @@ program test_turbo_driver
     call check_replayable(failures)
     call check_driver_uses_gradients(failures)
     call check_driver_uses_variational_model(failures)
+    call check_driver_records_failures(failures)
     call check_frozen_initial_design(failures)
     call check_frozen_candidate_pool(failures)
     call check_frozen_candidate_regions(failures)
@@ -438,6 +439,47 @@ contains
         call expect(any(points(1, :) /= initial(1, :)), &
             "variational derivative driver selects a candidate", failures)
     end subroutine check_driver_uses_variational_model
+
+    subroutine check_driver_records_failures(failures)
+        integer, intent(inout) :: failures
+        type(fortbo_turbo_config_t) :: config
+        type(fortbo_turbo_driver_t) :: driver
+        type(fortnum_status_t) :: status
+        real(dp) :: point(1, 2), value(1)
+        logical :: successful(1)
+        integer :: region(1)
+
+        config%n_regions = 1
+        config%batch_size = 1
+        config%n_initial = 2
+        call driver%initialize(2, config, 31415, status)
+        call expect(status%code == FORTNUM_OK, &
+            "failure-aware driver configuration initializes", failures)
+        call driver%ask(point, region, status)
+        call expect(status%code == FORTNUM_OK, &
+            "failure-aware driver asks for a point", failures)
+        value(1) = huge(1.0_dp)
+        successful(1) = .false.
+        call driver%tell(point, region, value, status, successful=successful)
+        call expect(status%code == FORTNUM_OK, &
+            "a failed evaluation is accepted by the driver", failures)
+        call expect(driver%histories(1)%count == 1, &
+            "failed evaluations remain in history", failures)
+        call expect(driver%histories(1)%usable_count() == 0, &
+            "failed evaluations are excluded from fitting", failures)
+        call expect(driver%best_value == huge(1.0_dp), &
+            "failed evaluations do not become incumbents", failures)
+        value(1) = 0.125_dp
+        successful(1) = .true.
+        call driver%ask(point, region, status)
+        call driver%tell(point, region, value, status, successful=successful)
+        call expect(status%code == FORTNUM_OK, &
+            "a later successful evaluation remains usable", failures)
+        call expect(driver%histories(1)%usable_count() == 1, &
+            "successful rows remain available to the surrogate", failures)
+        call expect(driver%best_value == value(1), &
+            "successful evaluations update the incumbent", failures)
+    end subroutine check_driver_records_failures
 
     !! A caller-supplied initial design takes precedence over the local Sobol
     !! implementation. This is the exact-replay escape hatch for upstream

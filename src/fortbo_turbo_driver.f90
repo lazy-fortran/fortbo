@@ -44,7 +44,8 @@ module fortbo_turbo_driver
     use fortnum_sobol, only: sobol_t, sobol_initialize, sobol_next, &
         SOBOL_MAX_DIMENSION
     use fortbo_posterior, only: fortbo_posterior_t
-    use fortbo_history, only: fortbo_history_t
+    use fortbo_history, only: fortbo_history_t, FORTBO_MISSING_IMPUTE_WORST, &
+        FORTBO_OUTCOME_FAILED
     use fortbo_trust_region, only: fortbo_trust_region_t
     use fortbo_acquisition, only: fortbo_expected_improvement
     use fortbo_turbo, only: fortbo_turbo_candidates, fortbo_candidate_count, &
@@ -256,6 +257,11 @@ contains
             self%regions(k)%improvement_tolerance = config%improvement_tolerance
             call self%histories(k)%initialize(n_inputs, 0, status)
             if (status%code /= FORTNUM_OK) return
+            ! The driver can receive failed evaluations through the optional
+            ! `successful` tell argument. Store those rows as imputed worst
+            ! cases so they remain in the checkpoint and trust trace, while
+            ! `usable_count` keeps them out of surrogate training.
+            self%histories(k)%missing_policy = FORTBO_MISSING_IMPUTE_WORST
         end do
         call rng_seed(self%generator, int(seed, kind(1_8)), status)
         if (status%code /= FORTNUM_OK) return
@@ -647,15 +653,18 @@ contains
     !! that proposed it. A region whose trust region has collapsed is restarted
     !! from a fresh center with an empty history: restarting while keeping the
     !! old data would rebuild the same collapsed model and collapse again.
-    subroutine driver_tell(self, points, regions, values, status, gradients)
+    subroutine driver_tell(self, points, regions, values, status, gradients, &
+            successful)
         class(fortbo_turbo_driver_t), intent(inout) :: self
         real(dp), intent(in) :: points(:, :)
         integer, intent(in) :: regions(:)
         real(dp), intent(in) :: values(:)
         type(fortnum_status_t), intent(out) :: status
         real(dp), intent(in), optional :: gradients(:, :)
+        logical, intent(in), optional :: successful(:)
         real(dp), allocatable :: batch_points(:, :), batch_values(:)
         integer :: k, i, n, count
+        logical :: observation_ok
 
         n = size(values)
         if (.not. self%started) then
@@ -681,9 +690,21 @@ contains
                 return
             end if
         end if
+        if (present(successful)) then
+            if (size(successful) /= n) then
+                call status_set(status, FORTNUM_DOMAIN_ERROR, &
+                    "fortbo turbo driver: success mask does not match the batch")
+                return
+            end if
+        end if
 
         do i = 1, n
-            if (present(gradients)) then
+            observation_ok = .true.
+            if (present(successful)) observation_ok = successful(i)
+            if (.not. observation_ok) then
+                call self%histories(regions(i))%add(points(i, :), status, &
+                    outcome=FORTBO_OUTCOME_FAILED)
+            else if (present(gradients)) then
                 call self%histories(regions(i))%add(points(i, :), status, &
                     objective=values(i), gradient=gradients(i, :))
             else
@@ -691,7 +712,7 @@ contains
                     objective=values(i))
             end if
             if (status%code /= FORTNUM_OK) return
-            if (values(i) < self%best_value) then
+            if (observation_ok .and. values(i) < self%best_value) then
                 self%best_value = values(i)
                 self%best_point = points(i, :)
             end if
