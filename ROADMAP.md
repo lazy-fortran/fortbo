@@ -466,8 +466,31 @@ Concretely, and binding on every work package below:
   indefinite Hessian is still not repaired; mode 2 relies on
   `fortbo_quadratic` following negative curvature to the boundary rather than
   working around it.
-- [ ] Add mixed-integer and categorical optimizers with typed derivative
+- [x] Add mixed-integer and categorical optimizers with typed derivative
   refusals for discrete coordinates and continuous products for the rest.
+  `src/fortbo_mixed.f90` searches the discrete coordinates by neighbourhood —
+  an integer to its two neighbours, a categorical to each of its other levels —
+  and accepts a move only if it improves. Enumerating the discrete product is
+  exponential and sampling it wastes most draws on combinations already
+  rejected.
+
+  A mixed space has no gradient. Not a gradient that is hard to compute: the
+  acquisition is a step function of an integer coordinate and a finite table of
+  a categorical one, so the derivative is undefined *everywhere* rather than
+  awkward somewhere. The typed refusal exists so a caller gets a named error
+  instead of a finite-difference estimate of a step function — zero almost
+  everywhere and enormous exactly at the jumps, which carries no information
+  and still looks like a derivative. The test checks the refusal fires on a
+  mixed space and does *not* fire on a continuous one, since refusing there
+  would break the ordinary gradient path.
+
+  Neighbourhood moves are computed in the *decoded* space and re-encoded: a
+  fixed step on the unit cube lands on a different integer for different ranges
+  and on none at all for a range of one. `test_mixed` checks the neighbourhood
+  against exhaustive enumeration, checks the walk reaches the exhaustive
+  minimum from every start, and checks that a truncated walk reports
+  `converged = .false.` rather than passing off a budget exhaustion as a local
+  optimum.
 - [ ] Add parallel/asynchronous workers, pending-point fantasizing, retries,
   timeouts, and failure-aware objective/cost handling.
 
