@@ -28,6 +28,7 @@ program fortbo_bench_ordering
     use fortnum_status, only: fortnum_status_t, FORTNUM_OK
     use fortbo_ordering_bench, only: bench_run_turbo, bench_run_random, &
         bench_problem_id, bench_median
+    use, intrinsic :: iso_fortran_env, only: real64
     implicit none
 
     character(len=64) :: argument
@@ -81,27 +82,27 @@ program fortbo_bench_ordering
     ! against a Python reference that also times only its optimization loop.
     allocate (single_wall(n_seeds), several_wall(n_seeds), random_wall(n_seeds))
     do s = 1, n_seeds
-        call cpu_time(started)
+        started = wall_seconds()
         call bench_run_turbo(problem, 1, 100 + s, budget, n_initial, &
             single(s), status)
-        call cpu_time(finished)
+        finished = wall_seconds()
         single_wall(s) = finished - started
         if (status%code /= FORTNUM_OK) then
             print *, "turbo-1 failed: ", trim(status%msg)
             error stop 1
         end if
-        call cpu_time(started)
+        started = wall_seconds()
         call bench_run_turbo(problem, n_regions, 100 + s, budget, n_initial, &
             several(s), status)
-        call cpu_time(finished)
+        finished = wall_seconds()
         several_wall(s) = finished - started
         if (status%code /= FORTNUM_OK) then
             print *, "turbo-m failed: ", trim(status%msg)
             error stop 1
         end if
-        call cpu_time(started)
+        started = wall_seconds()
         call bench_run_random(problem, 100 + s, budget, random(s), status)
-        call cpu_time(finished)
+        finished = wall_seconds()
         random_wall(s) = finished - started
         if (status%code /= FORTNUM_OK) then
             print *, "random failed: ", trim(status%msg)
@@ -117,5 +118,23 @@ program fortbo_bench_ordering
         bench_median(random)
     print *, "TIMING ", trim(problem_name), bench_median(single_wall), &
         bench_median(several_wall), bench_median(random_wall)
+
+contains
+
+    !! Wall-clock seconds.
+    !!
+    !! `cpu_time` sums processor time across threads, so a multithreaded BLAS
+    !! reports several times the elapsed time and a comparison against a
+    !! Python reference timed with `perf_counter` becomes meaningless -- and
+    !! meaningless in the direction that flatters whichever side is
+    !! single-threaded. `system_clock` measures elapsed time on both.
+    function wall_seconds() result(seconds)
+        use, intrinsic :: iso_fortran_env, only: int64
+        real(real64) :: seconds
+        integer(int64) :: ticks, rate
+
+        call system_clock(ticks, rate)
+        seconds = real(ticks, real64)/real(rate, real64)
+    end function wall_seconds
 
 end program fortbo_bench_ordering

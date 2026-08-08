@@ -33,6 +33,7 @@ program fortbo_bench_acquisitions
     use fortbo_entropy, only: fortbo_max_value_entropy_search
     use fortbo_fortml, only: fortbo_gp_posterior_t
     use fortbo_posterior, only: fortbo_posterior_t
+    use, intrinsic :: iso_fortran_env, only: real64
     implicit none
 
     integer :: n_candidates, n_train, n_samples
@@ -115,9 +116,9 @@ program fortbo_bench_acquisitions
     ! The posterior evaluation itself, timed separately. Every acquisition
     ! pays it, so reporting it apart is what stops a slow acquisition hiding
     ! behind a slow posterior or the reverse.
-    call cpu_time(started)
+    started = wall_seconds()
     call posterior%moments(candidates, mean, variance, status)
-    call cpu_time(finished)
+    finished = wall_seconds()
     sd = sqrt(max(variance, 0.0_dp))
     print *, "TIME posterior_moments ", finished - started, sum(mean), sum(sd)
 
@@ -157,23 +158,39 @@ program fortbo_bench_acquisitions
         call rng_uniform(generator, draw)
         optimum_samples(k) = best - 0.5_dp*draw
     end do
-    call cpu_time(started)
+    started = wall_seconds()
     call fortbo_max_value_entropy_search(mean, sd, optimum_samples, values, &
         status)
-    call cpu_time(finished)
+    finished = wall_seconds()
     print *, "TIME mes ", finished - started, sum(values), &
         merge(0, 1, status%code == FORTNUM_OK)
 
 contains
+
+    !! Wall-clock seconds.
+    !!
+    !! `cpu_time` sums processor time across threads, so a multithreaded BLAS
+    !! reports several times the elapsed time and a comparison against a
+    !! Python reference timed with `perf_counter` becomes meaningless -- and
+    !! meaningless in the direction that flatters whichever side is
+    !! single-threaded. `system_clock` measures elapsed time on both.
+    function wall_seconds() result(seconds)
+        use, intrinsic :: iso_fortran_env, only: int64
+        real(real64) :: seconds
+        integer(int64) :: ticks, rate
+
+        call system_clock(ticks, rate)
+        seconds = real(ticks, real64)/real(rate, real64)
+    end function wall_seconds
 
     subroutine time_acquisition(name, acquisition)
         character(len=*), intent(in) :: name
         class(fortbo_acquisition_t), intent(in) :: acquisition
         real(dp) :: begin, done
 
-        call cpu_time(begin)
+        begin = wall_seconds()
         call acquisition%value(posterior, candidates, values, status)
-        call cpu_time(done)
+        done = wall_seconds()
         print *, "TIME "//name//" ", done - begin, sum(values), &
             merge(0, 1, status%code == FORTNUM_OK)
         if (status%code /= FORTNUM_OK) print *, "   refused: ", trim(status%msg)
