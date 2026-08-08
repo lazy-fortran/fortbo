@@ -295,8 +295,29 @@ Concretely, and binding on every work package below:
 - [ ] Implement batch **qKG**, Thompson sampling as a batch rule, and fantasy
   observations. qKG needs the fantasy machinery over `q` simultaneous
   observations, which is a different construction from the three above.
-- [ ] Implement constrained, cost-aware, multi-fidelity, multi-objective,
-  preference, and risk-sensitive acquisitions.
+- [x] Implement **constrained and cost-aware** acquisitions.
+  `src/fortbo_constrained.f90` weights a base acquisition by the probability of
+  feasibility, or divides it by cost to the power `alpha`. Both are weightings,
+  and both are wrong in an instructive way if applied naively.
+
+  Weighting by feasibility is only valid because expected improvement is
+  non-negative. Applied to an acquisition that can go negative — UCB under a
+  minimization convention — multiplying by a small probability moves the value
+  *up*, so an almost certainly infeasible point outranks a feasible one and the
+  ordering is inverted with nothing in the output saying so. A negative base
+  value is therefore refused, and `test_constrained` asserts that refusal
+  directly rather than trusting callers to notice.
+
+  `alpha` exists because the raw improvement-per-cost ratio diverges as cost
+  goes to zero, so a cheap and useless point beats an expensive and excellent
+  one. It interpolates between ignoring cost and full per-unit accounting, and
+  the test pins both endpoints. A non-positive cost is refused rather than
+  clamped: it almost always means a cost model fitted in log space and never
+  exponentiated, and clamping would hide that.
+
+  Multi-objective acquisitions are already covered by `src/fortbo_pareto.f90`
+  and preference acquisitions by `src/fortbo_preference.f90`.
+- [ ] Implement multi-fidelity and risk-sensitive acquisitions.
 
 ### BO2: surrogate integration
 
