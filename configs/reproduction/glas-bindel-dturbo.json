@@ -3,6 +3,8 @@
   "config_id": "glas-bindel-dturbo-adamcv",
   "config_revision": "2026-08-08",
   "status": "literature-only",
+  "fortbo_result_label": "fortbo-exact-derivative",
+  "published_derivative_parity": "blocked",
   "source": [
     {
       "id": "glas_bindel_paper",

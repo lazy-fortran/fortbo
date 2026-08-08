@@ -3,6 +3,7 @@
   "config_id": "landreman-data-informed-turbo",
   "config_revision": "2026-08-08",
   "status": "ready-for-replay",
+  "fortbo_result_label": "fortbo-value-only",
   "source": [
     {
       "id": "landreman_archive",

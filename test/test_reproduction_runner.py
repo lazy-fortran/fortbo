@@ -54,14 +54,16 @@ class ReproductionRunnerTests(unittest.TestCase):
 
     def test_physics_case_is_not_silently_replaced_by_synthetic_data(self):
         result = self.run_runner(
-            "--implementation", "fortbo", "--case", "landreman-pca-turbo",
+            "--implementation", "fortbo", "--case", "glas-bindel-dturbo-adamcv",
             "--budget", "2", "--initial", "1",
+            "--config", str(ROOT / "configs/reproduction/glas-bindel-dturbo.json"),
         )
         self.assertEqual(result.returncode, 0, result.stderr)
         payload = json.loads(result.stdout)
         self.assertEqual(payload["run"]["status"], "refused")
         self.assertEqual(payload["ledger"], [])
         self.assertIn("physics evaluators", payload["run"]["refusal_reason"])
+        self.assertEqual(payload["run"]["result_label"], "fortbo-exact-derivative")
 
     def test_output_and_scratch_are_the_same_common_document(self):
         with tempfile.TemporaryDirectory() as directory:

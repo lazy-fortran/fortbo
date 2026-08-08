@@ -343,15 +343,16 @@ def run_botorch(args: argparse.Namespace) -> Dict[str, Any]:
     return _finish_payload(payload)
 
 
-def load_config(path: Optional[Path]) -> Tuple[Optional[str], Optional[str]]:
+def load_config(path: Optional[Path]) -> Tuple[Optional[str], Optional[str], Optional[str]]:
     if path is None:
-        return None, None
+        return None, None, None
     try:
         raw = path.read_bytes()
         data = json.loads(raw)
     except (OSError, json.JSONDecodeError) as error:
         raise ValueError(f"cannot read config {path}: {error}") from error
-    return data.get("config_id"), hashlib.sha256(raw).hexdigest()
+    return (data.get("config_id"), hashlib.sha256(raw).hexdigest(),
+            data.get("fortbo_result_label"))
 
 
 def refused_payload(args: argparse.Namespace, reason: str) -> Dict[str, Any]:
@@ -362,7 +363,7 @@ def refused_payload(args: argparse.Namespace, reason: str) -> Dict[str, Any]:
 
 
 def execute(args: argparse.Namespace) -> Dict[str, Any]:
-    config_id, config_digest = load_config(args.config)
+    config_id, config_digest, result_label = load_config(args.config)
     if args.case != "synthetic-quadratic":
         reason = (
             f"no evaluator adapter is registered for case {args.case!r}; "
@@ -382,6 +383,9 @@ def execute(args: argparse.Namespace) -> Dict[str, Any]:
     if config_id is not None:
         payload["provenance"]["config_id"] = config_id
         payload["provenance"]["config_sha256"] = config_digest
+    if result_label is not None:
+        payload["run"]["result_label"] = result_label
+        payload["provenance"]["result_label"] = result_label
     return payload
 
 
