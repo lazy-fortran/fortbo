@@ -23,6 +23,7 @@ ROOT = Path(__file__).resolve().parents[1]
 @dataclass
 class Row:
     evaluation: int
+    region: int
     point: np.ndarray
     value: float
     best: float
@@ -46,6 +47,7 @@ def parse_rows(output: str, dimension: int) -> list[Row]:
         point_end = 3 + dimension
         rows.append(Row(
             evaluation=int(fields[1]),
+            region=int(fields[2]),
             point=np.array([float(item) for item in fields[3:point_end]],
                            dtype=np.float64),
             value=float(fields[point_end]),
@@ -85,8 +87,16 @@ def check_frozen_proposals(
     if frozen_candidates is not None:
         if len(rows) == initial:
             return
+        regions = max(row.region for row in rows)
+        if regions < 1 or len(frozen_candidates) % regions != 0:
+            raise ValueError("frozen candidate pool is not divisible by regions")
+        per_region = len(frozen_candidates)//regions
         for row in rows[initial:]:
-            if not np.any(np.all(np.isclose(frozen_candidates, row.point,
+            if row.region < 1 or row.region > regions:
+                raise AssertionError(f"invalid region at evaluation {row.evaluation}")
+            pool_start = (row.region - 1)*per_region
+            pool = frozen_candidates[pool_start:pool_start + per_region]
+            if not np.any(np.all(np.isclose(pool, row.point,
                                              rtol=0.0, atol=atol), axis=1)):
                 raise AssertionError(
                     f"proposal at evaluation {row.evaluation} is not in "

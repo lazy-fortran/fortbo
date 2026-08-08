@@ -100,9 +100,10 @@ module fortbo_turbo_driver
         !! When present, these rows take precedence over `quasi_random` and are
         !! consumed in ask order, including across multiple regions.
         real(dp), allocatable :: frozen_initial_design(:, :)
-        !! Optional caller-owned candidate pool for cross-language replay. The
-        !! rows are unit-cube candidates and are scored by the normal posterior
-        !! and acquisition path; supplying them does not bypass selection.
+        !! Optional caller-owned candidate pools for cross-language replay.
+        !! Rows are unit-cube candidates and are scored by the normal posterior
+        !! and acquisition path; supplying them does not bypass selection. For
+        !! TuRBO-m, concatenate one equal-sized pool per region in region order.
         real(dp), allocatable :: frozen_candidates(:, :)
     end type fortbo_turbo_config_t
 
@@ -192,7 +193,8 @@ contains
             return
         end if
         if (allocated(config%frozen_candidates)) then
-            if (size(config%frozen_candidates, 1) < config%batch_size .or. &
+            if (size(config%frozen_candidates, 1) < config%batch_size*config%n_regions .or. &
+                    mod(size(config%frozen_candidates, 1), config%n_regions) /= 0 .or. &
                     size(config%frozen_candidates, 2) /= n_inputs .or. &
                     any(config%frozen_candidates < 0.0_dp) .or. &
                     any(config%frozen_candidates > 1.0_dp)) then
@@ -358,7 +360,7 @@ contains
         ! Every remaining slot goes through the pooled Thompson bandit.
         per_region = fortbo_candidate_count(self%n_inputs)
         if (allocated(self%config%frozen_candidates)) then
-            per_region = size(self%config%frozen_candidates, 1)
+            per_region = size(self%config%frozen_candidates, 1)/size(self%regions)
         end if
         allocate (lengthscales(self%n_inputs))
         if (self%config%use_ard) then
@@ -390,7 +392,8 @@ contains
                 if (status%code /= FORTNUM_OK) return
             end if
             if (allocated(self%config%frozen_candidates)) then
-                candidates = self%config%frozen_candidates
+                candidates = self%config%frozen_candidates(&
+                    (k - 1)*per_region + 1:k*per_region, :)
                 do i = 1, per_region
                     if (.not. self%regions(k)%contains_point(candidates(i, :), &
                             lengthscales)) then

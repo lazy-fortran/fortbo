@@ -37,6 +37,7 @@ program test_turbo_driver
     call check_driver_uses_gradients(failures)
     call check_frozen_initial_design(failures)
     call check_frozen_candidate_pool(failures)
+    call check_frozen_candidate_regions(failures)
     call check_batch_qei(failures)
     call check_refusals(failures)
 
@@ -469,6 +470,54 @@ contains
         end do
         call expect(found, "selection returns one of the frozen candidates", failures)
     end subroutine check_frozen_candidate_pool
+
+    !! TuRBO-m replay fixtures are concatenated by region. The selected point
+    !! must come from the pool belonging to the region that proposed it, not
+    !! merely from the union of every region's candidates.
+    subroutine check_frozen_candidate_regions(failures)
+        integer, intent(inout) :: failures
+        type(fortbo_turbo_config_t) :: config
+        type(fortbo_turbo_driver_t) :: driver
+        type(fortnum_status_t) :: status
+        real(dp) :: point(1, 2), value(1), pool(4, 2)
+        integer :: region(1), i
+        logical :: found
+
+        config%n_regions = 2
+        config%batch_size = 1
+        config%n_initial = 1
+        allocate (config%frozen_candidates(4, 2))
+        pool = reshape([0.38_dp, 0.42_dp, 0.58_dp, 0.62_dp, &
+            0.38_dp, 0.42_dp, 0.58_dp, 0.62_dp], [4, 2])
+        config%frozen_candidates = pool
+
+        call driver%initialize(2, config, 17, status)
+        call expect(status%code == FORTNUM_OK, &
+            "region-specific frozen candidate pools are accepted", failures)
+
+        point(1, :) = [0.35_dp, 0.35_dp]
+        region = 1
+        value = 0.0_dp
+        call driver%tell(point, region, value, status)
+        point(1, :) = [0.65_dp, 0.65_dp]
+        region = 2
+        value = 1.0_dp
+        call driver%tell(point, region, value, status)
+        call driver%ask(point, region, status)
+        call expect(status%code == FORTNUM_OK, &
+            "selection from region-specific frozen pools succeeds", failures)
+
+        found = .false.
+        if (region(1) == 1) then
+            found = any([(maxval(abs(point(1, :) - pool(i, :))) == 0.0_dp, &
+                i=1,2)])
+        else if (region(1) == 2) then
+            found = any([(maxval(abs(point(1, :) - pool(i, :))) == 0.0_dp, &
+                i=3,4)])
+        end if
+        call expect(found, "selection stays inside its region's candidate pool", &
+            failures)
+    end subroutine check_frozen_candidate_regions
 
     subroutine check_batch_qei(failures)
         integer, intent(inout) :: failures
