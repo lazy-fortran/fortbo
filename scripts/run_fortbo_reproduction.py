@@ -82,6 +82,8 @@ def _base_payload(args: argparse.Namespace, status: str = "complete") -> Dict[st
             "acquisition": args.acquisition,
             "frozen_candidates": (str(args.frozen_candidates)
                                   if args.frozen_candidates else None),
+            "frozen_initial_design": (str(args.frozen_initial)
+                                      if args.frozen_initial else None),
             "status": status,
         },
         "objective": objective_metadata(args.dimension),
@@ -204,6 +206,9 @@ def run_fortbo(args: argparse.Namespace) -> Dict[str, Any]:
     extra = [args.acquisition]
     if args.frozen_candidates:
         extra.append(str(args.frozen_candidates))
+    if args.frozen_initial:
+        extra.append(str(args.frozen_candidates) if args.frozen_candidates else "-")
+        extra.append(str(args.frozen_initial))
     command = [
         args.fortbo_command or "fo", "exec", "fortbo_reproduction",
         str(args.dimension), str(args.budget), str(args.initial), str(args.seed),
@@ -234,6 +239,12 @@ def run_fortbo(args: argparse.Namespace) -> Dict[str, Any]:
         raw = args.frozen_candidates.read_bytes()
         payload["provenance"]["adapter"]["frozen_candidate_file"] = {
             "path": str(args.frozen_candidates),
+            "sha256": hashlib.sha256(raw).hexdigest(),
+        }
+    if args.frozen_initial:
+        raw = args.frozen_initial.read_bytes()
+        payload["provenance"]["adapter"]["frozen_initial_file"] = {
+            "path": str(args.frozen_initial),
             "sha256": hashlib.sha256(raw).hexdigest(),
         }
     for line in result.stdout.splitlines():
@@ -388,6 +399,8 @@ def parse_args(argv: Optional[Iterable[str]] = None) -> argparse.Namespace:
     parser.add_argument("--acquisition", choices=("ei", "ts"), default="ts")
     parser.add_argument("--frozen-candidates", type=Path,
                         help="count/dimension candidate pool for exact replay")
+    parser.add_argument("--frozen-initial", type=Path,
+                        help="count/dimension initial design for exact replay")
     parser.add_argument("--scratch", type=Path)
     parser.add_argument("--output", type=Path)
     parser.add_argument("--timeout", type=float, default=300.0)

@@ -19,8 +19,8 @@ program fortbo_reproduction
     type(fortbo_turbo_driver_t) :: driver
     type(fortnum_status_t) :: status
 
-    if (command_argument_count() < 4 .or. command_argument_count() > 6) then
-        print *, "usage: fortbo_reproduction DIMENSION BUDGET N_INITIAL SEED [ei|ts] [candidate_file]"
+    if (command_argument_count() < 4 .or. command_argument_count() > 7) then
+        print *, "usage: fortbo_reproduction DIMENSION BUDGET N_INITIAL SEED [ei|ts] [candidate_file|-] [initial_file]"
         error stop 2
     end if
     call get_command_argument(1, argument, length=length)
@@ -53,12 +53,23 @@ program fortbo_reproduction
     allocate (config%lengthscales(dimension))
     config%lengthscales = config%lengthscale
     config%use_ard = .true.
-    if (command_argument_count() == 6) then
+    if (command_argument_count() >= 6) then
         call get_command_argument(6, argument, length=length)
-        call read_candidate_pool(argument(:length), dimension, &
-            config%frozen_candidates, status)
+        if (trim(adjustl(argument(:length))) /= "-") then
+            call read_point_pool(argument(:length), dimension, &
+                config%frozen_candidates, status)
+            if (status%code /= FORTNUM_OK) then
+                print *, "ERROR candidates ", trim(status%msg)
+                error stop 1
+            end if
+        end if
+    end if
+    if (command_argument_count() == 7) then
+        call get_command_argument(7, argument, length=length)
+        call read_point_pool(argument(:length), dimension, &
+            config%frozen_initial_design, status)
         if (status%code /= FORTNUM_OK) then
-            print *, "ERROR candidates ", trim(status%msg)
+            print *, "ERROR initial design ", trim(status%msg)
             error stop 1
         end if
     end if
@@ -100,7 +111,7 @@ program fortbo_reproduction
 
 contains
 
-    subroutine read_candidate_pool(path, dimension, candidates, status)
+    subroutine read_point_pool(path, dimension, candidates, status)
         character(len=*), intent(in) :: path
         integer, intent(in) :: dimension
         real(dp), allocatable, intent(out) :: candidates(:, :)
@@ -111,14 +122,14 @@ contains
             iostat=ios)
         if (ios /= 0) then
             call status_set(status, FORTNUM_DOMAIN_ERROR, &
-                "fortbo reproduction: candidate file cannot be opened")
+                "fortbo reproduction: point file cannot be opened")
             return
         end if
         read (unit, *, iostat=ios) count, width
         if (ios /= 0 .or. count < 1 .or. width /= dimension) then
             close (unit)
             call status_set(status, FORTNUM_DOMAIN_ERROR, &
-                "fortbo reproduction: candidate header must be count and dimension")
+                "fortbo reproduction: point header must be count and dimension")
             return
         end if
         allocate (candidates(count, dimension))
@@ -128,12 +139,12 @@ contains
                 close (unit)
                 deallocate (candidates)
                 call status_set(status, FORTNUM_DOMAIN_ERROR, &
-                    "fortbo reproduction: candidate row is incomplete")
+                    "fortbo reproduction: point row is incomplete")
                 return
             end if
         end do
         close (unit)
         call status_set(status, FORTNUM_OK, "")
-    end subroutine read_candidate_pool
+    end subroutine read_point_pool
 
 end program fortbo_reproduction
