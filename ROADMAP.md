@@ -801,9 +801,29 @@ into the headline number.
   rover trajectory problem, and the 14D robot pushing problem. Gradients come
   from FortAD or a FortSym-generated kernel so DTuRBO modes are exercised on a
   true adjoint, not on finite differences.
-- [ ] Record simple regret, cumulative regret, best feasible value, constraint
+- [x] Record simple regret, cumulative regret, best feasible value, constraint
   violations, acquisition evaluations, gradient evaluations, ESS for sampled
-  policies, memory, transfers, and wall time.
+  policies, memory, transfers, and wall time. `src/fortbo_metrics.f90` keeps one
+  row per evaluation in run order. Three decisions separate an honest record
+  from a flattering one, and each is tested rather than documented alone.
+
+  An infeasible point never sets the incumbent, however good its objective
+  value — letting it makes a constrained run report solving a problem it never
+  solved. Before anything feasible exists the regret is reported *unavailable*
+  rather than as a large number, because "we have not found a feasible point"
+  and "we found a bad one" call for different responses, and a run with no known
+  optimum gets best-value curves instead of regret against a guess.
+
+  Cumulative regret charges every evaluation, not just improvements. The test
+  runs two methods that reach the same answer at the same evaluation, one of
+  which then keeps searching badly: simple regret cannot tell them apart and
+  cumulative regret must.
+
+  Acquisition and gradient evaluations are counted separately from objective
+  evaluations, since one objective evaluation can hide thousands of acquisition
+  evaluations and a regret-per-objective-evaluation plot hides that trade
+  entirely. Wall time, memory, and transfers are recorded but belong to the
+  machine, not the method.
 - [x] Record the trust-region trace for every TuRBO/DTuRBO run: per-region
   radius history, success/failure counters, ratio-test values, restart events,
   and which region supplied each accepted batch point. A regret curve without
