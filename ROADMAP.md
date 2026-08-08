@@ -69,8 +69,11 @@ The FOCUS source was recovered from its public Git repository and pinned at
 W7-X high-mirror example files present. An isolated GNU Fortran/OpenMPI/HDF5
 build produced `xfocus`; a bounded W7-X initialization reached surface
 initialization but then failed in an upstream GNU Fortran format string. This
-recovers source/build evidence, not the paper's exact W7-X input, perturbation
-covariance, optimizer implementation, or seed ledger.
+recovers source/build evidence, not the paper's exact W7-X input, the frozen
+covariance/realization ledger, optimizer implementation, or seed ledger. The
+published periodic-kernel equations are now implemented in
+`scripts/glas_covariance.py` and checked against direct numerical integration;
+that generator does not claim to recover the paper's random-number schedule.
 
 ## Active blockers
 
@@ -80,12 +83,13 @@ covariance, optimizer implementation, or seed ledger.
    path, so a live exact replay requires a declared path remap and an allocated
    equivalent environment; the deviation is recorded rather than hidden.
 2. The Glas et al. harvest contains manuscript and figures, but no paper-
-   specific W7-X input, perturbation covariance, or optimizer ledger. FOCUS
-   source is now pinned separately and builds in isolation; its bundled
-   high-mirror example is not evidence of the paper's exact inputs, and its
-   GNU Fortran initialization smoke currently hits an upstream format-string
-   failure. The reproduction remains literature-only until the remaining
-   artifacts and runtime parity are recovered.
+   specific W7-X input, covariance/realization ledger, or optimizer ledger.
+   FOCUS source is now pinned separately and builds in isolation; the
+   published periodic covariance formula is implemented locally, but its
+   bundled high-mirror example is not evidence of the paper's exact inputs,
+   and its GNU Fortran initialization smoke currently hits an upstream
+   format-string failure. The reproduction remains literature-only until the
+   remaining artifacts and runtime parity are recovered.
 3. Published DTuRBO uses an inducing-point stochastic variational GP with
    paired function and gradient observations. FortBO now has a checked local
    fixed-hyperparameter inducing derivative posterior, plus an exact dense

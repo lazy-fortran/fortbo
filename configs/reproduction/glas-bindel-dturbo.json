@@ -39,7 +39,7 @@
   ],
   "missing_inputs": [
     "W7-X input",
-    "periodic GP/Fourier perturbation covariance",
+    "paper-specific covariance realization and seed convention",
     "optimizer source and experiment seed ledger"
   ],
   "parameters": {
@@ -56,7 +56,13 @@
     "perturbations": {
       "distribution": "periodic_gp_fourier",
       "amplitudes_mm": [5, 10],
-      "covariance_source_required": true
+      "covariance_source_required": false,
+      "covariance_generator": "scripts/glas_covariance.py",
+      "kernel": "exponential_sine_squared_periodic",
+      "lengthscale": 0.5,
+      "amplitude_rule": "h=p^2/3",
+      "coefficient_convention": "c0/2 plus cosine and sine modes",
+      "cross_coil_realization": "independent_blocks_pending_paper_ledger"
     },
     "objective": {
       "omega_B": 100.0,
