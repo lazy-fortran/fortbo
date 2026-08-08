@@ -523,14 +523,28 @@ Concretely, and binding on every work package below:
   is `src/fortbo_dturbo.f90`, and it was blocked until FortML gained
   `predict_input_hvp`, because `hess sigma` existed nowhere in the stack.
 
-  `lambda` is drawn from a standard normal truncated to the non-negative half
-  line, by inverting that distribution's own CDF rather than by taking `abs` of
-  a normal draw: the two give the same distribution but consume the stream
-  differently, and replay against a recorded run would break. The truncation is
-  not decorative — a negative `lambda` would subtract the standard deviation's
-  gradient and steer the step *away* from uncertainty, which is the opposite of
-  an acquisition. `test_dturbo` checks the sampled distribution against
-  `2*Phi(x) - 1` with the tolerance taken from sampling error, and checks that
+  **Two errors corrected by reading arXiv:2508.18423 rather than recalling it.**
+
+  `lambda` is truncated to `(-1, 1)`, not to the non-negative half line. The
+  first version truncated one-sidedly, reasoning that a negative `lambda` would
+  subtract the standard deviation's gradient and steer away from uncertainty.
+  That reasoning is plausible and is not what the paper does: section 4 restricts
+  `lambda` to `(-1, 1)` explicitly "to ensure local convergence". The bound
+  limits how far the local model may deviate from the mean's own Newton model
+  *in either direction*; it is not a clipped exploration weight. Negative draws
+  occur and the test now requires them. Sampling is still by CDF inversion
+  rather than rejection, so one draw is consumed per sample and replay against a
+  recorded stream holds.
+
+  Algorithm 2 also caps expansion at `mu ||g||` as well as at the region
+  maximum, which the first version omitted. Near a stationary point the gradient
+  vanishes and the cap pulls the region in, which is the smooth form of the
+  restart-on-small-gradient rule rather than a separate test. It is optional:
+  a caller without a gradient keeps the plain doubling rule instead of being
+  handed a cap it cannot honestly compute.
+
+  `test_dturbo` checks the sampled distribution against the truncated normal's
+  own CDF on `(-1, 1)` with the tolerance from sampling error, and checks that
   `lambda = 0` recovers exactly a Newton step on the posterior mean.
 
   Radius adaptation uses the classical ratio test rather than the success and

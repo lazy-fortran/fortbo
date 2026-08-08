@@ -26,7 +26,8 @@ program test_dturbo
     use fortbo_trust_region, only: fortbo_trust_region_t, FORTBO_TR_UNCHANGED, &
         FORTBO_TR_EXPANDED, FORTBO_TR_SHRANK, FORTBO_TR_EXHAUSTED
     use fortbo_quadratic, only: fortbo_quadratic_value
-    use fortbo_normal, only: fortbo_inverse_normal, fortbo_half_normal
+    use fortbo_normal, only: fortbo_inverse_normal, &
+        fortbo_symmetric_truncated_normal
     use fortbo_dturbo, only: fortbo_dturbo_lambda, fortbo_dturbo_local_model, &
         fortbo_dturbo_step, fortbo_dturbo_ratio_update, FORTBO_DTURBO_ETA_0, &
         FORTBO_DTURBO_ETA_1
@@ -75,48 +76,66 @@ contains
         call expect(abs(fortbo_inverse_normal(0.5_dp)) < 1.0e-12_dp, &
             "the median is zero", failures)
 
-        ! The half-normal is never negative and its median is Phi^-1(0.75).
-        call expect(fortbo_half_normal(0.0_dp) >= 0.0_dp .and. &
-            fortbo_half_normal(1.0_dp) > 0.0_dp, &
-            "the half normal is non-negative", failures)
-        call expect(abs(fortbo_half_normal(0.5_dp) &
-            - fortbo_inverse_normal(0.75_dp)) < 1.0e-12_dp, &
-            "the half normal's median is the upper quartile", failures)
+        ! The symmetric truncation stays inside its bound and is symmetric
+        ! about zero, which the half-normal used previously was not.
+        call expect(abs(fortbo_symmetric_truncated_normal(0.5_dp, 1.0_dp)) &
+            < 1.0e-12_dp, "the truncated normal's median is zero", failures)
+        call expect(fortbo_symmetric_truncated_normal(0.0_dp, 1.0_dp) &
+            >= -1.0_dp .and. fortbo_symmetric_truncated_normal(1.0_dp, 1.0_dp) &
+            <= 1.0_dp, "the truncated normal respects its bound", failures)
+        call expect(abs(fortbo_symmetric_truncated_normal(0.25_dp, 1.0_dp) &
+            + fortbo_symmetric_truncated_normal(0.75_dp, 1.0_dp)) < 1.0e-12_dp, &
+            "the truncated normal is symmetric about zero", failures)
     end subroutine check_quantile_function
 
     !! Compare the empirical CDF of sampled `lambda` against the truncated
-    !! normal's own CDF, `2*Phi(x) - 1`.
+    !! normal's own CDF on `(-1, 1)`, which is
+    !! `(Phi(x) - Phi(-1)) / (Phi(1) - Phi(-1))`.
+    !!
+    !! Negative draws must occur. An earlier version truncated to the
+    !! non-negative half line on the reasoning that a negative `lambda` steers
+    !! away from uncertainty; the paper truncates to `(-1, 1)` explicitly to
+    !! ensure local convergence, and the bound limits deviation from the mean's
+    !! Newton model in *either* direction.
     subroutine check_lambda_distribution(failures)
         integer, intent(inout) :: failures
         type(rng_t) :: generator
         type(fortnum_status_t) :: status
         integer, parameter :: n_samples = 200000
         real(dp) :: lambda, exact, empirical, standard_error, threshold
-        integer :: k, below, negatives, grid
+        real(dp) :: low_mass, high_mass
+        integer :: k, below, outside, negatives, grid
         logical :: matches
 
-        call rng_seed(generator, int(8675309, int64), status)
+        low_mass = 0.5_dp*(1.0_dp + erf(-1.0_dp/sqrt(2.0_dp)))
+        high_mass = 0.5_dp*(1.0_dp + erf(1.0_dp/sqrt(2.0_dp)))
 
         matches = .true.
+        outside = 0
         negatives = 0
-        do grid = 1, 5
-            threshold = 0.4_dp*real(grid, dp)
+        do grid = 1, 4
+            threshold = -0.75_dp + 0.5_dp*real(grid - 1, dp)
             call rng_seed(generator, int(8675309, int64), status)
             below = 0
             do k = 1, n_samples
                 call fortbo_dturbo_lambda(generator, lambda, status)
+                if (abs(lambda) > 1.0_dp) outside = outside + 1
                 if (lambda < 0.0_dp) negatives = negatives + 1
                 if (lambda <= threshold) below = below + 1
             end do
             empirical = real(below, dp)/real(n_samples, dp)
-            exact = 2.0_dp*(0.5_dp*(1.0_dp + erf(threshold/sqrt(2.0_dp)))) - 1.0_dp
+            exact = (0.5_dp*(1.0_dp + erf(threshold/sqrt(2.0_dp))) - low_mass) &
+                /(high_mass - low_mass)
             standard_error = sqrt(exact*(1.0_dp - exact)/real(n_samples, dp))
             if (abs(empirical - exact) > 5.0_dp*standard_error) matches = .false.
         end do
         call expect(matches, &
-            "lambda follows the truncated normal it is specified as", failures)
-        call expect(negatives == 0, &
-            "lambda is never negative, so it never steers away from uncertainty", &
+            "lambda follows the truncated normal on (-1, 1) it is specified as", &
+            failures)
+        call expect(outside == 0, "lambda never leaves its truncation bound", &
+            failures)
+        call expect(negatives > 0, &
+            "negative lambda occurs, as the two-sided truncation requires", &
             failures)
     end subroutine check_lambda_distribution
 
@@ -130,7 +149,8 @@ contains
         real(dp) :: zero_gradient(2), zero_hessian(2, 2)
         real(dp) :: query(1, 2), mean_gradient(1, 2), sd_gradient(1, 2)
         real(dp) :: mean_hessian(2, 2), sd_hessian(2, 2)
-        real(dp), parameter :: lambda = 1.75_dp
+        ! Inside the (-1, 1) truncation the paper specifies.
+        real(dp), parameter :: lambda = 0.75_dp
 
         posterior%dimension = 2
         point = [0.3_dp, -0.4_dp]
@@ -335,10 +355,16 @@ contains
         plain%dimension = 2
         lengthscales = 1.0_dp
 
+        ! A negative lambda inside the bound is legitimate.
         call fortbo_dturbo_local_model(posterior, [0.1_dp, 0.2_dp], -0.5_dp, &
             gradient, hessian, status)
+        call expect(status%code == FORTNUM_OK, &
+            "a negative lambda inside the bound is accepted", failures)
+
+        call fortbo_dturbo_local_model(posterior, [0.1_dp, 0.2_dp], 1.5_dp, &
+            gradient, hessian, status)
         call expect(status%code == FORTNUM_DOMAIN_ERROR, &
-            "a negative lambda is refused", failures)
+            "a lambda outside the truncation bound is refused", failures)
 
         ! A posterior with moments but no derivatives cannot build this model,
         ! and must say so rather than silently dropping the lambda term.

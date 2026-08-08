@@ -14,17 +14,19 @@ module fortbo_dturbo
     !!     g = grad mu + lambda grad sigma
     !!     H = hess mu + lambda hess sigma
     !!
-    !! with `lambda` drawn from a standard normal truncated to the non-negative
-    !! half line. The next point is the solution of the bound-constrained
-    !! quadratic program over the trust region intersected with the unit cube.
+    !! with `lambda` drawn from a standard normal truncated to `(-1, 1)`. The
+    !! next point solves the bound-constrained quadratic program over the trust
+    !! region intersected with the unit cube.
     !!
-    !! `lambda` is what keeps this an *optimization under uncertainty* rather
-    !! than a Newton step on the posterior mean. It is a random exploration
-    !! weight: a draw near zero gives a pure exploitation step, a large draw
-    !! follows the uncertainty. Truncating to the non-negative side matters —
-    !! a negative `lambda` would subtract the standard deviation's gradient and
-    !! steer the step *away* from uncertain regions, which is the opposite of
-    !! what an acquisition should do.
+    !! **The truncation is two-sided, and that was got wrong first.** An earlier
+    !! version here truncated to the non-negative half line, reasoning that a
+    !! negative `lambda` would subtract the standard deviation's gradient and
+    !! steer away from uncertainty. That reasoning is plausible and is not what
+    !! the paper does: section 4 restricts `lambda` to `(-1, 1)` explicitly "to
+    !! ensure local convergence". The bound exists to limit how far the local
+    !! model may deviate from the mean's own Newton model *in either direction*,
+    !! which is what the convergence argument needs; it is not an exploration
+    !! weight that happens to be clipped. Both signs occur.
     !!
     !! Radius adaptation switches to the classical trust-region ratio test
     !!
@@ -52,7 +54,7 @@ module fortbo_dturbo
         FORTBO_TR_EXPANDED, FORTBO_TR_SHRANK, FORTBO_TR_EXHAUSTED
     use fortbo_quadratic, only: fortbo_solve_quadratic_subproblem, &
         fortbo_quadratic_value
-    use fortbo_normal, only: fortbo_half_normal
+    use fortbo_normal, only: fortbo_symmetric_truncated_normal
     implicit none
     private
 
@@ -72,6 +74,19 @@ module fortbo_dturbo
     !! radius unchanged.
     real(dp), parameter, public :: FORTBO_DTURBO_PREDICTION_FLOOR = 1.0e-14_dp
 
+    !! `lambda`'s truncation, from Newton-BO section 4: a standard normal
+    !! restricted to `(-1, 1)`. The bound is what the paper's local-convergence
+    !! argument needs — it limits how far the local model may deviate from the
+    !! mean's own Newton model in either direction. It is *not* a one-sided
+    !! exploration weight; both signs occur.
+    real(dp), parameter, public :: FORTBO_DTURBO_LAMBDA_BOUND = 1.0_dp
+
+    !! Expansion is capped at `mu` times the gradient norm as well as at the
+    !! region's maximum, following the paper's Algorithm 2. Near a stationary
+    !! point the gradient vanishes and the cap forces the region down, which is
+    !! the smooth form of the restart-on-small-gradient rule.
+    real(dp), parameter, public :: FORTBO_DTURBO_GRADIENT_CAP = 2.0_dp
+
     !! Restart when the posterior mean's gradient falls below this: the model
     !! believes it is at a stationary point, and shrinking further only refines
     !! a place it has already given up on.
@@ -89,7 +104,8 @@ contains
         real(dp) :: uniform
 
         call rng_uniform(generator, uniform)
-        lambda = fortbo_half_normal(uniform)
+        lambda = fortbo_symmetric_truncated_normal(uniform, &
+            FORTBO_DTURBO_LAMBDA_BOUND)
         call status_set(status, FORTNUM_OK, "")
     end subroutine fortbo_dturbo_lambda
 
@@ -122,9 +138,12 @@ contains
                 "fortbo dturbo: local model shapes disagree")
             return
         end if
-        if (lambda < 0.0_dp) then
+        if (abs(lambda) > FORTBO_DTURBO_LAMBDA_BOUND) then
+            ! Outside the paper's truncation the local-convergence argument no
+            ! longer applies, so a caller supplying its own lambda is told
+            ! rather than quietly given a model with no guarantee behind it.
             call status_set(status, FORTNUM_DOMAIN_ERROR, &
-                "fortbo dturbo: lambda must not be negative")
+                "fortbo dturbo: lambda lies outside its truncation bound")
             return
         end if
         if (.not. posterior%supports(FORTBO_CAP_MOMENT_GRADIENT) .or. &
@@ -236,13 +255,18 @@ contains
     !! information about the model's quality and the radius is left alone: the
     !! alternative is to let rounding decide whether a region grows.
     subroutine fortbo_dturbo_ratio_update(region, actual_decrease, &
-            predicted_decrease, event, status)
+            predicted_decrease, event, status, gradient_norm)
         type(fortbo_trust_region_t), intent(inout) :: region
         real(dp), intent(in) :: actual_decrease
         real(dp), intent(in) :: predicted_decrease
         integer, intent(out) :: event
         type(fortnum_status_t), intent(out) :: status
-        real(dp) :: ratio
+        !! Norm of the local model's gradient. When supplied, expansion is
+        !! additionally capped at `FORTBO_DTURBO_GRADIENT_CAP` times it, per the
+        !! paper's Algorithm 2. Omitting it keeps the plain doubling rule, which
+        !! is what a caller without a gradient can honestly do.
+        real(dp), intent(in), optional :: gradient_norm
+        real(dp) :: ratio, expanded
 
         event = FORTBO_TR_UNCHANGED
         if (.not. region%active) then
@@ -265,7 +289,16 @@ contains
 
         ratio = actual_decrease/predicted_decrease
         if (ratio >= FORTBO_DTURBO_ETA_1) then
-            region%length = min(2.0_dp*region%length, region%length_max)
+            expanded = min(2.0_dp*region%length, region%length_max)
+            if (present(gradient_norm)) then
+                ! Near a stationary point the gradient vanishes, so this cap
+                ! pulls the region in rather than letting a good ratio inflate
+                ! a region the model can no longer justify.
+                expanded = min(expanded, &
+                    FORTBO_DTURBO_GRADIENT_CAP*max(gradient_norm, 0.0_dp))
+                expanded = max(expanded, region%length_min)
+            end if
+            region%length = expanded
             event = FORTBO_TR_EXPANDED
         else if (ratio < FORTBO_DTURBO_ETA_0) then
             region%length = 0.5_dp*region%length

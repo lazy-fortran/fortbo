@@ -13,6 +13,7 @@ module fortbo_normal
 
     public :: fortbo_inverse_normal
     public :: fortbo_half_normal
+    public :: fortbo_symmetric_truncated_normal
 
 contains
 
@@ -66,5 +67,30 @@ contains
 
         z = fortbo_inverse_normal(0.5_dp*(1.0_dp + min(max(uniform, 0.0_dp), 1.0_dp)))
     end function fortbo_half_normal
+
+    !! A standard normal truncated to `(-bound, bound)`, from a uniform draw.
+    !!
+    !! Inverting the truncated CDF, `F(x) = (Phi(x) - Phi(-b)) / (Phi(b) -
+    !! Phi(-b))`, is exact and consumes exactly one uniform. Rejection sampling
+    !! would give the same distribution but consume an unpredictable number of
+    !! draws, which breaks replay against a recorded stream.
+    pure real(dp) function fortbo_symmetric_truncated_normal(uniform, bound) &
+            result(z)
+        real(dp), intent(in) :: uniform
+        real(dp), intent(in) :: bound
+        real(dp) :: lower_mass, upper_mass, clamped
+
+        if (bound <= 0.0_dp) then
+            z = 0.0_dp
+            return
+        end if
+        lower_mass = 0.5_dp*(1.0_dp + erf(-bound/sqrt(2.0_dp)))
+        upper_mass = 0.5_dp*(1.0_dp + erf(bound/sqrt(2.0_dp)))
+        clamped = min(max(uniform, 0.0_dp), 1.0_dp)
+        z = fortbo_inverse_normal(lower_mass + clamped*(upper_mass - lower_mass))
+        ! Rounding in the quantile function can push the result a hair outside
+        ! the interval, and a caller relying on the bound should get the bound.
+        z = min(max(z, -bound), bound)
+    end function fortbo_symmetric_truncated_normal
 
 end module fortbo_normal
