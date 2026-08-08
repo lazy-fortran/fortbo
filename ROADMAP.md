@@ -439,8 +439,41 @@ Concretely, and binding on every work package below:
   held-out grid the derivative-informed model has strictly lower squared error
   and lower posterior uncertainty than the same model fitted to the same values
   without their gradients.
-- [ ] Adapt the FortML sparse, variational, multi-output, multi-task, and
-  deep-kernel GPs to the posterior protocol.
+- [x] Adapt the FortML sparse, variational, multi-output, and Student-t
+  surrogates to the posterior protocol. `src/fortbo_fortml_sparse.f90` holds the
+  adapters; the *models* live in FortML, since none of them is
+  Bayesian-optimization specific.
+
+  **Generic model work went upstream.** The Student-t process is new FortML code
+  (`fortml_student_t_process.f90`), written against arXiv:1402.4306 read rather
+  than recalled. A TP keeps a GP's analytic marginals and changes the thing that
+  matters here: its predictive covariance depends on the *observed values*,
+  through a Mahalanobis distance whose prior expectation is exactly `n`. Data
+  more surprising than expected widen the predictive variance; tamer data narrow
+  it. A GP cannot express either, and the test contrasts the two directly. The
+  paper's parameterization is deliberately not the usual one — `cov = K`
+  exactly, where most references use a scale matrix — and the large-`nu` limit
+  against an exact GP is what pins it.
+
+  **A real gap was found upstream too.** FortML's multi-output GP had
+  `joint_covariance`, which is the *prior* `B (x) K`, and no posterior route at
+  all. An adapter using the prior where a posterior belongs would report
+  uncertainty that never shrinks with data: plausible on a plot and simply
+  wrong. `predict_covariance` was added to FortML rather than reconstructed in
+  FortBO.
+
+  Each adapter's honesty boundary is stated and tested. The sparse GP's
+  marginals are the *variational* posterior's, which systematically
+  underestimates variance, so an acquisition against it explores less — the
+  adapter cannot correct that and does not pretend to. The Student-t adapter
+  reports the right first two moments and the wrong tail, since every FortBO
+  acquisition integrates against a Gaussian; it declares moments only. The
+  multi-output adapter projects onto one output and declares joint covariance,
+  because restricting the real joint to one output's rows is exact — the test
+  requires the covariance diagonal to equal the reported marginals, which is
+  what catches a wrong stride where symmetry alone would not.
+- [ ] Adapt the FortML multi-task and deep-kernel GPs, which have no posterior
+  contract route yet.
 - [ ] Add heteroskedastic, Student-t, classification, count, and robust
   surrogate likelihood adapters.
 - [ ] Add fully Bayesian surrogate hyperparameter integration through FortMC
