@@ -39,7 +39,7 @@ program test_fortml_adapter
     failures = 0
     call check_value_only_interpolates(failures)
     call check_branch_is_chosen_from_data(failures)
-    call check_ard_retains_mixed_values(failures)
+    call check_mixed_derivative_values(failures)
     call check_variational_branch(failures)
     call check_gradients_improve_prediction(failures)
     call check_acquisitions_are_indistinguishable(failures)
@@ -184,7 +184,7 @@ contains
     !! The exact ARD posterior must retain those values while appending the
     !! complete derivative rows. Interpolation at the value-only site is an
     !! independent behavioral check that catches silently dropping that row.
-    subroutine check_ard_retains_mixed_values(failures)
+    subroutine check_mixed_derivative_values(failures)
         integer, intent(inout) :: failures
         type(fortbo_history_t) :: history
         class(fortbo_posterior_t), allocatable :: posterior
@@ -213,7 +213,16 @@ contains
             "the mixed value/gradient ARD posterior predicts", failures)
         call expect(abs(mean(1) - value) < 1.0e-4_dp .and. variance(1) < 1.0e-4_dp, &
             "the ARD derivative fit retains value-only observations", failures)
-    end subroutine check_ard_retains_mixed_values
+
+        call fortbo_fit_from_history(history, posterior, status, lengthscale=0.4_dp, &
+            noise_variance=1.0e-8_dp)
+        call expect(status%code == FORTNUM_OK, &
+            "the mixed value/gradient dense fit succeeds", failures)
+        call posterior%moments(query, mean, variance, status)
+        call expect(status%code == FORTNUM_OK .and. &
+            abs(mean(1) - value) < 1.0e-4_dp .and. variance(1) < 1.0e-4_dp, &
+            "the dense derivative fit retains value-only observations", failures)
+    end subroutine check_mixed_derivative_values
 
     subroutine check_variational_branch(failures)
         integer, intent(inout) :: failures

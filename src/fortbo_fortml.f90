@@ -423,6 +423,7 @@ contains
         type(fortbo_derivative_gp_posterior_t), allocatable :: with_gradients
         type(kernel_t) :: kernel
         real(dp), allocatable :: inputs(:, :), objectives(:), gradients(:, :)
+        real(dp), allocatable :: gradient_inputs(:, :), gradient_objectives(:)
         real(dp), allocatable :: rows(:, :), targets(:, :)
         integer, allocatable :: components(:)
         real(dp) :: noise, signal
@@ -494,26 +495,35 @@ contains
         call build_kernel(kernel, d, lengthscale, signal_variance)
 
         if (wanted) then
-            call history%gradient_data(inputs, objectives, gradients, status)
+            call history%training_data(inputs, objectives, status)
             if (status%code /= FORTNUM_OK) return
             n = size(objectives)
+            if (n < 1) then
+                call status_set(status, FORTNUM_DOMAIN_ERROR, &
+                    "fortbo fortml: no usable observations")
+                return
+            end if
+            call history%gradient_data(gradient_inputs, gradient_objectives, gradients, &
+                status)
+            if (status%code /= FORTNUM_OK) return
+            n = size(gradient_objectives)
             if (n < 1) then
                 call status_set(status, FORTNUM_DOMAIN_ERROR, &
                     "fortbo fortml: no usable gradient observations")
                 return
             end if
-            ! One value row plus one row per coordinate, all at the same input.
-            expanded = n*(1 + d)
+            ! Retain every value row, then append one row per derivative
+            ! coordinate for each complete gradient-bearing input.
+            expanded = size(objectives) + n*d
             allocate (rows(expanded, d), targets(expanded, 1), components(expanded))
-            row = 0
+            rows(1:size(objectives), :) = inputs
+            targets(1:size(objectives), 1) = objectives
+            components(1:size(objectives)) = 0
+            row = size(objectives)
             do i = 1, n
-                row = row + 1
-                rows(row, :) = inputs(i, :)
-                targets(row, 1) = objectives(i)
-                components(row) = 0
                 do j = 1, d
                     row = row + 1
-                    rows(row, :) = inputs(i, :)
+                    rows(row, :) = gradient_inputs(i, :)
                     targets(row, 1) = gradients(i, j)
                     components(row) = j
                 end do
