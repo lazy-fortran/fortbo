@@ -60,9 +60,10 @@ excluded from surrogate training and cannot become incumbents. The
 completion-driven eight-worker external-evaluator bridges. Completion-driven
 asks are one point at a time, keep pending points out of subsequent proposals
 with posterior-mean fantasies, accept out-of-order tells, and preserve failed
-rows without inventing objective values. A clean eight-call raw smoke through
-the completion-driven bridge recorded eight truth failures, peak concurrency
-eight, and a nontrivial completion order; the row passed the FortBO-side
+rows without inventing objective values. Clean eight-call smokes through the
+completion-driven bridge recorded eight raw truth failures and eight
+successful data-informed truth calls (272.1 seconds), both at peak concurrency
+eight with nontrivial completion order; both rows passed the FortBO-side
 audit. These are bridge checks, not F3 rows; the full 256-call paired campaign
 remains an explicitly scheduled external computation.
 
