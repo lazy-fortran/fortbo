@@ -337,6 +337,17 @@ def _run_completion_driven(
                 if not line.startswith("DONE "):
                     raise RuntimeError(f"malformed completion DONE: {line!r}")
                 break
+    except Exception as error:
+        if process.stdin is not None:
+            process.stdin.close()
+        stderr = process.stderr.read() if process.stderr is not None else ""
+        process.wait()
+        detail = stderr[-2000:].strip()
+        if detail:
+            raise RuntimeError(
+                f"FortBO completion protocol aborted: {detail}"
+            ) from error
+        raise
     finally:
         if process.stdin is not None:
             process.stdin.close()

@@ -369,10 +369,13 @@ contains
         if (required == 0) required = 2*self%n_inputs
 
         ! A region short of its initial design proposes seeded digital-shifted
-        ! Sobol points when quasi-random mode is enabled. Regions are served
-        ! round-robin rather than one at a time, so that with several
-        ! regions the designs advance together and the bandit starts with
-        ! comparable evidence about each.
+        ! Sobol points when quasi-random mode is enabled. A region with no
+        ! usable observation stays on this fallback design path even after its
+        ! nominal count is full: a failed initial design cannot be centered or
+        ! fitted, and must not be replaced by a fabricated surrogate value.
+        ! Regions are served round-robin rather than one at a time, so that
+        ! with several regions the designs advance together and the bandit
+        ! starts with comparable evidence about each.
         filled = 0
         allocate (draw(self%n_inputs))
         allocate (assigned(size(self%regions)))
@@ -443,7 +446,8 @@ contains
 
         offset = 0
         do k = 1, size(self%regions)
-            if (self%histories(k)%count < required) then
+            if (self%histories(k)%count < required .or. &
+                    self%histories(k)%usable_count() == 0) then
                 ! Still in its initial design; contributes nothing to the pool.
                 cycle
             end if
@@ -824,7 +828,9 @@ contains
 
     !! Completion-driven initial design counts points already in flight, so an
     !! asynchronous caller cannot overfill one region before its peers have
-    !! received their initial observations.
+    !! received their initial observations. A region with no usable result
+    !! remains eligible after its nominal count, because no trust center exists
+    !! until at least one real value has arrived.
     integer function next_completion_region_needing_design(self, required) &
             result(choice)
         class(fortbo_turbo_driver_t), intent(in) :: self
@@ -836,7 +842,7 @@ contains
         do k = 1, size(self%regions)
             have = self%histories(k)%count + &
                 completion_pending_count_for_region(self, k)
-            if (have >= required) cycle
+            if (have >= required .and. self%histories(k)%usable_count() > 0) cycle
             if (have < fewest) then
                 fewest = have
                 choice = k
@@ -845,8 +851,9 @@ contains
     end function next_completion_region_needing_design
 
     !! The next region still short of its initial design, counting points
-    !! already assigned in this batch. Returns zero when every design is
-    !! complete. Round-robin, so no region monopolizes a batch.
+    !! already assigned in this batch. A region with no usable result remains
+    !! eligible until it has one. Returns zero when every design is complete.
+    !! Round-robin, so no region monopolizes a batch.
     pure integer function next_region_needing_design(self, required, assigned) &
             result(choice)
         class(fortbo_turbo_driver_t), intent(in) :: self
@@ -858,7 +865,7 @@ contains
         fewest = huge(1)
         do k = 1, size(self%regions)
             have = self%histories(k)%count + assigned(k)
-            if (have >= required) cycle
+            if (have >= required .and. self%histories(k)%usable_count() > 0) cycle
             if (have < fewest) then
                 fewest = have
                 choice = k

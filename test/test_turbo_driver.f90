@@ -565,13 +565,14 @@ contains
     !! and trust-accounting contract as batched mode.
     subroutine check_completion_driven_workers(failures)
         integer, intent(inout) :: failures
-        type(fortbo_turbo_config_t) :: config
-        type(fortbo_turbo_driver_t) :: driver
+        type(fortbo_turbo_config_t) :: config, fallback_config
+        type(fortbo_turbo_driver_t) :: driver, fallback
         type(fortnum_status_t) :: status
         real(dp) :: points(1, 2), first(1, 2), second(1, 2), values(1), pool(8, 2)
         real(dp) :: initial(2, 2)
+        real(dp) :: fallback_point(1, 1), fallback_value(1)
         logical :: successful(1)
-        integer :: regions(1), first_region(1), second_region(1)
+        integer :: regions(1), first_region(1), second_region(1), fallback_region(1)
 
         config%n_regions = 1
         config%batch_size = 1
@@ -646,6 +647,26 @@ contains
         call expect(driver%histories(1)%count == 4 .and. &
             driver%histories(1)%usable_count() == 3, &
             "completion-driven failures remain excluded from fitting", failures)
+
+        ! A completely failed initial design must keep sampling design points
+        ! rather than trying to center a region with no usable incumbent.
+        fallback_config%batch_size = 1
+        fallback_config%completion_driven = .true.
+        fallback_config%max_pending = 1
+        fallback_config%n_initial = 1
+        call fallback%initialize(1, fallback_config, 7070, status)
+        call expect(status%code == FORTNUM_OK, &
+            "the failure-only fallback driver initializes", failures)
+        call fallback%ask(fallback_point, fallback_region, status)
+        fallback_value(1) = huge(1.0_dp)
+        successful(1) = .false.
+        call fallback%tell(fallback_point, fallback_region, fallback_value, status, &
+            successful=successful)
+        call expect(status%code == FORTNUM_OK, &
+            "the failure-only fallback records its first failure", failures)
+        call fallback%ask(fallback_point, fallback_region, status)
+        call expect(status%code == FORTNUM_OK, &
+            "a failed initial design continues with a fresh design point", failures)
     end subroutine check_completion_driven_workers
 
     !! A caller-supplied initial design takes precedence over the local Sobol
