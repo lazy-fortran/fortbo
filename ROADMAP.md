@@ -412,7 +412,7 @@ external FortAD `fortad_reverse.f90` with an nvfortran internal compiler error
    path; `run_landreman_original.py` applies the declared remap in a generated
    copy and refuses non-Slurm execution. The source and driver preflight now
    pass, but the archived control/FortBO pair has not yet been launched: the
-   the FortBO-side MPI bridge is ready, but current aCluster and sCluster
+   FortBO-side MPI bridge is ready, but current aCluster and sCluster
    inventories provide one GPU per node while
    the historical job requires four GPUs on one node. A compatible Tu Graz
    allocation is therefore still required for the live MPI/physics trace
