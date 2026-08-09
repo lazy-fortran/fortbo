@@ -56,9 +56,9 @@ contains
             + FORTBO_CAP_JOINT_SAMPLE + FORTBO_CAP_MOMENT_GRADIENT
     end function ard_posterior_capabilities
 
-    !! Fit a fixed-hyperparameter exact ARD posterior.  When requested, every
-    !! complete history row contributes one value and one observation per
-    !! derivative coordinate at the same input.
+    !! Fit a fixed-hyperparameter exact ARD posterior. When requested, every
+    !! usable history row contributes its value and every complete gradient
+    !! row contributes one observation per derivative coordinate at that input.
     subroutine fortbo_fit_ard_posterior(history, posterior, lengthscales, status, &
             signal_variance, noise_variance, use_gradients)
         type(fortbo_history_t), intent(in) :: history
@@ -69,11 +69,12 @@ contains
         real(dp), intent(in), optional :: noise_variance
         logical, intent(in), optional :: use_gradients
         type(fortbo_ard_posterior_t), allocatable :: fitted
-        real(dp), allocatable :: value_x(:, :), value_y(:), gradients(:, :)
+        real(dp), allocatable :: value_x(:, :), value_y(:)
+        real(dp), allocatable :: gradient_x(:, :), gradient_y(:), gradients(:, :)
         real(dp), allocatable :: train_x(:, :), train_y(:), covariance(:, :)
         integer, allocatable :: components(:)
         real(dp) :: signal, noise
-        integer :: n, nobs, d, i, j, row
+        integer :: n, n_gradient, nobs, d, i, j, row
         logical :: use_derivatives
 
         d = history%n_inputs
@@ -104,15 +105,23 @@ contains
         end if
 
         if (use_derivatives) then
-            call history%gradient_data(value_x, value_y, gradients, status)
+            call history%training_data(value_x, value_y, status)
             if (status%code /= FORTNUM_OK) return
             n = size(value_y)
             if (n < 1) then
                 call status_set(status, FORTNUM_DOMAIN_ERROR, &
+                    "fortbo ARD posterior: no usable observations")
+                return
+            end if
+            call history%gradient_data(gradient_x, gradient_y, gradients, status)
+            if (status%code /= FORTNUM_OK) return
+            n_gradient = size(gradient_y)
+            if (n_gradient < 1) then
+                call status_set(status, FORTNUM_DOMAIN_ERROR, &
                     "fortbo ARD posterior: no usable gradient observations")
                 return
             end if
-            nobs = n*(1 + d)
+            nobs = n + n_gradient*d
             allocate (train_x(nobs, d), train_y(nobs), components(nobs))
             row = 0
             do i = 1, n
@@ -120,9 +129,11 @@ contains
                 train_x(row, :) = value_x(i, :)
                 train_y(row) = value_y(i)
                 components(row) = 0
+            end do
+            do i = 1, n_gradient
                 do j = 1, d
                     row = row + 1
-                    train_x(row, :) = value_x(i, :)
+                    train_x(row, :) = gradient_x(i, :)
                     train_y(row) = gradients(i, j)
                     components(row) = j
                 end do

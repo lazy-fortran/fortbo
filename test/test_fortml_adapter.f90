@@ -39,6 +39,7 @@ program test_fortml_adapter
     failures = 0
     call check_value_only_interpolates(failures)
     call check_branch_is_chosen_from_data(failures)
+    call check_ard_retains_mixed_values(failures)
     call check_variational_branch(failures)
     call check_gradients_improve_prediction(failures)
     call check_acquisitions_are_indistinguishable(failures)
@@ -178,6 +179,41 @@ contains
         call expect(.not. is_derivative_model, &
             "forcing the value-only branch is honored", failures)
     end subroutine check_branch_is_chosen_from_data
+
+    !! A derivative-bearing history may still contain earlier value-only calls.
+    !! The exact ARD posterior must retain those values while appending the
+    !! complete derivative rows. Interpolation at the value-only site is an
+    !! independent behavioral check that catches silently dropping that row.
+    subroutine check_ard_retains_mixed_values(failures)
+        integer, intent(inout) :: failures
+        type(fortbo_history_t) :: history
+        class(fortbo_posterior_t), allocatable :: posterior
+        type(fortnum_status_t) :: status
+        real(dp) :: value_point(2), point(2), query(1, 2)
+        real(dp) :: mean(1), variance(1), value
+        integer :: k
+
+        call history%initialize(2, 0, status)
+        value_point = [0.03_dp, 0.97_dp]
+        value = 1.7_dp
+        call history%add(value_point, status, objective=value)
+        do k = 1, 3
+            call training_site(k, point)
+            call history%add(point, status, objective=objective(point), &
+                gradient=objective_gradient(point))
+        end do
+
+        call fortbo_fit_from_history(history, posterior, status, &
+            lengthscales=[0.25_dp, 0.25_dp], noise_variance=1.0e-8_dp)
+        call expect(status%code == FORTNUM_OK, &
+            "the mixed value/gradient ARD fit succeeds", failures)
+        query(1, :) = value_point
+        call posterior%moments(query, mean, variance, status)
+        call expect(status%code == FORTNUM_OK, &
+            "the mixed value/gradient ARD posterior predicts", failures)
+        call expect(abs(mean(1) - value) < 1.0e-4_dp .and. variance(1) < 1.0e-4_dp, &
+            "the ARD derivative fit retains value-only observations", failures)
+    end subroutine check_ard_retains_mixed_values
 
     subroutine check_variational_branch(failures)
         integer, intent(inout) :: failures
