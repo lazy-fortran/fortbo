@@ -12,7 +12,7 @@ import subprocess
 import sys
 import tarfile
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Mapping, Optional, Tuple
+from typing import Any, Iterable, Mapping, Optional, Tuple
 
 
 SHA256 = re.compile(r"^[0-9a-f]{64}$")
