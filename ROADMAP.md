@@ -67,6 +67,26 @@ eight with nontrivial completion order; both rows passed the FortBO-side
 audit. These are bridge checks, not F3 rows; the full 256-call paired campaign
 remains an explicitly scheduled external computation.
 
+The public-source provenance lane is now scripted but deliberately not run from
+this workstation. `configs/reproduction/source-downloads.json` pins the
+Landreman Zenodo record `20733437`, the Glas/Bindel arXiv source, FOCUS
+`develop/e4bb49b`, the ConStellaration checkout, and the three B5 Hugging Face
+Parquet shards. `scripts/fetch_reproduction_sources.py` reuses an existing
+artifact when its environment-variable path is set, verifies SHA-256 digests,
+pins Git revisions, rejects unsafe archive paths, and refuses a download or
+unpack when the configured free-space reserve would be violated. It does not
+copy the existing 7.5 GB Landreman archive merely to make a second mirror.
+
+`scripts/run_b5_oracle_pair.py` launches the pinned simsopt-dfo BoTorch control
+and `scripts/run_fortbo_b5.py` concurrently with the same B5 mode, seed, budget,
+workers, evaluator commit, and coordinate map. The control ledger is recorded
+as the independent oracle; `scripts/check_oracle_pair.py` checks both ledgers'
+behavioral accounting and compares FortBO's best value against the oracle.
+This pair must be launched on `faepkub4` for CPU work or inside an allocated
+aCluster/sCluster Slurm job for GPU work. No physics reproduction is to run on
+the workstation. The runner stops both children if the run filesystem falls
+below its disk reserve.
+
 At `bf7c665`, a clean canonical checkout with clean sibling dependencies passes
 all 48 Fortran tests and all 40 Python tests. A raw 256-call attempt was stopped
 after 71 completed failures because several upstream evaluator subprocesses
@@ -170,6 +190,9 @@ external FortAD `fortad_reverse.f90` with an nvfortran internal compiler error
    and four GPUs. The archived driver still names an absolute `/pscratch` data
    path, so a live exact replay requires a declared path remap and an allocated
    equivalent environment; the deviation is recorded rather than hidden.
+   The exact-tool downloader and cluster-only launcher are present, but the
+   archived control/FortBO pair has not yet been launched on the Tu Graz
+   allocation.
 2. The Glas et al. harvest contains manuscript and figures, but no paper-
    specific W7-X input, covariance/realization ledger, or optimizer ledger.
    FOCUS source is now pinned separately and builds in isolation; the
@@ -401,6 +424,10 @@ device identity and kernel-residency evidence.
 - [x] F1: add scripts/run_fortbo_reproduction.py with implementation
   botorch|fortbo, identical output schema, and an independent analytic/delay
   replay oracle.
+- [x] F1.5: add public source pins, checksum/revision-aware downloads with a
+  free-space guard, and the concurrent B5 original-control/oracle pair
+  launcher. The scripts are cluster-portable; no workstation physics run is
+  counted.
 - [ ] F2: match Landreman qEI and TS posterior, acquisition, candidate,
   trust-state, and completion traces.
 - [ ] F3: run five paired seeds for raw/data-informed TuRBO-1 and
@@ -408,7 +435,8 @@ device identity and kernel-residency evidence.
   audited, all five raw TuRBO-1 FortBO rows are now recorded, and the
   data-informed rows are pending.
 - [ ] F4: run archived Landreman control and FortBO at the original allocation,
-  then a labeled resource-matched GPU scaling row.
+  then a labeled resource-matched GPU scaling row. Launch only on the Tu Graz
+  allocation and retain the archived control as the independent oracle.
 - [ ] F5: recover FOCUS artifacts and implement/check the inducing variational
   derivative model and paired action. The local fixed-hyperparameter model,
   adapter/driver path, independent oracle, and pinned/build-checked FOCUS

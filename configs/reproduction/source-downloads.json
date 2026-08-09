@@ -1,0 +1,78 @@
+{
+  "schema_version": 1,
+  "description": "Public source pins used by the exact-tool reproduction lanes.",
+  "artifacts": [
+    {
+      "id": "landreman_archive",
+      "kind": "file",
+      "url": "https://zenodo.org/api/records/20733437/files/20260514-01-zenodo_for_data_informed_spaces_paper.20260617.tar/content",
+      "relative_path": "landreman/20260514-01-zenodo_for_data_informed_spaces_paper.20260617.tar",
+      "local_path_env": "LANDREMAN_ARCHIVE",
+      "size_bytes": 7529635840,
+      "sha256": "7037bb0abbaaa7ccc4bc7b9f5434e41b18ecdf97af04cf8ae244ea2ae20c428f",
+      "unpack_to": "landreman/20260514-01-zenodo_for_data_informed_spaces_paper"
+    },
+    {
+      "id": "glas_bindel_harvest",
+      "kind": "file",
+      "url": "https://arxiv.org/e-print/2110.07464",
+      "relative_path": "glas-bindel/2110.07464.tar",
+      "local_path_env": "GLAS_BINDEL_HARVEST",
+      "size_bytes": 2424024,
+      "sha256": "61e1dc8912ddb4825b6ac5ad5d26c2a0d86280fb71d86f2ef3991dfb5c40a693"
+    },
+    {
+      "id": "glas_bindel_paper",
+      "kind": "file",
+      "url": "https://arxiv.org/pdf/2110.07464",
+      "relative_path": "glas-bindel/2110.07464.pdf",
+      "local_path_env": "GLAS_BINDEL_PAPER",
+      "sha256": "24cc2600e8b20b74b80b96ce294286c66bea19c2e96808e516abae5f960f8d0b"
+    },
+    {
+      "id": "focus_source",
+      "kind": "git",
+      "url": "https://github.com/PrincetonUniversity/FOCUS.git",
+      "relative_path": "focus",
+      "local_path_env": "FOCUS_SOURCE",
+      "revision": "e4bb49b0632c650e326616912e274feb7781a60d",
+      "required_paths": [
+        "sources/stochastic.f90",
+        "examples/w7x_high_mirror/w7x_high_mirror.input",
+        "examples/w7x_high_mirror/w7x_high_mirror.boundary"
+      ]
+    },
+    {
+      "id": "constellaration_source",
+      "kind": "git",
+      "url": "https://github.com/proximafusion/constellaration.git",
+      "relative_path": "constellaration",
+      "local_path_env": "CONSTELLARATION_SOURCE",
+      "revision": "112b20ae07193910d467d26033fe51022e641b9f"
+    },
+    {
+      "id": "b5_dataset_shard_0",
+      "kind": "file",
+      "url": "https://huggingface.co/datasets/proxima-fusion/constellaration/resolve/19bd570ee4d57aa253ba17233b6a367e080569b9/data/train-00000-of-00003.parquet?download=true",
+      "relative_path": "constellaration-data/train-00000-of-00003.parquet",
+      "size_bytes": 251687471,
+      "sha256": "e48dada8775f9c86820372cdfe34fd4b181635284bb254854bbd0f09514838c6"
+    },
+    {
+      "id": "b5_dataset_shard_1",
+      "kind": "file",
+      "url": "https://huggingface.co/datasets/proxima-fusion/constellaration/resolve/19bd570ee4d57aa253ba17233b6a367e080569b9/data/train-00001-of-00003.parquet?download=true",
+      "relative_path": "constellaration-data/train-00001-of-00003.parquet",
+      "size_bytes": 203988362,
+      "sha256": "c574dcbc02f29417a7f5cc088dde6d38f1f165280ab166089a2b1752f3579b9b"
+    },
+    {
+      "id": "b5_dataset_shard_2",
+      "kind": "file",
+      "url": "https://huggingface.co/datasets/proxima-fusion/constellaration/resolve/19bd570ee4d57aa253ba17233b6a367e080569b9/data/train-00002-of-00003.parquet?download=true",
+      "relative_path": "constellaration-data/train-00002-of-00003.parquet",
+      "size_bytes": 154525812,
+      "sha256": "92e816bdd9898fc7f481040279084dc71ae2130e974a49df0dc2336a693fc084"
+    }
+  ]
+}
