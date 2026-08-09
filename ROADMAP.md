@@ -7,7 +7,7 @@ and test suite.
 
 ## Current status
 
-As of 2026-08-09, 15:55 CEST:
+As of 2026-08-09, 15:59 CEST:
 
 | Area | Status |
 | --- | --- |
@@ -141,6 +141,8 @@ later seed from overwriting campaign evidence or failing after workers have
 already started.
 The independent pair checker additionally requires matching B5 case, mode,
 dimension, transform file, and transform SHA-256 before reporting a comparison.
+The launcher now also marks a pair complete only when both child ledgers exist
+and report `passed: true`.
 This pair must be launched on `faepkub4` for CPU work or inside an allocated
 aCluster/sCluster Slurm job for GPU work. No physics reproduction is to run on
 the workstation. The runner stops both children if the run filesystem falls
@@ -151,8 +153,8 @@ with the original BoTorch control and FortBO sharing the pinned ConStellaration
 evaluator. Earlier seed-2 launch attempts failed before a valid evaluator pair
 was started (remote `fo` path, missing BoTorch, and evaluator-environment
 selection); each failed pair document is retained and none is counted as F3.
-At the 15:55 CEST handoff snapshot, the active seed-2 pair had 206
-original-control requests/190 responses. The FortBO child ledger exists, but
+At the 15:59 CEST handoff snapshot, the active seed-2 pair had 215
+original-control requests/199 responses. The FortBO child ledger exists, but
 the original control and parent pair ledger are not finished. It remains in
 progress with 84 GB free on `/var/tmp/ert`. No new CPU campaign or GPU Slurm
 job was started, and the workstation was not used for physics work.
