@@ -40,7 +40,11 @@
         "sources/stochastic.f90",
         "examples/w7x_high_mirror/w7x_high_mirror.input",
         "examples/w7x_high_mirror/w7x_high_mirror.boundary"
-      ]
+      ],
+      "required_digests": {
+        "examples/w7x_high_mirror/w7x_high_mirror.input": "58d907fe894726c20c59300c6dc5141e916a3e870f1f3382fbaa9846bd00a8f4",
+        "examples/w7x_high_mirror/w7x_high_mirror.boundary": "1c803bd870c30be0f991cd834b98c5d6f2d1657a27d3abd8291feefd634a36d6"
+      }
     },
     {
       "id": "constellaration_source",

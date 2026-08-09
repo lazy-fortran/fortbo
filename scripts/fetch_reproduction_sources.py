@@ -30,6 +30,7 @@ DEFAULT_ROOT = Path(
     os.environ.get("FORTBO_REPRODUCTION_SOURCE_ROOT", "/var/tmp/ert/fortbo-reproduction-sources")
 )
 DEFAULT_RESERVE_GIB = 8.0
+SHA256_LENGTH = 64
 
 
 class SourceError(RuntimeError):
@@ -59,6 +60,17 @@ def _load(path: Path) -> list[Mapping[str, Any]]:
             raise SourceError(f"unsupported source kind for {artifact.get('id')!r}")
         if not artifact.get("url") or not artifact.get("relative_path"):
             raise SourceError(f"{artifact['id']}: url and relative_path are required")
+        required_digests = artifact.get("required_digests", {})
+        if not isinstance(required_digests, dict):
+            raise SourceError(f"{artifact['id']}: required_digests must be an object")
+        for required_path, digest in required_digests.items():
+            if (not isinstance(required_path, str) or not required_path
+                    or not isinstance(digest, str)
+                    or len(digest) != SHA256_LENGTH
+                    or any(character not in "0123456789abcdef" for character in digest)):
+                raise SourceError(
+                    f"{artifact['id']}: required_digests must map paths to lowercase SHA-256 digests"
+                )
     return artifacts
 
 
@@ -142,6 +154,19 @@ def _git_output(path: Path, *args: str) -> str:
     return result.stdout.strip()
 
 
+def _required_file(root: Path, relative: str, artifact_id: str) -> Path:
+    candidate = (root / relative).resolve()
+    try:
+        candidate.relative_to(root.resolve())
+    except ValueError as error:
+        raise SourceError(
+            f"{artifact_id}: required path escapes the checkout: {relative}"
+        ) from error
+    if not candidate.is_file():
+        raise SourceError(f"{artifact_id}: required path is absent: {relative}")
+    return candidate
+
+
 def _checkout(
     artifact: Mapping[str, Any], destination: Path, check_only: bool, require_clean: bool
 ) -> None:
@@ -171,8 +196,14 @@ def _checkout(
     if dirty and require_clean:
         raise SourceError(f"{artifact['id']}: checkout is dirty: {destination}")
     for required in artifact.get("required_paths", []):
-        if not (destination / required).is_file():
-            raise SourceError(f"{artifact['id']}: required path is absent: {required}")
+        _required_file(destination, required, artifact["id"])
+    for required, expected in artifact.get("required_digests", {}).items():
+        actual_digest = _digest(_required_file(destination, required, artifact["id"]))
+        if actual_digest != expected:
+            raise SourceError(
+                f"{artifact['id']}: required file digest mismatch for {required}: "
+                f"{actual_digest} != {expected}"
+            )
     tree_digest = hashlib.sha256(_git_output(destination, "ls-tree", "-r", "--full-tree", "HEAD").encode()).hexdigest()
     cleanliness = "clean" if not dirty else "DIRTY; reuse only, not an exact source"
     print(f"OK {artifact['id']}: {destination} ({revision}, tree {tree_digest}, {cleanliness})")
