@@ -6,12 +6,14 @@ import subprocess
 import sys
 import tempfile
 import threading
+import time
 import unittest
 from pathlib import Path
 
 from scripts.run_b5_oracle_pair import (
     PairError,
     _ledgers_passed,
+    _terminate,
     _run_process,
     main as run_pair,
 )
@@ -194,6 +196,54 @@ class OraclePairTests(unittest.TestCase):
                     abort,
                 )
             self.assertTrue(abort.is_set())
+
+    def test_terminate_cleans_a_detached_descendant(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            marker = Path(temporary) / "child.pid"
+            process = subprocess.Popen(
+                [
+                    sys.executable,
+                    "-c",
+                    (
+                        "import pathlib, subprocess, sys, time; "
+                        "child = subprocess.Popen([sys.executable, '-c', "
+                        "'import time; time.sleep(60)'], start_new_session=True); "
+                        "pathlib.Path(sys.argv[1]).write_text(str(child.pid)); "
+                        "time.sleep(60)"
+                    ),
+                    str(marker),
+                ],
+                start_new_session=True,
+            )
+            try:
+                for _ in range(100):
+                    if marker.is_file():
+                        break
+                    time.sleep(0.01)
+                self.assertTrue(marker.is_file())
+                child_pid = int(marker.read_text(encoding="utf-8"))
+                _terminate(process)
+                self.assertIsNotNone(process.poll())
+                for _ in range(100):
+                    if subprocess.run(
+                        ["ps", "-p", str(child_pid)],
+                        capture_output=True,
+                        check=False,
+                    ).returncode != 0:
+                        break
+                    time.sleep(0.01)
+                self.assertNotEqual(
+                    subprocess.run(
+                        ["ps", "-p", str(child_pid)],
+                        capture_output=True,
+                        check=False,
+                    ).returncode,
+                    0,
+                )
+            finally:
+                if process.poll() is None:
+                    process.kill()
+                    process.wait()
 
     def test_pair_requires_both_child_ledgers_to_pass(self):
         passed = {"passed": True}

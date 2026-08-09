@@ -175,6 +175,12 @@ def _run_process(
 
 
 def _terminate(process: subprocess.Popen[Any]) -> None:
+    descendants = _descendant_pids(process.pid)
+    for pid in reversed(descendants):
+        try:
+            os.kill(pid, signal.SIGTERM)
+        except ProcessLookupError:
+            pass
     try:
         os.killpg(process.pid, signal.SIGTERM)
     except ProcessLookupError:
@@ -182,11 +188,50 @@ def _terminate(process: subprocess.Popen[Any]) -> None:
     try:
         process.wait(timeout=20)
     except subprocess.TimeoutExpired:
+        for pid in reversed(descendants):
+            try:
+                os.kill(pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
         try:
             os.killpg(process.pid, signal.SIGKILL)
         except ProcessLookupError:
             pass
         process.wait()
+
+
+def _descendant_pids(root_pid: int) -> list[int]:
+    """Find descendants even when a worker creates a separate process group."""
+
+    try:
+        result = subprocess.run(
+            ["ps", "-eo", "pid=,ppid="],
+            capture_output=True,
+            text=True,
+            timeout=5,
+            check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return []
+    if result.returncode:
+        return []
+    children: dict[int, list[int]] = {}
+    for line in result.stdout.splitlines():
+        fields = line.split()
+        if len(fields) != 2:
+            continue
+        try:
+            pid, parent = (int(field) for field in fields)
+        except ValueError:
+            continue
+        children.setdefault(parent, []).append(pid)
+    descendants: list[int] = []
+    pending = list(children.get(root_pid, ()))
+    while pending:
+        pid = pending.pop()
+        descendants.append(pid)
+        pending.extend(children.get(pid, ()))
+    return descendants
 
 
 def _load_result(path: Path) -> dict[str, Any]:
