@@ -7,7 +7,7 @@ and test suite.
 
 ## Current status
 
-As of 2026-08-09, 17:07 CEST:
+As of 2026-08-09, 17:17 CEST:
 
 | Area | Status |
 | --- | --- |
@@ -174,9 +174,19 @@ physics. The fresh checkout's `fo build` failed because
 manifest is retained at
 `/var/tmp/ert/fortbo-cpu-59c6e35/runs/oracle-pairs/data-informed-seed-3.json`.
 No retry was launched; the latest remote disk check left 82 GB free, and the
-workstation remained unused for physics. The next campaign continuation must
-first make the clean dependency/build context explicit and pass `fo build` on
-`faepkub4`.
+workstation remained unused for physics. The failed attempt left the clean
+dependency/build context as the next campaign gate.
+
+That build context is now repaired on `faepkub4`: the FortBO `59c6e35`
+checkout has clean detached sibling worktrees for its path dependencies, with
+FortNum `7ced2f7aa272`, FortOpt `883aa7ee0a3f`, FortAD `d71cdf724cd8`, FortML
+`970508656825`, FortMC `e5e42a0ac1d4`, FortFront `488c49e14700`, FortGen
+`ea422bb282ba`, and FortSparse `7ad20738b3f8`. Remote `fo build` completed
+818/818, and `FO_TEST_TIMEOUT=60 fo test` passed all 48 tests in 81.1 seconds.
+The default 10-second test timeout still reports 45/48 because the three slow
+tests exceed that harness limit; this is why the explicit timeout is recorded.
+This was a software-only gate: no physics relaunch has started yet, and the
+workstation was not used.
 
 The Landreman exact-tool path is now portable: the manifest resolves
 `LANDREMAN_ARCHIVE`, `scripts/run_landreman_original.py` extracts only the
@@ -347,11 +357,6 @@ external FortAD `fortad_reverse.f90` with an nvfortran internal compiler error
    blocked by the external FortAD nvfortran compiler error recorded above, so
    the package-level GPU benchmark and end-to-end performance profile remain
    open.
-5. A fresh commit-addressed CPU checkout at FortBO `59c6e35` failed its remote
-   `fo build` before the seed-3 oracle pair reached physics because
-   `fortnum_kinds.mod` was not available. Re-establish the sibling dependency
-   and module search/build context, pass the remote build and contract gates,
-   then relaunch only from `faepkub4` (or an allocated GPU Slurm job).
 
 ## Repository and provenance
 
