@@ -7,7 +7,7 @@ and test suite.
 
 ## Current status
 
-As of 2026-08-09, 17:17 CEST:
+As of 2026-08-09, 17:20 CEST:
 
 | Area | Status |
 | --- | --- |
@@ -163,8 +163,8 @@ evaluator. Earlier seed-2 launch attempts failed before a valid evaluator pair
 was started (remote `fo` path, missing BoTorch, and evaluator-environment
 selection); each failed pair document is retained and none is counted as F3.
 The completed pair used 256 truth calls and eight workers on each side and left
-83 GB free on `/var/tmp/ert`. No next CPU campaign or GPU Slurm job has been
-started yet, and the workstation was not used for physics work.
+83 GB free on `/var/tmp/ert`. At that checkpoint no next CPU campaign or GPU
+Slurm job had started; the workstation was not used for physics work.
 
 The next commit-addressed seed-3 attempt was prepared on `faepkub4` from
 FortBO `59c6e35` under `/var/tmp/ert/fortbo-cpu-59c6e35/`, but stopped before
@@ -185,8 +185,17 @@ FortNum `7ced2f7aa272`, FortOpt `883aa7ee0a3f`, FortAD `d71cdf724cd8`, FortML
 818/818, and `FO_TEST_TIMEOUT=60 fo test` passed all 48 tests in 81.1 seconds.
 The default 10-second test timeout still reports 45/48 because the three slow
 tests exceed that harness limit; this is why the explicit timeout is recorded.
-This was a software-only gate: no physics relaunch has started yet, and the
-workstation was not used.
+This was a software-only gate, and the workstation was not used.
+
+After that gate, the data-informed TuRBO-1 seed-3 retry-1 pair was launched on
+`faepkub4` with the pinned simsopt-dfo/ConStellaration environments, 256 calls,
+and eight workers. Its FortBO checkout is `59c6e35`; its fresh run root is
+`/var/tmp/ert/fortbo-cpu-59c6e35/runs/oracle-pair-data-informed-seed-3-retry1/`
+and its pair output is
+`/var/tmp/ert/fortbo-cpu-59c6e35/runs/oracle-pairs/data-informed-seed-3-retry1.json`.
+The launcher was alive after startup with no ledger yet and 82 GB free on
+`/var/tmp/ert`; this is an in-progress attempt, not an F3 row. The workstation
+remains unused for physics.
 
 The Landreman exact-tool path is now portable: the manifest resolves
 `LANDREMAN_ARCHIVE`, `scripts/run_landreman_original.py` extracts only the
