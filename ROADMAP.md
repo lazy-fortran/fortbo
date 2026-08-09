@@ -54,15 +54,16 @@ FortBO B5 rows are still pending, so this closes control evidence only.
 FortBO's TuRBO driver now accepts an explicit success mask: failed truth calls
 remain in the history and trust accounting as imputed worst cases, but are
 excluded from surrogate training and cannot become incumbents. The
-`fortbo_b5_protocol` executable and `scripts/run_fortbo_b5.py` provide the
-eight-worker external-evaluator bridge for the remaining value-only rows.
-Those rows are deliberately labeled batched FortBO ask/tell evidence until a
-completion-driven policy with matching failure semantics is available.
-The pinned evaluator has been exercised through that bridge: an eight-call
-raw smoke produced eight recorded truth failures, while an eight-call
-data-informed smoke produced eight successful calls in about 275 seconds on
-this host. These are bridge checks, not F3 rows; the full 256-call paired
-campaign remains an explicitly scheduled external computation.
+`fortbo_b5_protocol` and `fortbo_b5_completion_protocol`, together with
+`scripts/run_fortbo_b5.py`, provide both the legacy batched and the
+completion-driven eight-worker external-evaluator bridges. Completion-driven
+asks are one point at a time, keep pending points out of subsequent proposals
+with posterior-mean fantasies, accept out-of-order tells, and preserve failed
+rows without inventing objective values. A clean eight-call raw smoke through
+the completion-driven bridge recorded eight truth failures, peak concurrency
+eight, and a nontrivial completion order; the row passed the FortBO-side
+audit. These are bridge checks, not F3 rows; the full 256-call paired campaign
+remains an explicitly scheduled external computation.
 
 The FOCUS source was recovered from its public Git repository and pinned at
 `e4bb49b0632c650e326616912e274feb7781a60d`, with the stochastic source and
