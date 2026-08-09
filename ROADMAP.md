@@ -7,7 +7,7 @@ and test suite.
 
 ## Current status
 
-As of 2026-08-09:
+As of 2026-08-09, 14:32 CEST:
 
 | Area | Status |
 | --- | --- |
@@ -68,9 +68,9 @@ successful data-informed truth calls (272.1 seconds), both at peak concurrency
 eight with nontrivial completion order; both rows passed the FortBO-side
 audit. These are bridge checks, not F3 rows; the full 256-call campaign is now
 running on `faepkub4` in the data-informed seed-1 lane, with no duplicate
-physics run started here. The 13:51 CEST handoff snapshot had 177 requests and
-141 responses, eight active physics workers, no final ledger yet, and 97 GB free
-on `/var/tmp/ert`; it remains an in-progress run rather than an F3 result.
+physics run started here. The latest remote snapshot had 213 requests and 166
+responses, eight active physics workers, no final ledger yet, and 92 GB free on
+`/var/tmp/ert`; it remains an in-progress run rather than an F3 result.
 
 The public-source provenance lane is now scripted but deliberately not run from
 this workstation. `configs/reproduction/source-downloads.json` pins the
@@ -104,10 +104,12 @@ with the original BoTorch control and FortBO sharing the pinned ConStellaration
 evaluator. Earlier seed-2 launch attempts failed before a valid evaluator pair
 was started (remote `fo` path, missing BoTorch, and evaluator-environment
 selection); each failed pair document is retained and none is counted as F3.
-At the 14:22 CEST handoff snapshot, seed-1 had 205 requests and 162
-responses; the active seed-2 pair had 16 original-control requests/8 responses
-and 13 FortBO requests/5 responses. Neither final ledger existed, and
-`/var/tmp/ert` had 92 GB free, so both remain in progress rather than F3 rows.
+At the 14:32 CEST handoff snapshot, seed-1 had 213 requests and 166
+responses; the active seed-2 pair had 31 original-control requests/19
+responses and 29 FortBO requests/19 responses. Neither final ledger existed,
+and `/var/tmp/ert` had 92 GB free, so both remain in progress rather than F3
+rows. No new CPU campaign or GPU Slurm job was started, and the workstation
+was not used for physics work.
 
 The Landreman exact-tool path is now portable: the manifest resolves
 `LANDREMAN_ARCHIVE`, `scripts/run_landreman_original.py` extracts only the
