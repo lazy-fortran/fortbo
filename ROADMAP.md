@@ -50,7 +50,9 @@ model when configured.
 The external B5 control ledgers are now materialized from Git LFS and pass the
 FortBO-side audit: ten TuRBO-1 ledgers (raw and data-informed) plus ten
 data-informed four-region TuRBO-m ledgers, all at 256 calls and eight workers.
-FortBO B5 rows are still pending, so this closes control evidence only.
+FortBO's five raw TuRBO-1 rows are now recorded and audited; the five
+data-informed TuRBO-1 rows and five data-informed TuRBO-m rows remain pending,
+so the control set is complete but the FortBO campaign is not.
 
 FortBO's TuRBO driver now accepts an explicit success mask: failed truth calls
 remain in the history and trust accounting as imputed worst cases, but are
@@ -64,8 +66,9 @@ rows without inventing objective values. Clean eight-call smokes through the
 completion-driven bridge recorded eight raw truth failures and eight
 successful data-informed truth calls (272.1 seconds), both at peak concurrency
 eight with nontrivial completion order; both rows passed the FortBO-side
-audit. These are bridge checks, not F3 rows; the full 256-call paired campaign
-remains an explicitly scheduled external computation.
+audit. These are bridge checks, not F3 rows; the full 256-call campaign is now
+running on `faepkub4` in the data-informed seed-1 lane, with no duplicate
+physics run started here.
 
 The public-source provenance lane is now scripted but deliberately not run from
 this workstation. `configs/reproduction/source-downloads.json` pins the
