@@ -78,17 +78,26 @@ def _check_run(
     successful = [row["value"] for row in evaluations if row.get("status") == "ok"]
     expected_best = min(successful) if successful else None
     actual_best = result.get("best_value")
+    checked_result = dict(result)
     if expected_best is None:
         _require(actual_best is None, f"{side} reports a best value without successes")
     else:
-        _require(math.isclose(float(actual_best), float(expected_best), rel_tol=1e-12, abs_tol=1e-12), f"{side} best value is not the minimum successful value")
+        if actual_best is None:
+            # FortBO records best_so_far on each evaluation rather than an
+            # aggregate result field; derive the comparison value from the
+            # independently scanned successful rows.
+            actual_best = expected_best
+            checked_result["best_value"] = expected_best
+        else:
+            _require(math.isclose(float(actual_best), float(expected_best), rel_tol=1e-12, abs_tol=1e-12), f"{side} best value is not the minimum successful value")
     run_configuration = dict(document.get("configuration", {}))
+    run_configuration.setdefault("mode", problem.get("mode"))
     run_configuration.setdefault("regions", 1)
     return {
         "problem": problem,
         "configuration": run_configuration,
         "source": document.get("source", {}),
-        "result": result,
+        "result": checked_result,
     }
 
 

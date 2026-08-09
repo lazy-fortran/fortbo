@@ -93,6 +93,30 @@ class OraclePairTests(unittest.TestCase):
             self.assertEqual(result.returncode, 1)
             self.assertIn("best value is not the minimum", result.stderr)
 
+    def test_missing_fortbo_aggregate_best_is_derived_from_rows(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            pair = self.make_pair(root)
+            fortbo = root / "fortbo.json"
+            document = json.loads(fortbo.read_text(encoding="utf-8"))
+            del document["result"]["best_value"]
+            fortbo.write_text(json.dumps(document), encoding="utf-8")
+            result = self.run_checker(pair)
+            self.assertEqual(result.returncode, 0, result.stderr + result.stdout)
+            self.assertIn('"fortbo_minus_oracle": 0.0', result.stdout)
+
+    def test_mode_can_be_read_from_child_problem_metadata(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            pair = self.make_pair(root)
+            for name in ("oracle.json", "fortbo.json"):
+                path = root / name
+                document = json.loads(path.read_text(encoding="utf-8"))
+                del document["configuration"]["mode"]
+                path.write_text(json.dumps(document), encoding="utf-8")
+            result = self.run_checker(pair)
+            self.assertEqual(result.returncode, 0, result.stderr + result.stdout)
+
     def test_different_upstream_commit_is_rejected(self):
         with tempfile.TemporaryDirectory() as temporary:
             result = self.run_checker(
