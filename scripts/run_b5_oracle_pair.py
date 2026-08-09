@@ -182,6 +182,16 @@ def _document_summary(document: Mapping[str, Any]) -> dict[str, Any]:
     }
 
 
+def _ledgers_passed(
+    original_document: Optional[Mapping[str, Any]],
+    fortbo_document: Optional[Mapping[str, Any]],
+) -> bool:
+    return all(
+        document is not None and document.get("passed") is True
+        for document in (original_document, fortbo_document)
+    )
+
+
 def main(argv: Optional[Iterable[str]] = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--mode", choices=("raw", "data-informed"), required=True)
@@ -318,6 +328,8 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
                     process_records[label] = {"error": str(error)}
         original_document = _load_result(original_output) if original_output.is_file() else None
         fortbo_document = _load_result(fortbo_output) if fortbo_output.is_file() else None
+        if not _ledgers_passed(original_document, fortbo_document):
+            errors.append("one or both child ledgers are missing passed=true")
         pair = {
             "schema_name": "fortbo.oracle-pair",
             "schema_version": 1,
@@ -350,7 +362,7 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
             },
             "status": "complete" if not errors and all(
                 record.get("returncode") == 0 for record in process_records.values()
-            ) else "failed",
+            ) and _ledgers_passed(original_document, fortbo_document) else "failed",
             "errors": errors,
         }
         args.output.write_text(json.dumps(pair, indent=2, sort_keys=True) + "\n", encoding="utf-8")

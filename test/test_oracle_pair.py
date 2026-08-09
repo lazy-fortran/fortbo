@@ -9,7 +9,12 @@ import threading
 import unittest
 from pathlib import Path
 
-from scripts.run_b5_oracle_pair import PairError, _run_process, main as run_pair
+from scripts.run_b5_oracle_pair import (
+    PairError,
+    _ledgers_passed,
+    _run_process,
+    main as run_pair,
+)
 
 
 ROOT = Path(__file__).parents[1]
@@ -165,6 +170,13 @@ class OraclePairTests(unittest.TestCase):
                     abort,
                 )
             self.assertTrue(abort.is_set())
+
+    def test_pair_requires_both_child_ledgers_to_pass(self):
+        passed = {"passed": True}
+        failed = {"passed": False}
+        self.assertTrue(_ledgers_passed(passed, passed))
+        self.assertFalse(_ledgers_passed(passed, failed))
+        self.assertFalse(_ledgers_passed(passed, None))
 
     def test_pair_runner_preflights_the_original_environment(self):
         with tempfile.TemporaryDirectory() as temporary:
