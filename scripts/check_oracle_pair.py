@@ -33,10 +33,34 @@ def _load(path: Path) -> Mapping[str, Any]:
     return document
 
 
-def _check_run(pair: Mapping[str, Any], side: str) -> Mapping[str, Any]:
+def _output_path(
+    entry: Mapping[str, Any],
+    rebase_from: Optional[Path],
+    rebase_to: Optional[Path],
+) -> Path:
+    output = Path(entry.get("output", ""))
+    if rebase_from is None:
+        return output
+    assert rebase_to is not None
+    try:
+        relative = output.resolve().relative_to(rebase_from.resolve())
+    except ValueError as error:
+        raise PairCheckError(
+            f"{output} is outside the requested rebase root {rebase_from}"
+        ) from error
+    return rebase_to.resolve() / relative
+
+
+def _check_run(
+    pair: Mapping[str, Any],
+    side: str,
+    *,
+    rebase_from: Optional[Path] = None,
+    rebase_to: Optional[Path] = None,
+) -> Mapping[str, Any]:
     entry = pair.get(side)
     _require(isinstance(entry, dict), f"missing {side} entry")
-    output = Path(entry.get("output", ""))
+    output = _output_path(entry, rebase_from, rebase_to)
     _require(output.is_file(), f"missing {side} output: {output}")
     expected_digest = entry.get("sha256")
     if expected_digest:
@@ -68,11 +92,18 @@ def _check_run(pair: Mapping[str, Any], side: str) -> Mapping[str, Any]:
     }
 
 
-def check(path: Path) -> None:
+def check(
+    path: Path,
+    *,
+    rebase_from: Optional[Path] = None,
+    rebase_to: Optional[Path] = None,
+) -> None:
+    if (rebase_from is None) != (rebase_to is None):
+        raise PairCheckError("rebase-from and rebase-to must be supplied together")
     pair = _load(path)
     configuration = pair.get("configuration", {})
-    oracle = _check_run(pair, "oracle")
-    fortbo = _check_run(pair, "fortbo")
+    oracle = _check_run(pair, "oracle", rebase_from=rebase_from, rebase_to=rebase_to)
+    fortbo = _check_run(pair, "fortbo", rebase_from=rebase_from, rebase_to=rebase_to)
     for key in ("mode", "regions", "seed", "budget", "workers"):
         _require(oracle["configuration"].get(key) == configuration.get(key), f"oracle {key} disagrees with pair")
         _require(fortbo["configuration"].get(key) == configuration.get(key), f"fortbo {key} disagrees with pair")
@@ -92,9 +123,13 @@ def check(path: Path) -> None:
 def main(argv: Optional[Iterable[str]] = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("pair", type=Path)
+    parser.add_argument("--rebase-from", type=Path,
+                        help="remote run root embedded in pair output paths")
+    parser.add_argument("--rebase-to", type=Path,
+                        help="local run root containing archived output files")
     args = parser.parse_args(argv)
     try:
-        check(args.pair)
+        check(args.pair, rebase_from=args.rebase_from, rebase_to=args.rebase_to)
     except PairCheckError as error:
         print(f"ERROR: {error}", file=sys.stderr)
         return 1

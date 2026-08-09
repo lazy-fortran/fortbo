@@ -46,9 +46,9 @@ def run_document(best_value, commit="upstream-commit"):
 
 
 class OraclePairTests(unittest.TestCase):
-    def run_checker(self, pair):
+    def run_checker(self, pair, *extra):
         return subprocess.run(
-            [sys.executable, str(CHECKER), str(pair)],
+            [sys.executable, str(CHECKER), str(pair), *extra],
             check=False,
             capture_output=True,
             text=True,
@@ -95,6 +95,27 @@ class OraclePairTests(unittest.TestCase):
             )
             self.assertEqual(result.returncode, 1)
             self.assertIn("different ConStellaration commits", result.stderr)
+
+    def test_checker_rebases_archived_remote_paths(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            pair = self.make_pair(root, fortbo_best=1.0)
+            archive = root / "archive" / "run"
+            archive.mkdir(parents=True)
+            for name in ("oracle.json", "fortbo.json"):
+                (archive / name).write_text(
+                    (root / name).read_text(encoding="utf-8"), encoding="utf-8"
+                )
+            document = json.loads(pair.read_text(encoding="utf-8"))
+            document["oracle"]["output"] = "/remote/run/oracle.json"
+            document["fortbo"]["output"] = "/remote/run/fortbo.json"
+            pair.write_text(json.dumps(document), encoding="utf-8")
+            result = self.run_checker(
+                pair,
+                "--rebase-from", "/remote/run",
+                "--rebase-to", str(archive),
+            )
+            self.assertEqual(result.returncode, 0, result.stderr + result.stdout)
 
     def test_pair_runner_refuses_to_reuse_nonempty_run_root(self):
         with tempfile.TemporaryDirectory() as temporary:
