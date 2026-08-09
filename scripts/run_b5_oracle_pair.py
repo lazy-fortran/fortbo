@@ -161,6 +161,8 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
     parser.add_argument("--dfo-root", type=Path, default=DEFAULT_DFO_ROOT,
                         help="cluster checkout of simsopt-dfo; also set SIMSOPT_DFO_SOURCE")
     parser.add_argument("--fortbo-root", type=Path, default=ROOT)
+    parser.add_argument("--fortbo-python", default=os.environ.get("FORTBO_PYTHON", sys.executable),
+                        help="Python interpreter for the FortBO bridge")
     parser.add_argument("--original-python", default=os.environ.get("SIMSOPT_DFO_PYTHON", sys.executable))
     parser.add_argument("--fortbo-command", default="fo")
     parser.add_argument("--constellaration-root", type=Path)
@@ -209,7 +211,7 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
             str(original_output),
         ]
         fortbo_command = [
-            sys.executable,
+            args.fortbo_python,
             str(args.fortbo_root / "scripts/run_fortbo_b5.py"),
             "--mode",
             args.mode,
