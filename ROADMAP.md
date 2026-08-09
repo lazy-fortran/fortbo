@@ -125,6 +125,14 @@ timeouts, peak concurrency eight, all 256 unique completion IDs, and
 3490.09 seconds wall time. Three of the five raw TuRBO-1 FortBO rows are now
 recorded; the remaining raw seeds and data-informed rows are open.
 
+The fourth complete raw TuRBO-1 row used FortBO `c263e46` and simsopt-dfo
+`2a3ce7b`: seed 4, 256 calls, eight workers, and the same pinned
+ConStellaration source. Its ledger passes `check_fortbo_b5.py` and records 26
+successful and 230 failed truth calls, including 25 structured worker
+timeouts, peak concurrency eight, all 256 unique completion IDs, and
+3528.25 seconds wall time. Four of the five raw TuRBO-1 FortBO rows are now
+recorded; the final raw seed and data-informed rows remain open.
+
 The FOCUS source was recovered from its public Git repository and pinned at
 `e4bb49b0632c650e326616912e274feb7781a60d`, with the stochastic source and
 W7-X high-mirror example files present. An isolated GNU Fortran/OpenMPI/HDF5
@@ -389,7 +397,7 @@ device identity and kernel-residency evidence.
   trust-state, and completion traces.
 - [ ] F3: run five paired seeds for raw/data-informed TuRBO-1 and
   data-informed TuRBO-m at 256 calls and eight workers; control ledgers are
-  audited, three raw TuRBO-1 FortBO rows are now recorded, and the remaining
+  audited, four raw TuRBO-1 FortBO rows are now recorded, and the remaining
   rows are pending.
 - [ ] F4: run archived Landreman control and FortBO at the original allocation,
   then a labeled resource-matched GPU scaling row.
