@@ -7,7 +7,7 @@ and test suite.
 
 ## Current status
 
-As of 2026-08-09, 21:08 CEST:
+As of 2026-08-09, 21:23 CEST:
 
 | Area | Status |
 | --- | --- |
@@ -381,6 +381,12 @@ covariance/realization ledger, optimizer implementation, or seed ledger. The
 published periodic-kernel equations are now implemented in
 `scripts/glas_covariance.py` and checked against direct numerical integration;
 that generator does not claim to recover the paper's random-number schedule.
+The authors' public research page links the arXiv preprint but no source or
+data release; the journal article supplies the model dimensions and optimizer
+parameters but likewise does not publish the paper-specific W7-X input,
+covariance realization file, optimizer checkout, or seed ledger. The public
+trail therefore strengthens the literature-only classification but does not
+make the missing experiment artifacts reproducible.
 
 The current local GPU audit on `mailuefterl` found `nvfortran`/`nvc` 26.5-0 and
 two NVIDIA GeForce RTX 5060 Ti devices (driver 610.43.03, 16311 MiB each).
