@@ -7,7 +7,7 @@ and test suite.
 
 ## Current status
 
-As of 2026-08-09, 21:02 CEST:
+As of 2026-08-09, 21:08 CEST:
 
 | Area | Status |
 | --- | --- |
@@ -248,6 +248,10 @@ gate with ConStellaration revision
 `112b20ae07193910d467d26033fe51022e641b9f` and is active on faepkub4 under
 `/var/tmp/ert/fortbo-cpu-f5d4d81/runs/oracle-pair-data-informed-seed-4-retry2/`;
 no result is counted until both ledgers and the pair checker pass.
+The follow-up cleanup audit found that the upstream evaluator creates separate
+sessions for its worker processes. Pushed commit `94fb558` now terminates the
+descendant process tree as well as the wrapper process group; its detached-child
+regression test and the focused pair/environment suite pass (`19 passed`).
 
 The Landreman exact-tool path is now portable: the manifest resolves
 `LANDREMAN_ARCHIVE`, `scripts/run_landreman_original.py` extracts only the
