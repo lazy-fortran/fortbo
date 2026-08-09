@@ -7,7 +7,7 @@ and test suite.
 
 ## Current status
 
-As of 2026-08-09, 20:29 CEST:
+As of 2026-08-09, 20:31 CEST:
 
 | Area | Status |
 | --- | --- |
@@ -197,10 +197,10 @@ and eight workers. Its FortBO checkout is `59c6e35`; its fresh run root is
 and its pair output is
 `/var/tmp/ert/fortbo-cpu-59c6e35/runs/oracle-pairs/data-informed-seed-3-retry1.json`.
 The launcher was alive after startup with no ledger yet and 82 GB free on
-`/var/tmp/ert`. At the 20:29 CEST checkpoint, the FortBO child had completed
+`/var/tmp/ert`. At the 20:31 CEST checkpoint, the FortBO child had completed
 all 256 calls and written a passing child ledger with 34 failed upstream
-evaluations in 10492.175852232991 seconds; the original-control child had 224
-dispatched requests and 209 response files and was still active. The pair
+evaluations in 10492.175852232991 seconds; the original-control child had 228
+dispatched requests and 213 response files and was still active. The pair
 ledger and original child ledger were still absent. `/var/tmp/ert` had 81 GB
 free (81% used), and the pair run occupied 6.4 MB. This remains an
 in-progress attempt, not an F3 row, until the oracle completes and
@@ -241,10 +241,11 @@ the large archive remains on `faepkub4` rather than being copied to the
 workstation. The current `aCluster` and `sCluster` inventories expose one GPU
 per node, so no exact one-node/four-GPU allocation was submitted; the live
 control/FortBO trace remains open.
-The read-only 18:44 CEST Slurm inventory still reports one `gpu:tesla_t4:1`
-per visible aCluster node and one `gpu:nvidia_rtx_pro_6000...:1` on the idle
-sCluster node; no compatible four-GPU node was visible and no GPU job was
-submitted by this campaign.
+The read-only 20:31 CEST Slurm inventory reports one `gpu:tesla_t4:1` on each
+visible aCluster node, including idle node34, and one
+`gpu:nvidia_rtx_pro_6000_blackwell_max-q_workstation_edition:1` on each visible
+sCluster node, including idle nodes9--19. No compatible one-node/four-GPU
+allocation is visible and no GPU job was submitted by this campaign.
 
 The missing FortBO side of F4 is now staged in
 `scripts/run_landreman_fortbo.py`: rank zero owns the completion-driven
