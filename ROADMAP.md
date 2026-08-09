@@ -7,7 +7,7 @@ and test suite.
 
 ## Current status
 
-As of 2026-08-09, 15:53 CEST:
+As of 2026-08-09, 15:55 CEST:
 
 | Area | Status |
 | --- | --- |
@@ -83,6 +83,11 @@ are FortBO `cd71e9b9f2f71d0966d3b5c8792f213d78eca1d4`, simsopt-dfo
 one FortBO data-informed TuRBO-1 row, but it is not an oracle-paired row; the
 valid paired seed-2 run remains active. `/var/tmp/ert` had 84 GB free at the
 snapshot.
+The pre-existing seed-1 BoTorch control at
+`/home/ert/data/simsopt-dfo/b5-turbo-c1845a5/frozen/data-informed-seed-1.json`
+does share the transform digest and ConStellaration revision, but it was not
+launched by the concurrent pair runner and has no pair manifest; it remains a
+standalone comparator rather than a paired F3 oracle.
 
 The FortBO child of the active paired data-informed seed-2 run has since
 completed and passes `check_fortbo_b5.py`. Its provisional copy is retained at
@@ -146,8 +151,8 @@ with the original BoTorch control and FortBO sharing the pinned ConStellaration
 evaluator. Earlier seed-2 launch attempts failed before a valid evaluator pair
 was started (remote `fo` path, missing BoTorch, and evaluator-environment
 selection); each failed pair document is retained and none is counted as F3.
-At the 15:53 CEST handoff snapshot, the active seed-2 pair had 200
-original-control requests/185 responses. The FortBO child ledger exists, but
+At the 15:55 CEST handoff snapshot, the active seed-2 pair had 206
+original-control requests/190 responses. The FortBO child ledger exists, but
 the original control and parent pair ledger are not finished. It remains in
 progress with 84 GB free on `/var/tmp/ert`. No new CPU campaign or GPU Slurm
 job was started, and the workstation was not used for physics work.
