@@ -122,7 +122,7 @@ archive and executing that control on the allocation.
 
 At `bf7c665`, a clean canonical checkout with clean sibling dependencies passes
 all 48 Fortran tests and all 40 Python tests. The current pushed checkout passes
-all 48 Fortran tests and all 52 Python tests. A raw 256-call attempt was stopped
+all 48 Fortran tests and all 54 Python tests. A raw 256-call attempt was stopped
 after 71 completed failures because several upstream evaluator subprocesses
 ran for multiple minutes; it produced no ledger and is not counted as an F3
 row. The external evaluator has an explicit 600-second worker timeout policy.
