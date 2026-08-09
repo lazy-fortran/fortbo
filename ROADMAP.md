@@ -67,6 +67,13 @@ eight with nontrivial completion order; both rows passed the FortBO-side
 audit. These are bridge checks, not F3 rows; the full 256-call paired campaign
 remains an explicitly scheduled external computation.
 
+At `bf7c665`, a clean canonical checkout with clean sibling dependencies passes
+all 48 Fortran tests and all 40 Python tests. A raw 256-call attempt was stopped
+after 71 completed failures because several upstream evaluator subprocesses
+ran for multiple minutes; it produced no ledger and is not counted as an F3
+row. The next full campaign needs an explicit evaluator-timeout policy before
+it can be treated as bounded evidence.
+
 The FOCUS source was recovered from its public Git repository and pinned at
 `e4bb49b0632c650e326616912e274feb7781a60d`, with the stochastic source and
 W7-X high-mirror example files present. An isolated GNU Fortran/OpenMPI/HDF5
