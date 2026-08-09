@@ -105,6 +105,11 @@ def _run_process(
                 _terminate(process)
                 raise PairError(f"{label}: stopped because the paired process failed")
             time.sleep(5.0)
+        if process.returncode:
+            abort.set()
+            raise PairError(
+                f"{label}: process exited with return code {process.returncode}"
+            )
         return {
             "command": command,
             "cwd": str(cwd),

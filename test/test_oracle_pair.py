@@ -1,13 +1,15 @@
 """Independent behavioral checks for the original-control oracle pair."""
 
 import json
+import os
 import subprocess
 import sys
 import tempfile
+import threading
 import unittest
 from pathlib import Path
 
-from scripts.run_b5_oracle_pair import main as run_pair
+from scripts.run_b5_oracle_pair import PairError, _run_process, main as run_pair
 
 
 ROOT = Path(__file__).parents[1]
@@ -110,6 +112,26 @@ class OraclePairTests(unittest.TestCase):
                 "--output", str(root / "pair.json"),
             ])
             self.assertEqual(result, 2)
+
+    def test_failed_child_aborts_the_pair(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            run_root = root / "run"
+            run_root.mkdir()
+            abort = threading.Event()
+            with self.assertRaises(PairError):
+                _run_process(
+                    "oracle",
+                    [sys.executable, "-c", "import sys; sys.exit(7)"],
+                    root,
+                    os.environ.copy(),
+                    root / "stdout.log",
+                    root / "stderr.log",
+                    run_root,
+                    0,
+                    abort,
+                )
+            self.assertTrue(abort.is_set())
 
 
 if __name__ == "__main__":
