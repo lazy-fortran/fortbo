@@ -38,9 +38,29 @@
     "optimizer source and experiment seed ledger"
   ],
   "missing_inputs": [
-    "W7-X input",
+    "paper-specific W7-X input provenance and runtime overrides",
     "paper-specific covariance realization and seed convention",
     "optimizer source and experiment seed ledger"
+  ],
+  "candidate_inputs": [
+    {
+      "id": "focus_w7x_high_mirror_input",
+      "source": "focus_source",
+      "path": "examples/w7x_high_mirror/w7x_high_mirror.input",
+      "sha256": "58d907fe894726c20c59300c6dc5141e916a3e870f1f3382fbaa9846bd00a8f4",
+      "status": "public-example-not-paper-proven",
+      "caveats": [
+        "the file declares Nseg=128 while the paper reports Nseg=64",
+        "no paper run manifest maps this example to the published experiment"
+      ]
+    },
+    {
+      "id": "focus_w7x_high_mirror_boundary",
+      "source": "focus_source",
+      "path": "examples/w7x_high_mirror/w7x_high_mirror.boundary",
+      "sha256": "1c803bd870c30be0f991cd834b98c5d6f2d1657a27d3abd8291feefd634a36d6",
+      "status": "public-example-not-paper-proven"
+    }
   ],
   "parameters": {
     "geometry": {

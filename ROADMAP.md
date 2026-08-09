@@ -373,12 +373,17 @@ the data-informed rows remain open.
 
 The FOCUS source was recovered from its public Git repository and pinned at
 `e4bb49b0632c650e326616912e274feb7781a60d`, with the stochastic source and
-W7-X high-mirror example files present. An isolated GNU Fortran/OpenMPI/HDF5
-build produced `xfocus`; a bounded W7-X initialization reached surface
-initialization but then failed in an upstream GNU Fortran format string. This
-recovers source/build evidence, not the paper's exact W7-X input, the frozen
-covariance/realization ledger, optimizer implementation, or seed ledger. The
-published periodic-kernel equations are now implemented in
+W7-X high-mirror example files present. Their pinned digests are input
+`58d907fe894726c20c59300c6dc5141e916a3e870f1f3382fbaa9846bd00a8f4` and
+boundary `1c803bd870c30be0f991cd834b98c5d6f2d1657a27d3abd8291feefd634a36d6`.
+An isolated GNU Fortran/OpenMPI/HDF5 build produced `xfocus`; a bounded W7-X
+initialization reached surface initialization but then failed in an upstream
+GNU Fortran format string. The public files are candidate inputs, not proof of
+the paper's exact run: the input declares `Nseg=128` while the paper reports
+`Nseg=64`, and there is no run manifest connecting the example to the published
+experiment. The frozen covariance/realization ledger, optimizer
+implementation, and seed ledger remain missing. The published periodic-kernel
+equations are now implemented in
 `scripts/glas_covariance.py` and checked against direct numerical integration;
 that generator does not claim to recover the paper's random-number schedule.
 The authors' public research page links the arXiv preprint but no source or
