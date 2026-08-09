@@ -89,6 +89,13 @@ recorded eight successes in 223.63 seconds. Both rows reached peak concurrency
 eight, had nontrivial completion order, and passed `check_fortbo_b5.py`; they
 remain bridge evidence rather than 256-call F3 rows.
 
+The CPU lane was then reproduced on `faepkub4` from the commit-addressed
+`/var/tmp/ert/fortbo-cpu-3c3bc26` workspace: its raw eight-call row recorded
+eight failures in 43.52 seconds at peak concurrency eight and passed the same
+audit. The remote Fortran gate built successfully and passed the ARD and driver
+tests; two unrelated 10-second test-harness timeouts occurred in the full
+48-test host run.
+
 The FOCUS source was recovered from its public Git repository and pinned at
 `e4bb49b0632c650e326616912e274feb7781a60d`, with the stochastic source and
 W7-X high-mirror example files present. An isolated GNU Fortran/OpenMPI/HDF5
