@@ -7,7 +7,7 @@ and test suite.
 
 ## Current status
 
-As of 2026-08-09, 20:52 CEST:
+As of 2026-08-09, 21:02 CEST:
 
 | Area | Status |
 | --- | --- |
@@ -238,6 +238,16 @@ policy before its preflight and MPI launch. The workstation remains unused for
 physics.
 At 20:47 CEST, the exact pushed commit `9c90d5f` passed the same clean-cache
 gate on `faepkub4`; the recorded cache was 86 MB and stderr was empty.
+The first seed-4 retry at 20:55 CEST exposed one remaining launcher gap: its
+isolated workspace supplied no ConStellaration Git checkout. FortBO refused
+before its first truth call, the pair was recorded as failed, and its orphaned
+original-control workers were terminated; that attempt is not an F3 row. The
+pushed fix `35e4428` now requires and validates `--constellaration-root` before
+creating a run root or starting either child. Seed-4 retry-2 then passed that
+gate with ConStellaration revision
+`112b20ae07193910d467d26033fe51022e641b9f` and is active on faepkub4 under
+`/var/tmp/ert/fortbo-cpu-f5d4d81/runs/oracle-pair-data-informed-seed-4-retry2/`;
+no result is counted until both ledgers and the pair checker pass.
 
 The Landreman exact-tool path is now portable: the manifest resolves
 `LANDREMAN_ARCHIVE`, `scripts/run_landreman_original.py` extracts only the
