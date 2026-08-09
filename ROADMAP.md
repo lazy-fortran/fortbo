@@ -90,11 +90,20 @@ behavioral accounting and compares FortBO's best value against the oracle.
 Both Python interpreters are explicit (`--original-python` and
 `--fortbo-python`) so the pair cannot silently mix the evaluator and FortBO
 environments. The launcher also refuses non-empty run roots and pre-existing
-pair outputs, preventing a later seed from overwriting campaign evidence.
+pair outputs, preflights the simsopt-dfo/BoTorch and ConStellaration imports,
+and injects the selected simsopt-dfo source into `PYTHONPATH`, preventing a
+later seed from overwriting campaign evidence or failing after workers have
+already started.
 This pair must be launched on `faepkub4` for CPU work or inside an allocated
 aCluster/sCluster Slurm job for GPU work. No physics reproduction is to run on
 the workstation. The runner stops both children if the run filesystem falls
 below its disk reserve.
+
+The first valid paired data-informed seed-2 launch is now active on `faepkub4`
+with the original BoTorch control and FortBO sharing the pinned ConStellaration
+evaluator. Earlier seed-2 launch attempts failed before a valid evaluator pair
+was started (remote `fo` path, missing BoTorch, and evaluator-environment
+selection); each failed pair document is retained and none is counted as F3.
 
 The Landreman exact-tool path is now portable: the manifest resolves
 `LANDREMAN_ARCHIVE`, `scripts/run_landreman_original.py` extracts only the
@@ -109,7 +118,7 @@ archive and executing that control on the allocation.
 
 At `bf7c665`, a clean canonical checkout with clean sibling dependencies passes
 all 48 Fortran tests and all 40 Python tests. The current pushed checkout passes
-all 48 Fortran tests and all 51 Python tests. A raw 256-call attempt was stopped
+all 48 Fortran tests and all 52 Python tests. A raw 256-call attempt was stopped
 after 71 completed failures because several upstream evaluator subprocesses
 ran for multiple minutes; it produced no ledger and is not counted as an F3
 row. The external evaluator has an explicit 600-second worker timeout policy.
