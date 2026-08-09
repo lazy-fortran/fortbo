@@ -7,7 +7,7 @@ and test suite.
 
 ## Current status
 
-As of 2026-08-09, 15:00 CEST:
+As of 2026-08-09, 15:10 CEST:
 
 | Area | Status |
 | --- | --- |
@@ -68,7 +68,7 @@ successful data-informed truth calls (272.1 seconds), both at peak concurrency
 eight with nontrivial completion order; both rows passed the FortBO-side
 audit. These are bridge checks, not F3 rows; the full 256-call campaign is now
 running on `faepkub4` in the data-informed seed-1 lane, with no duplicate
-physics run started here. The latest remote snapshot had 236 requests and 175
+physics run started here. The latest remote snapshot had 244 requests and 177
 responses, eight active physics workers, no final ledger yet, and 85 GB free on
 `/var/tmp/ert`; it remains an in-progress run rather than an F3 result.
 
@@ -104,9 +104,9 @@ with the original BoTorch control and FortBO sharing the pinned ConStellaration
 evaluator. Earlier seed-2 launch attempts failed before a valid evaluator pair
 was started (remote `fo` path, missing BoTorch, and evaluator-environment
 selection); each failed pair document is retained and none is counted as F3.
-At the 15:00 CEST handoff snapshot, seed-1 had 236 requests and 175
-responses; the active seed-2 pair had 89 original-control requests/73
-responses and 79 FortBO requests/63 responses. Neither final ledger existed,
+At the 15:10 CEST handoff snapshot, seed-1 had 244 requests and 177
+responses; the active seed-2 pair had 112 original-control requests/97
+responses and 125 FortBO requests/109 responses. Neither final ledger existed,
 and `/var/tmp/ert` had 85 GB free, so both remain in progress rather than F3
 rows. No new CPU campaign or GPU Slurm job was started, and the workstation
 was not used for physics work.
@@ -136,6 +136,15 @@ the large archive remains on `faepkub4` rather than being copied to the
 workstation. The current `aCluster` and `sCluster` inventories expose one GPU
 per node, so no exact one-node/four-GPU allocation was submitted; the live
 control/FortBO trace remains open.
+
+The missing FortBO side of F4 is now staged in
+`scripts/run_landreman_fortbo.py`: rank zero owns the completion-driven
+ask/tell protocol and four MPI worker ranks each own an independent archived
+VMEC/PCA objective. `slurm/landreman_fortbo.sbatch` preserves the historical
+one-node/four-GPU shape, captures runtime metadata, refuses an existing output,
+and performs source preparation/check-only gates before launching. Its unit
+and wrapper checks pass (11 focused tests, Ruff, and shell syntax); no physics
+run has been claimed for this bridge yet.
 
 At `bf7c665`, a clean canonical checkout with clean sibling dependencies passes
 all 48 Fortran tests and all 40 Python tests. The current pushed checkout passes
@@ -242,7 +251,8 @@ external FortAD `fortad_reverse.f90` with an nvfortran internal compiler error
    path; `run_landreman_original.py` applies the declared remap in a generated
    copy and refuses non-Slurm execution. The source and driver preflight now
    pass, but the archived control/FortBO pair has not yet been launched: the
-   current aCluster and sCluster inventories provide one GPU per node while
+   the FortBO-side MPI bridge is ready, but current aCluster and sCluster
+   inventories provide one GPU per node while
    the historical job requires four GPUs on one node. A compatible Tu Graz
    allocation is therefore still required for the live MPI/physics trace
    needed for F2.
@@ -485,9 +495,9 @@ device identity and kernel-residency evidence.
   data-informed rows are pending.
 - [ ] F4: run archived Landreman control and FortBO at the original allocation,
   then a labeled resource-matched GPU scaling row. The exact archive, source
-  digest, portable preparation, and contract checks pass; launch only on the
-  Tu Graz allocation once four GPUs are available on one node, and retain the
-  archived control as the independent oracle.
+  digest, portable preparation, contract checks, and FortBO MPI bridge pass;
+  launch only on the Tu Graz allocation once four GPUs are available on one
+  node, and retain the archived control as the independent oracle.
 - [ ] F5: recover FOCUS artifacts and implement/check the inducing variational
   derivative model and paired action. The local fixed-hyperparameter model,
   adapter/driver path, independent oracle, and pinned/build-checked FOCUS

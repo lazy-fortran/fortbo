@@ -28,6 +28,22 @@ class LandremanReplayTests(unittest.TestCase):
             self.assertIn(directive, source)
         self.assertIn("--execute", source)
 
+    def test_fortbo_slurm_wrapper_uses_the_same_historical_allocation(self):
+        wrapper = Path(__file__).parents[1] / "slurm/landreman_fortbo.sbatch"
+        result = subprocess.run(["bash", "-n", str(wrapper)], check=False,
+                                capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        source = wrapper.read_text(encoding="utf-8")
+        for directive in (
+            "#SBATCH --ntasks=5",
+            "#SBATCH --cpus-per-task=13",
+            "#SBATCH --gpus-per-node=4",
+        ):
+            self.assertIn(directive, source)
+        self.assertIn("run_landreman_fortbo.py", source)
+        self.assertIn("--check-only", source)
+        self.assertIn("--gpu-bind=map_gpu:0,1,2,3", source)
+
     def test_prepare_extracts_and_records_the_declared_path_remap(self):
         with tempfile.TemporaryDirectory() as temporary:
             directory = Path(temporary)
