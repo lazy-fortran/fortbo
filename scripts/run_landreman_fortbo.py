@@ -169,8 +169,10 @@ def _evaluate(
     try:
         os.chdir(evaluation_dir)
         value = float(objective(np.asarray(point, dtype=np.float64)))
-        if value == FAIL_VALUE:
-            raise LandremanFortBOError("archived objective returned its failure value")
+        if not np.isfinite(value) or value == FAIL_VALUE:
+            raise LandremanFortBOError(
+                "archived objective returned a non-finite or failure value"
+            )
         dmerc = float(worst_dmerc(vmec, 0.2, 0.95))
         return {
             "status": "ok",
