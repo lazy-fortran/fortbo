@@ -662,11 +662,11 @@ FortFront modules cannot be reused across source worktrees.
   trust-state, and completion traces.
 - [ ] F3: run five paired seeds for raw/data-informed TuRBO-1 and
   data-informed TuRBO-m at 256 calls and eight workers; control ledgers are
-  audited, all five raw TuRBO-1 FortBO rows and two data-informed TuRBO-1
-  FortBO rows are now recorded, and seeds 2 and 3 are complete oracle-paired
-  data-informed rows. The remaining two data-informed TuRBO-1 rows and five
-  data-informed TuRBO-m rows are pending; seed 1 is still a standalone
-  comparator.
+  audited, all five raw TuRBO-1 FortBO rows and three data-informed TuRBO-1
+  FortBO rows are now recorded. Seeds 2 and 3 are complete oracle-paired
+  data-informed rows; seed 1 is still a standalone comparator. The remaining
+  two data-informed TuRBO-1 rows and five data-informed TuRBO-m rows are
+  pending.
 - [ ] F4: run archived Landreman control and FortBO at the original allocation,
   then a labeled resource-matched GPU scaling row. The exact archive, source
   digest, portable preparation, contract checks, and FortBO MPI bridge pass;
