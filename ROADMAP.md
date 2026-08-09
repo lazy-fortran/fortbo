@@ -7,7 +7,7 @@ and test suite.
 
 ## Current status
 
-As of 2026-08-10, 00:32 CEST:
+As of 2026-08-10, 01:15 CEST:
 
 | Area | Status |
 | --- | --- |
@@ -83,6 +83,15 @@ transform SHA-256 remains
 `951c2b6f8e0f8dd1dee0297aca91645900ce4044f104e3f5132fbad523e68340`.
 The archived pair is
 `/home/ert/data/simsopt-dfo-fortbo/b5-oracle-pairs/seed-4-retry2/`.
+
+The data-informed TuRBO-1 seed-5 retry-1 pair is now running as the sole
+physics workload on `faepkub4` under
+`/var/tmp/ert/fortbo-cpu-f5d4d81/runs/oracle-pair-data-informed-seed-5-retry1/`.
+At the latest checkpoint the original side had 44 responses from 58 dispatched
+requests and FortBO had 55 responses from 66; both child runners and the
+parent remained healthy, no ledgers had finalized, and `/var/tmp/ert` had
+75 GB free. It is not counted as an F3 row until both ledgers and the rebased
+pair checker pass. No TuRBO-m workload has been started concurrently.
 
 FortBO's TuRBO driver now accepts an explicit success mask: failed truth calls
 remain in the history and trust accounting as imputed worst cases, but are
