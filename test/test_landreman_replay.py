@@ -1,5 +1,6 @@
 import hashlib
 import json
+import subprocess
 import tarfile
 import tempfile
 import unittest
@@ -13,6 +14,20 @@ def digest(data: bytes) -> str:
 
 
 class LandremanReplayTests(unittest.TestCase):
+    def test_slurm_wrapper_has_valid_shell_and_historical_resources(self):
+        wrapper = Path(__file__).parents[1] / "slurm/landreman_exact_replay.sbatch"
+        result = subprocess.run(["bash", "-n", str(wrapper)], check=False,
+                                capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        source = wrapper.read_text(encoding="utf-8")
+        for directive in (
+            "#SBATCH --ntasks=5",
+            "#SBATCH --cpus-per-task=13",
+            "#SBATCH --gpus-per-node=4",
+        ):
+            self.assertIn(directive, source)
+        self.assertIn("--execute", source)
+
     def test_prepare_extracts_and_records_the_declared_path_remap(self):
         with tempfile.TemporaryDirectory() as temporary:
             directory = Path(temporary)

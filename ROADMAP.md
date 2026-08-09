@@ -93,7 +93,10 @@ archived `software/alpha_opt` tree, verifies the archive and pinned member
 digests, records the one `/pscratch` PCA remap, and emits the historical
 5-rank/4-GPU `srun` command. Preparation is safe outside an allocation;
 `--execute` refuses to run without `SLURM_JOB_ID`. This is replay plumbing and
-source-level evidence, not yet a live Landreman control/FortBO result.
+source-level evidence, not yet a live Landreman control/FortBO result. The
+`slurm/landreman_exact_replay.sbatch` wrapper now captures Slurm, CPU, GPU,
+compiler/runtime, and FortBO commit metadata before downloading/reusing the
+archive and executing that control on the allocation.
 
 At `bf7c665`, a clean canonical checkout with clean sibling dependencies passes
 all 48 Fortran tests and all 40 Python tests. A raw 256-call attempt was stopped
@@ -197,9 +200,9 @@ external FortAD `fortad_reverse.f90` with an nvfortran internal compiler error
    manifest, including the 5-rank allocation (one manager plus four workers)
    and four GPUs. The archived driver still names an absolute `/pscratch` data
    path; `run_landreman_original.py` applies the declared remap in a generated
-   copy and refuses non-Slurm execution. The archived control/FortBO pair has
-   not yet been launched on the Tu Graz allocation, and the live MPI/physics
-   trace needed for F2 is still missing.
+   copy and refuses non-Slurm execution. The Slurm wrapper is ready, but the
+   archived control/FortBO pair has not yet been launched on the Tu Graz
+   allocation, and the live MPI/physics trace needed for F2 is still missing.
 2. The Glas et al. harvest contains manuscript and figures, but no paper-
    specific W7-X input, covariance/realization ledger, or optimizer ledger.
    FOCUS source is now pinned separately and builds in isolation; the
