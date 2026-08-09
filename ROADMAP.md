@@ -7,7 +7,7 @@ and test suite.
 
 ## Current status
 
-As of 2026-08-09, 14:32 CEST:
+As of 2026-08-09, 15:00 CEST:
 
 | Area | Status |
 | --- | --- |
@@ -68,8 +68,8 @@ successful data-informed truth calls (272.1 seconds), both at peak concurrency
 eight with nontrivial completion order; both rows passed the FortBO-side
 audit. These are bridge checks, not F3 rows; the full 256-call campaign is now
 running on `faepkub4` in the data-informed seed-1 lane, with no duplicate
-physics run started here. The latest remote snapshot had 213 requests and 166
-responses, eight active physics workers, no final ledger yet, and 92 GB free on
+physics run started here. The latest remote snapshot had 236 requests and 175
+responses, eight active physics workers, no final ledger yet, and 85 GB free on
 `/var/tmp/ert`; it remains an in-progress run rather than an F3 result.
 
 The public-source provenance lane is now scripted but deliberately not run from
@@ -104,10 +104,10 @@ with the original BoTorch control and FortBO sharing the pinned ConStellaration
 evaluator. Earlier seed-2 launch attempts failed before a valid evaluator pair
 was started (remote `fo` path, missing BoTorch, and evaluator-environment
 selection); each failed pair document is retained and none is counted as F3.
-At the 14:32 CEST handoff snapshot, seed-1 had 213 requests and 166
-responses; the active seed-2 pair had 31 original-control requests/19
-responses and 29 FortBO requests/19 responses. Neither final ledger existed,
-and `/var/tmp/ert` had 92 GB free, so both remain in progress rather than F3
+At the 15:00 CEST handoff snapshot, seed-1 had 236 requests and 175
+responses; the active seed-2 pair had 89 original-control requests/73
+responses and 79 FortBO requests/63 responses. Neither final ledger existed,
+and `/var/tmp/ert` had 85 GB free, so both remain in progress rather than F3
 rows. No new CPU campaign or GPU Slurm job was started, and the workstation
 was not used for physics work.
 
@@ -121,6 +121,21 @@ source-level evidence, not yet a live Landreman control/FortBO result. The
 `slurm/landreman_exact_replay.sbatch` wrapper now captures Slurm, CPU, GPU,
 compiler/runtime, and FortBO commit metadata before downloading/reusing the
 archive and executing that control on the allocation.
+
+The exact-tool preflight was completed on `faepkub4` at 15:00 CEST. The
+7,529,635,840-byte Landreman archive was downloaded by
+`fetch_reproduction_sources.py` and passed its pinned SHA-256
+(`7037bb0a...20c428f`). `run_landreman_original.py` extracted 26,508,541 bytes
+into a new run root and recorded the portable PCA remap in
+`replay.json`; the execution-manifest and archived-driver contract checks both
+passed. The archived job confirms one node, `regular`, `gpu&hbm40g`, account
+`m4505`, five ranks, 13 CPUs per task, and four GPUs. The preparation evidence
+is retained under
+`/home/ert/data/simsopt-dfo-fortbo/landreman-exact-replay/prepared-630ae10/`;
+the large archive remains on `faepkub4` rather than being copied to the
+workstation. The current `aCluster` and `sCluster` inventories expose one GPU
+per node, so no exact one-node/four-GPU allocation was submitted; the live
+control/FortBO trace remains open.
 
 At `bf7c665`, a clean canonical checkout with clean sibling dependencies passes
 all 48 Fortran tests and all 40 Python tests. The current pushed checkout passes
@@ -225,9 +240,12 @@ external FortAD `fortad_reverse.f90` with an nvfortran internal compiler error
    manifest, including the 5-rank allocation (one manager plus four workers)
    and four GPUs. The archived driver still names an absolute `/pscratch` data
    path; `run_landreman_original.py` applies the declared remap in a generated
-   copy and refuses non-Slurm execution. The Slurm wrapper is ready, but the
-   archived control/FortBO pair has not yet been launched on the Tu Graz
-   allocation, and the live MPI/physics trace needed for F2 is still missing.
+   copy and refuses non-Slurm execution. The source and driver preflight now
+   pass, but the archived control/FortBO pair has not yet been launched: the
+   current aCluster and sCluster inventories provide one GPU per node while
+   the historical job requires four GPUs on one node. A compatible Tu Graz
+   allocation is therefore still required for the live MPI/physics trace
+   needed for F2.
 2. The Glas et al. harvest contains manuscript and figures, but no paper-
    specific W7-X input, covariance/realization ledger, or optimizer ledger.
    FOCUS source is now pinned separately and builds in isolation; the
@@ -466,8 +484,10 @@ device identity and kernel-residency evidence.
   audited, all five raw TuRBO-1 FortBO rows are now recorded, and the
   data-informed rows are pending.
 - [ ] F4: run archived Landreman control and FortBO at the original allocation,
-  then a labeled resource-matched GPU scaling row. Launch only on the Tu Graz
-  allocation and retain the archived control as the independent oracle.
+  then a labeled resource-matched GPU scaling row. The exact archive, source
+  digest, portable preparation, and contract checks pass; launch only on the
+  Tu Graz allocation once four GPUs are available on one node, and retain the
+  archived control as the independent oracle.
 - [ ] F5: recover FOCUS artifacts and implement/check the inducing variational
   derivative model and paired action. The local fixed-hyperparameter model,
   adapter/driver path, independent oracle, and pinned/build-checked FOCUS
