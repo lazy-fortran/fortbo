@@ -7,7 +7,7 @@ and test suite.
 
 ## Current status
 
-As of 2026-08-09, 15:39 CEST:
+As of 2026-08-09, 15:44 CEST:
 
 | Area | Status |
 | --- | --- |
@@ -51,9 +51,11 @@ The external B5 control ledgers are now materialized from Git LFS and pass the
 FortBO-side audit: ten TuRBO-1 ledgers (raw and data-informed) plus ten
 data-informed four-region TuRBO-m ledgers, all at 256 calls and eight workers.
 FortBO's five raw TuRBO-1 rows and the first data-informed TuRBO-1 row are now
-recorded and audited; the remaining four data-informed TuRBO-1 rows and five
-data-informed TuRBO-m rows remain pending, so the control set is complete but
-the FortBO campaign is not.
+recorded and audited. The FortBO child of the second data-informed TuRBO-1
+pair is also complete and passes its standalone audit, but remains provisional
+until the original control and pair audit finish. The remaining three
+data-informed TuRBO-1 rows and five data-informed TuRBO-m rows remain pending,
+so the control set is complete but the FortBO campaign is not.
 
 FortBO's TuRBO driver now accepts an explicit success mask: failed truth calls
 remain in the history and trust accounting as imputed worst cases, but are
@@ -81,6 +83,15 @@ are FortBO `cd71e9b9f2f71d0966d3b5c8792f213d78eca1d4`, simsopt-dfo
 one FortBO data-informed TuRBO-1 row, but it is not an oracle-paired row; the
 valid paired seed-2 run remains active. `/var/tmp/ert` had 84 GB free at the
 snapshot.
+
+The FortBO child of the active paired data-informed seed-2 run has since
+completed and passes `check_fortbo_b5.py`. Its provisional copy is retained at
+`/home/ert/data/simsopt-dfo-fortbo/b5-oracle-pairs/seed-2-retry3/fortbo.json`;
+it records 256 truth calls, eight failed evaluations, peak concurrency eight,
+and 5169.303276092 seconds wall time from FortBO
+`9197d89b736535dea905ae0d11d0a80515721149`. This is not yet a paired F3 row:
+the original BoTorch control is still running and the parent pair ledger does
+not exist.
 
 The public-source provenance lane is now scripted but deliberately not run from
 this workstation. `configs/reproduction/source-downloads.json` pins the
@@ -133,11 +144,11 @@ with the original BoTorch control and FortBO sharing the pinned ConStellaration
 evaluator. Earlier seed-2 launch attempts failed before a valid evaluator pair
 was started (remote `fo` path, missing BoTorch, and evaluator-environment
 selection); each failed pair document is retained and none is counted as F3.
-At the 15:39 CEST handoff snapshot, the active seed-2 pair had 165
-original-control requests/149 responses and 237 FortBO requests/221 responses;
-neither final ledger existed. It remains in progress with 84 GB free on
-`/var/tmp/ert`. No new CPU campaign or GPU Slurm job was started, and the
-workstation was not used for physics work.
+At the 15:44 CEST handoff snapshot, the active seed-2 pair had 182
+original-control requests/166 responses. The FortBO child ledger exists, but
+the original control and parent pair ledger are not finished. It remains in
+progress with 84 GB free on `/var/tmp/ert`. No new CPU campaign or GPU Slurm
+job was started, and the workstation was not used for physics work.
 
 The Landreman exact-tool path is now portable: the manifest resolves
 `LANDREMAN_ARCHIVE`, `scripts/run_landreman_original.py` extracts only the
@@ -523,9 +534,10 @@ device identity and kernel-residency evidence.
 - [ ] F3: run five paired seeds for raw/data-informed TuRBO-1 and
   data-informed TuRBO-m at 256 calls and eight workers; control ledgers are
   audited, all five raw TuRBO-1 FortBO rows and one data-informed TuRBO-1
-  FortBO row are now recorded, and the remaining data-informed rows are
-  pending. The completed seed-1 data-informed row is not oracle-paired; the
-  valid seed-2 pair is active.
+  FortBO row are now recorded, and a second data-informed FortBO child passes
+  standalone audit. The remaining data-informed rows are pending; the
+  completed seed-1 row and the seed-2 child are not counted as paired until
+  their control/pair audits pass.
 - [ ] F4: run archived Landreman control and FortBO at the original allocation,
   then a labeled resource-matched GPU scaling row. The exact archive, source
   digest, portable preparation, contract checks, and FortBO MPI bridge pass;
