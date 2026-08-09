@@ -7,7 +7,7 @@ and test suite.
 
 ## Current status
 
-As of 2026-08-09, 15:16 CEST:
+As of 2026-08-09, 15:23 CEST:
 
 | Area | Status |
 | --- | --- |
@@ -68,7 +68,7 @@ successful data-informed truth calls (272.1 seconds), both at peak concurrency
 eight with nontrivial completion order; both rows passed the FortBO-side
 audit. These are bridge checks, not F3 rows; the full 256-call campaign is now
 running on `faepkub4` in the data-informed seed-1 lane, with no duplicate
-physics run started here. The latest remote snapshot had 250 requests and 180
+physics run started here. The latest remote snapshot had 256 requests and 183
 responses, eight active physics workers, no final ledger yet, and 84 GB free on
 `/var/tmp/ert`; it remains an in-progress run rather than an F3 result.
 
@@ -81,6 +81,15 @@ artifact when its environment-variable path is set, verifies SHA-256 digests,
 pins Git revisions, rejects unsafe archive paths, and refuses a download or
 unpack when the configured free-space reserve would be violated. It does not
 copy the existing 7.5 GB Landreman archive merely to make a second mirror.
+
+The same fetch script was run on `faepkub4` at 15:22 CEST for the small
+Glas/Bindel and FOCUS artifacts. The arXiv harvest and PDF passed their pinned
+SHA-256 digests (`61e1dc89...40a693` and `24cc2600...60f8d0b`), and the FOCUS
+checkout is clean at revision
+`e4bb49b0632c650e326616912e274feb7781a60d` with tree digest
+`f67ad973...1969a7f38`. They remain under
+`/var/tmp/ert/fortbo-reproduction-sources/` on the remote host; this is source
+acquisition evidence, not an F6 physics reproduction.
 
 `scripts/run_b5_oracle_pair.py` launches the pinned simsopt-dfo BoTorch control
 and `scripts/run_fortbo_b5.py` concurrently with the same B5 mode, seed, budget,
@@ -104,12 +113,12 @@ with the original BoTorch control and FortBO sharing the pinned ConStellaration
 evaluator. Earlier seed-2 launch attempts failed before a valid evaluator pair
 was started (remote `fo` path, missing BoTorch, and evaluator-environment
 selection); each failed pair document is retained and none is counted as F3.
-At the 15:16 CEST handoff snapshot, seed-1 had 250 requests and 180
-responses; the active seed-2 pair had 123 original-control requests/107
-responses and 148 FortBO requests/132 responses. Neither final ledger existed,
-and `/var/tmp/ert` had 84 GB free, so both remain in progress rather than F3
-rows. No new CPU campaign or GPU Slurm job was started, and the workstation
-was not used for physics work.
+At the 15:23 CEST handoff snapshot, seed-1 had dispatched all 256 requests and
+had 183 responses; the active seed-2 pair had 137 original-control
+requests/122 responses and 177 FortBO requests/161 responses. Neither final
+ledger existed, and `/var/tmp/ert` had 84 GB free, so both remain in progress
+rather than F3 rows. No new CPU campaign or GPU Slurm job was started, and the
+workstation was not used for physics work.
 
 The Landreman exact-tool path is now portable: the manifest resolves
 `LANDREMAN_ARCHIVE`, `scripts/run_landreman_original.py` extracts only the
