@@ -7,7 +7,7 @@ and test suite.
 
 ## Current status
 
-As of 2026-08-09, 20:01 CEST:
+As of 2026-08-09, 20:22 CEST:
 
 | Area | Status |
 | --- | --- |
@@ -197,12 +197,21 @@ and eight workers. Its FortBO checkout is `59c6e35`; its fresh run root is
 and its pair output is
 `/var/tmp/ert/fortbo-cpu-59c6e35/runs/oracle-pairs/data-informed-seed-3-retry1.json`.
 The launcher was alive after startup with no ledger yet and 82 GB free on
-`/var/tmp/ert`. At the 20:01 CEST checkpoint, the parent and both child
-evaluator processes were still alive after 02:41:24, with evaluator processes
-active. The oracle scratch root had 185 dispatched requests and 170 response
-files; the FortBO root had 242 requests and 200 responses, with the pair ledger
-still absent. `/var/tmp/ert` had 81 GB free (81% used). This is an in-progress
-attempt, not an F3 row. The workstation remains unused for physics.
+`/var/tmp/ert`. At the 20:22 CEST checkpoint, the FortBO child had completed
+all 256 calls and written a passing child ledger with 34 failed upstream
+evaluations in 10492.175852232991 seconds; the original-control child had 214
+dispatched requests and 199 response files and was still active. The pair
+ledger and original child ledger were still absent. `/var/tmp/ert` had 81 GB
+free (81% used). This remains an in-progress attempt, not an F3 row, until the
+oracle completes and `check_oracle_pair.py` passes. The workstation remains
+unused for physics.
+
+The pushed environment fix `a4e3e28` was independently validated on
+`faepkub4` in an isolated checkout with the existing clean sibling dependency
+worktrees: `fo 0.3.2`, all nine recursive path dependencies, `fo build`, and
+the full test suite with `FO_TEST_TIMEOUT=60` all passed. The 191 MB validation
+checkout was removed after the check; the active campaign scratch was not
+modified.
 
 The Landreman exact-tool path is now portable: the manifest resolves
 `LANDREMAN_ARCHIVE`, `scripts/run_landreman_original.py` extracts only the
