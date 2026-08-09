@@ -68,7 +68,9 @@ successful data-informed truth calls (272.1 seconds), both at peak concurrency
 eight with nontrivial completion order; both rows passed the FortBO-side
 audit. These are bridge checks, not F3 rows; the full 256-call campaign is now
 running on `faepkub4` in the data-informed seed-1 lane, with no duplicate
-physics run started here.
+physics run started here. The 13:51 CEST handoff snapshot had 177 requests and
+141 responses, eight active physics workers, no final ledger yet, and 97 GB free
+on `/var/tmp/ert`; it remains an in-progress run rather than an F3 result.
 
 The public-source provenance lane is now scripted but deliberately not run from
 this workstation. `configs/reproduction/source-downloads.json` pins the
@@ -106,7 +108,8 @@ compiler/runtime, and FortBO commit metadata before downloading/reusing the
 archive and executing that control on the allocation.
 
 At `bf7c665`, a clean canonical checkout with clean sibling dependencies passes
-all 48 Fortran tests and all 40 Python tests. A raw 256-call attempt was stopped
+all 48 Fortran tests and all 40 Python tests. The current pushed checkout passes
+all 48 Fortran tests and all 51 Python tests. A raw 256-call attempt was stopped
 after 71 completed failures because several upstream evaluator subprocesses
 ran for multiple minutes; it produced no ledger and is not counted as an F3
 row. The external evaluator has an explicit 600-second worker timeout policy.
