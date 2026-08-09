@@ -7,7 +7,7 @@ and test suite.
 
 ## Current status
 
-As of 2026-08-09, 17:00 CEST:
+As of 2026-08-09, 17:07 CEST:
 
 | Area | Status |
 | --- | --- |
@@ -83,7 +83,7 @@ are FortBO `cd71e9b9f2f71d0966d3b5c8792f213d78eca1d4`, simsopt-dfo
 `112b20ae07193910d467d26033fe51022e641b9f`; the ledger SHA-256 is
 `d4cf49c8cb8ac0cb4837c6e346aaff17de949edcf1edaba8219ee1219d7427e1`. This is
 one FortBO data-informed TuRBO-1 row, but it is not an oracle-paired row; the
-valid paired seed-2 run remains active. `/var/tmp/ert` had 84 GB free at the
+seed 2 below is the first paired row. `/var/tmp/ert` had 84 GB free at the
 snapshot.
 The pre-existing seed-1 BoTorch control at
 `/home/ert/data/simsopt-dfo/b5-turbo-c1845a5/frozen/data-informed-seed-1.json`
@@ -157,7 +157,7 @@ aCluster/sCluster Slurm job for GPU work. No physics reproduction is to run on
 the workstation. The runner stops both children if the run filesystem falls
 below its disk reserve.
 
-The first valid paired data-informed seed-2 launch completed on `faepkub4`
+The completed paired data-informed seed-2 launch ran on `faepkub4`
 with the original BoTorch control and FortBO sharing the pinned ConStellaration
 evaluator. Earlier seed-2 launch attempts failed before a valid evaluator pair
 was started (remote `fo` path, missing BoTorch, and evaluator-environment
@@ -165,6 +165,18 @@ selection); each failed pair document is retained and none is counted as F3.
 The completed pair used 256 truth calls and eight workers on each side and left
 83 GB free on `/var/tmp/ert`. No next CPU campaign or GPU Slurm job has been
 started yet, and the workstation was not used for physics work.
+
+The next commit-addressed seed-3 attempt was prepared on `faepkub4` from
+FortBO `59c6e35` under `/var/tmp/ert/fortbo-cpu-59c6e35/`, but stopped before
+physics. The fresh checkout's `fo build` failed because
+`fortnum_kinds.mod` was unavailable; FortBO therefore ended before its first
+`ASK`, the paired process returned 1, and the pair is not an F3 row. The failed
+manifest is retained at
+`/var/tmp/ert/fortbo-cpu-59c6e35/runs/oracle-pairs/data-informed-seed-3.json`.
+No retry was launched; the latest remote disk check left 82 GB free, and the
+workstation remained unused for physics. The next campaign continuation must
+first make the clean dependency/build context explicit and pass `fo build` on
+`faepkub4`.
 
 The Landreman exact-tool path is now portable: the manifest resolves
 `LANDREMAN_ARCHIVE`, `scripts/run_landreman_original.py` extracts only the
@@ -335,6 +347,11 @@ external FortAD `fortad_reverse.f90` with an nvfortran internal compiler error
    blocked by the external FortAD nvfortran compiler error recorded above, so
    the package-level GPU benchmark and end-to-end performance profile remain
    open.
+5. A fresh commit-addressed CPU checkout at FortBO `59c6e35` failed its remote
+   `fo build` before the seed-3 oracle pair reached physics because
+   `fortnum_kinds.mod` was not available. Re-establish the sibling dependency
+   and module search/build context, pass the remote build and contract gates,
+   then relaunch only from `faepkub4` (or an allocated GPU Slurm job).
 
 ## Repository and provenance
 
