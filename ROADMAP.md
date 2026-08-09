@@ -212,6 +212,9 @@ worktrees: `fo 0.3.2`, all nine recursive path dependencies, `fo build`, and
 the full test suite with `FO_TEST_TIMEOUT=60` all passed. The 191 MB validation
 checkout was removed after the check; the active campaign scratch was not
 modified.
+The Landreman Slurm wrapper and standalone synthetic/posterior runners now
+resolve the same absolute `fo` executable; the Slurm wrapper records a full
+preflight before entering the MPI launch.
 
 The Landreman exact-tool path is now portable: the manifest resolves
 `LANDREMAN_ARCHIVE`, `scripts/run_landreman_original.py` extracts only the

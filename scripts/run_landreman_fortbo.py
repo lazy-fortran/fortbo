@@ -22,6 +22,11 @@ from typing import Any, Iterable, Mapping, Optional, TextIO
 
 import numpy as np
 
+try:
+    from .fortbo_environment import resolve_fo_command
+except ImportError:  # pragma: no cover - used when this file is run directly
+    from fortbo_environment import resolve_fo_command
+
 
 ROOT = Path(__file__).resolve().parents[1]
 WORK_TAG = 1
@@ -466,6 +471,7 @@ def _parser() -> argparse.ArgumentParser:
 
 def main(argv: Optional[Iterable[str]] = None) -> int:
     args = _parser().parse_args(argv)
+    args.fortbo_command = resolve_fo_command(args.fortbo_command)
     if args.dimension != DEFAULT_DIMENSION:
         raise SystemExit("Landreman parity requires dimension 20")
     if args.initial < 1 or args.budget < args.initial or args.workers < 1:

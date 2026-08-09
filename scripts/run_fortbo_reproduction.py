@@ -25,6 +25,11 @@ from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
 
 import numpy as np
 
+try:
+    from .fortbo_environment import resolve_fo_command
+except ImportError:  # pragma: no cover - used when this file is run directly
+    from fortbo_environment import resolve_fo_command
+
 
 SCHEMA_VERSION = 1
 ROOT = Path(__file__).resolve().parents[1]
@@ -209,14 +214,15 @@ def run_fortbo(args: argparse.Namespace) -> Dict[str, Any]:
     if args.frozen_initial:
         extra.append(str(args.frozen_candidates) if args.frozen_candidates else "-")
         extra.append(str(args.frozen_initial))
+    fo_command = resolve_fo_command(args.fortbo_command or "fo")
     command = [
-        args.fortbo_command or "fo", "exec", "fortbo_reproduction",
+        fo_command, "exec", "fortbo_reproduction",
         str(args.dimension), str(args.budget), str(args.initial), str(args.seed),
         *extra,
     ]
     if args.fortbo_command:
         command = [
-            args.fortbo_command, str(args.dimension), str(args.budget),
+            fo_command, str(args.dimension), str(args.budget),
             str(args.initial), str(args.seed), *extra,
         ]
     started = time.perf_counter()

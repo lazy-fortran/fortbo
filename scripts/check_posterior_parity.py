@@ -12,6 +12,11 @@ import numpy as np
 
 from landreman_reference import gp_posterior
 
+try:
+    from .fortbo_environment import resolve_fo_command
+except ImportError:  # pragma: no cover - used when this file is run directly
+    from fortbo_environment import resolve_fo_command
+
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -45,10 +50,11 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
                         help="fo or a compiled fortbo_posterior_reproduction executable")
     parser.add_argument("--atol", type=float, default=1.0e-12)
     args = parser.parse_args(argv)
+    fo_command = resolve_fo_command(args.fortbo_command)
     if args.fortbo_command == "fo":
-        command = ["fo", "exec", "fortbo_posterior_reproduction"]
+        command = [fo_command, "exec", "fortbo_posterior_reproduction"]
     else:
-        command = [args.fortbo_command]
+        command = [fo_command]
     result = subprocess.run(command, cwd=ROOT, check=False,
                             capture_output=True, text=True)
     if result.returncode:

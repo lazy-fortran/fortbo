@@ -38,6 +38,11 @@ nvidia-smi -L > "$METADATA_ROOT/nvidia-smi.txt"
 git -C "$FORTBO_ROOT" rev-parse HEAD > "$METADATA_ROOT/fortbo-commit.txt"
 "$PYTHON" -VV > "$METADATA_ROOT/python.txt" 2>&1
 
+"$PYTHON" "$FORTBO_ROOT/scripts/fortbo_environment.py" \
+    --fortbo-root "$FORTBO_ROOT" \
+    --fortbo-command "$FORTBO_COMMAND" \
+    --test > "$METADATA_ROOT/fortbo-environment.json"
+
 "$PYTHON" "$FORTBO_ROOT/scripts/fetch_reproduction_sources.py" \
     --manifest "$FORTBO_ROOT/configs/reproduction/source-downloads.json" \
     --root "$SOURCE_ROOT" --artifact landreman_archive \
