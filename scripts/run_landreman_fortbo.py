@@ -193,8 +193,14 @@ def _evaluate(
 def _worker_loop(alpha_root: Path, scratch: Path, comm: Any, worker_rank: int) -> None:
     from mpi4py import MPI
 
-    vmec, objective, worst_dmerc = _build_objective(alpha_root, worker_rank)
-    comm.Barrier()
+    initialization_error: Optional[str] = None
+    try:
+        vmec, objective, worst_dmerc = _build_objective(alpha_root, worker_rank)
+    except Exception as error:
+        initialization_error = f"worker {worker_rank}: {type(error).__name__}: {error}"
+    initialization_errors = comm.allgather(initialization_error)
+    if any(error is not None for error in initialization_errors):
+        return
     while True:
         status = MPI.Status()
         comm.Probe(source=0, tag=MPI.ANY_TAG, status=status)
@@ -294,6 +300,10 @@ def _complete_one(
 
 def _run_manager(args: argparse.Namespace, comm: Any) -> dict[str, Any]:
     args.scratch.mkdir(parents=True, exist_ok=True)
+    initialization_errors = comm.allgather(None)
+    if any(error is not None for error in initialization_errors):
+        details = "; ".join(error for error in initialization_errors if error)
+        raise LandremanFortBOError(f"archived evaluator initialization failed: {details}")
     stderr_path = args.scratch / "fortbo.stderr"
     command = _protocol_command(
         args.fortbo_command,
