@@ -7,7 +7,7 @@ and test suite.
 
 ## Current status
 
-As of 2026-08-09, 20:22 CEST:
+As of 2026-08-09, 20:29 CEST:
 
 | Area | Status |
 | --- | --- |
@@ -197,14 +197,14 @@ and eight workers. Its FortBO checkout is `59c6e35`; its fresh run root is
 and its pair output is
 `/var/tmp/ert/fortbo-cpu-59c6e35/runs/oracle-pairs/data-informed-seed-3-retry1.json`.
 The launcher was alive after startup with no ledger yet and 82 GB free on
-`/var/tmp/ert`. At the 20:22 CEST checkpoint, the FortBO child had completed
+`/var/tmp/ert`. At the 20:29 CEST checkpoint, the FortBO child had completed
 all 256 calls and written a passing child ledger with 34 failed upstream
-evaluations in 10492.175852232991 seconds; the original-control child had 214
-dispatched requests and 199 response files and was still active. The pair
+evaluations in 10492.175852232991 seconds; the original-control child had 224
+dispatched requests and 209 response files and was still active. The pair
 ledger and original child ledger were still absent. `/var/tmp/ert` had 81 GB
-free (81% used). This remains an in-progress attempt, not an F3 row, until the
-oracle completes and `check_oracle_pair.py` passes. The workstation remains
-unused for physics.
+free (81% used), and the pair run occupied 6.4 MB. This remains an
+in-progress attempt, not an F3 row, until the oracle completes and
+`check_oracle_pair.py` passes. The workstation remains unused for physics.
 
 The pushed environment fix `a4e3e28` was independently validated on
 `faepkub4` in an isolated checkout with the existing clean sibling dependency
@@ -260,7 +260,7 @@ bridge yet.
 
 At `bf7c665`, a clean canonical checkout with clean sibling dependencies passes
 all 48 Fortran tests and all 40 Python tests. The current pushed checkout passes
-all 48 Fortran tests and all 64 Python tests. A raw 256-call attempt was stopped
+all 48 Fortran tests and all 67 Python tests. A raw 256-call attempt was stopped
 after 71 completed failures because several upstream evaluator subprocesses
 ran for multiple minutes; it produced no ledger and is not counted as an F3
 row. The external evaluator has an explicit 600-second worker timeout policy.
