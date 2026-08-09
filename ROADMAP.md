@@ -104,6 +104,10 @@ with the original BoTorch control and FortBO sharing the pinned ConStellaration
 evaluator. Earlier seed-2 launch attempts failed before a valid evaluator pair
 was started (remote `fo` path, missing BoTorch, and evaluator-environment
 selection); each failed pair document is retained and none is counted as F3.
+At the 14:22 CEST handoff snapshot, seed-1 had 205 requests and 162
+responses; the active seed-2 pair had 16 original-control requests/8 responses
+and 13 FortBO requests/5 responses. Neither final ledger existed, and
+`/var/tmp/ert` had 92 GB free, so both remain in progress rather than F3 rows.
 
 The Landreman exact-tool path is now portable: the manifest resolves
 `LANDREMAN_ARCHIVE`, `scripts/run_landreman_original.py` extracts only the
