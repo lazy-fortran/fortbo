@@ -7,7 +7,7 @@ and test suite.
 
 ## Current status
 
-As of 2026-08-09, 18:03 CEST:
+As of 2026-08-09, 18:05 CEST:
 
 | Area | Status |
 | --- | --- |
@@ -195,9 +195,9 @@ and eight workers. Its FortBO checkout is `59c6e35`; its fresh run root is
 and its pair output is
 `/var/tmp/ert/fortbo-cpu-59c6e35/runs/oracle-pairs/data-informed-seed-3-retry1.json`.
 The launcher was alive after startup with no ledger yet and 82 GB free on
-`/var/tmp/ert`. At the 18:03 CEST checkpoint, the parent and both child
-evaluator processes were still alive after 43:13. Each scratch root had 56
-dispatched requests; the oracle had 39 response files and FortBO had 37, with
+`/var/tmp/ert`. At the 18:05 CEST checkpoint, the parent and both child
+evaluator processes were still alive after 44:48. Each scratch root had 58
+dispatched requests; the oracle had 40 response files and FortBO had 38, with
 additional evaluator processes active. This is an in-progress attempt, not an
 F3 row. The workstation remains unused for physics.
 
