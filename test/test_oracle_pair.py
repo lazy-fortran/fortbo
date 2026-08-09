@@ -133,6 +133,21 @@ class OraclePairTests(unittest.TestCase):
                 )
             self.assertTrue(abort.is_set())
 
+    def test_pair_runner_preflights_the_original_environment(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            dfo = root / "dfo"
+            (dfo / "scripts").mkdir(parents=True)
+            (dfo / "scripts/run_b5_async_turbo.py").write_text("# fixture\n",
+                                                                  encoding="utf-8")
+            result = run_pair([
+                "--mode", "data-informed", "--seed", "1",
+                "--dfo-root", str(dfo), "--original-python", sys.executable,
+                "--run-root", str(root / "run"),
+                "--output", str(root / "pair.json"),
+            ])
+            self.assertEqual(result, 2)
+
 
 if __name__ == "__main__":
     unittest.main()

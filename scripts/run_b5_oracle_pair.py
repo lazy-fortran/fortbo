@@ -68,6 +68,25 @@ def _ensure_new(path: Path, label: str) -> None:
         raise PairError(f"{label} already contains artifacts: {path}")
 
 
+def _preflight_python(
+    interpreter: str, code: str, label: str, environment: Mapping[str, str]
+) -> None:
+    try:
+        result = subprocess.run(
+            [interpreter, "-c", code],
+            env=dict(environment),
+            capture_output=True,
+            text=True,
+            timeout=60,
+            check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired) as error:
+        raise PairError(f"{label} preflight failed: {error}") from error
+    if result.returncode:
+        detail = (result.stderr or result.stdout).strip()[-1000:]
+        raise PairError(f"{label} preflight failed: {detail}")
+
+
 def _run_process(
     label: str,
     command: list[str],
@@ -199,10 +218,29 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
         disk_before = _disk(args.run_root)
         environment = os.environ.copy()
         environment["SIMSOPT_DFO_SOURCE"] = str(args.dfo_root.resolve())
+        dfo_source = str((args.dfo_root / "src").resolve())
+        old_pythonpath = environment.get("PYTHONPATH")
+        environment["PYTHONPATH"] = os.pathsep.join(
+            item for item in (dfo_source, old_pythonpath) if item
+        )
         if args.constellaration_root:
             environment["SIMSOPT_DFO_CONSTELLARATION_SRC"] = str(args.constellaration_root)
         if args.constellaration_python:
             environment["SIMSOPT_DFO_CONSTELLARATION_PYTHON"] = str(args.constellaration_python)
+        _preflight_python(
+            args.original_python,
+            "import simsopt_dfo, torch, botorch",
+            "original control",
+            environment,
+        )
+        constellaration_python = environment.get("SIMSOPT_DFO_CONSTELLARATION_PYTHON")
+        if constellaration_python:
+            _preflight_python(
+                constellaration_python,
+                "import constellaration",
+                "ConStellaration evaluator",
+                environment,
+            )
         reserve_bytes = int(args.disk_reserve_gib * 1024**3)
         original_output = args.run_root / "original.json"
         fortbo_output = args.run_root / "fortbo.json"
