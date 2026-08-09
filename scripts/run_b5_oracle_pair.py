@@ -81,6 +81,28 @@ def _ensure_new(path: Path, label: str) -> None:
         raise PairError(f"{label} already contains artifacts: {path}")
 
 
+def _git_revision(path: Path, label: str) -> str:
+    """Require a real Git checkout before a pinned evaluator can start."""
+
+    path = path.resolve()
+    if not path.is_dir():
+        raise PairError(f"{label} checkout is missing: {path}")
+    try:
+        result = subprocess.run(
+            ["git", "-C", str(path), "rev-parse", "HEAD"],
+            capture_output=True,
+            text=True,
+            timeout=30,
+            check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired) as error:
+        raise PairError(f"cannot inspect {label} checkout {path}: {error}") from error
+    if result.returncode or not result.stdout.strip():
+        detail = (result.stderr or result.stdout).strip()[-500:]
+        raise PairError(f"{label} checkout is not a Git worktree: {path}: {detail}")
+    return result.stdout.strip()
+
+
 def _preflight_python(
     interpreter: str, code: str, label: str, environment: Mapping[str, str]
 ) -> None:
@@ -232,6 +254,12 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
             raise PairError("exact B5 oracle pairing requires budget 256 and eight workers")
         if not args.dfo_root.is_dir() or not (args.dfo_root / "scripts/run_b5_async_turbo.py").is_file():
             raise PairError(f"simsopt-dfo control checkout is missing: {args.dfo_root}")
+        if args.constellaration_root is None:
+            raise PairError(
+                "exact B5 oracle pairing requires --constellaration-root"
+            )
+        constellaration_root = args.constellaration_root.resolve()
+        _git_revision(constellaration_root, "ConStellaration")
         _ensure_external(args.run_root, (args.dfo_root, args.fortbo_root), "run-root")
         _ensure_external(args.output, (args.dfo_root, args.fortbo_root), "output")
         _ensure_new(args.run_root, "run-root")
@@ -246,8 +274,7 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
         environment["PYTHONPATH"] = os.pathsep.join(
             item for item in (dfo_source, old_pythonpath) if item
         )
-        if args.constellaration_root:
-            environment["SIMSOPT_DFO_CONSTELLARATION_SRC"] = str(args.constellaration_root)
+        environment["SIMSOPT_DFO_CONSTELLARATION_SRC"] = str(constellaration_root)
         if args.constellaration_python:
             environment["SIMSOPT_DFO_CONSTELLARATION_PYTHON"] = str(args.constellaration_python)
         _preflight_python(
