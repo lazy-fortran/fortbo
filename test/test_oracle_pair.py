@@ -7,6 +7,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from scripts.run_b5_oracle_pair import main as run_pair
+
 
 ROOT = Path(__file__).parents[1]
 CHECKER = ROOT / "scripts/check_oracle_pair.py"
@@ -91,6 +93,23 @@ class OraclePairTests(unittest.TestCase):
             )
             self.assertEqual(result.returncode, 1)
             self.assertIn("different ConStellaration commits", result.stderr)
+
+    def test_pair_runner_refuses_to_reuse_nonempty_run_root(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            dfo = root / "dfo"
+            (dfo / "scripts").mkdir(parents=True)
+            (dfo / "scripts/run_b5_async_turbo.py").write_text("# fixture\n",
+                                                                  encoding="utf-8")
+            run_root = root / "run"
+            run_root.mkdir()
+            (run_root / "old.json").write_text("{}\n", encoding="utf-8")
+            result = run_pair([
+                "--mode", "data-informed", "--seed", "1",
+                "--dfo-root", str(dfo), "--run-root", str(run_root),
+                "--output", str(root / "pair.json"),
+            ])
+            self.assertEqual(result, 2)
 
 
 if __name__ == "__main__":

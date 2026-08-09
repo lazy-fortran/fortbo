@@ -63,6 +63,11 @@ def _ensure_external(path: Path, roots: Iterable[Path], label: str) -> None:
         raise PairError(f"{label} must be outside source checkout {root}")
 
 
+def _ensure_new(path: Path, label: str) -> None:
+    if path.exists() and (path.is_file() or any(path.iterdir())):
+        raise PairError(f"{label} already contains artifacts: {path}")
+
+
 def _run_process(
     label: str,
     command: list[str],
@@ -182,6 +187,8 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
             raise PairError(f"simsopt-dfo control checkout is missing: {args.dfo_root}")
         _ensure_external(args.run_root, (args.dfo_root, args.fortbo_root), "run-root")
         _ensure_external(args.output, (args.dfo_root, args.fortbo_root), "output")
+        _ensure_new(args.run_root, "run-root")
+        _ensure_new(args.output, "pair output")
         args.run_root.mkdir(parents=True, exist_ok=True)
         args.output.parent.mkdir(parents=True, exist_ok=True)
         disk_before = _disk(args.run_root)

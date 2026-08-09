@@ -87,7 +87,8 @@ as the independent oracle; `scripts/check_oracle_pair.py` checks both ledgers'
 behavioral accounting and compares FortBO's best value against the oracle.
 Both Python interpreters are explicit (`--original-python` and
 `--fortbo-python`) so the pair cannot silently mix the evaluator and FortBO
-environments.
+environments. The launcher also refuses non-empty run roots and pre-existing
+pair outputs, preventing a later seed from overwriting campaign evidence.
 This pair must be launched on `faepkub4` for CPU work or inside an allocated
 aCluster/sCluster Slurm job for GPU work. No physics reproduction is to run on
 the workstation. The runner stops both children if the run filesystem falls
