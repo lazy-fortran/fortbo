@@ -7,7 +7,7 @@ and test suite.
 
 ## Current status
 
-As of 2026-08-09, 16:02 CEST:
+As of 2026-08-09, 17:00 CEST:
 
 | Area | Status |
 | --- | --- |
@@ -50,10 +50,9 @@ model when configured.
 The external B5 control ledgers are now materialized from Git LFS and pass the
 FortBO-side audit: ten TuRBO-1 ledgers (raw and data-informed) plus ten
 data-informed four-region TuRBO-m ledgers, all at 256 calls and eight workers.
-FortBO's five raw TuRBO-1 rows and the first data-informed TuRBO-1 row are now
-recorded and audited. The FortBO child of the second data-informed TuRBO-1
-pair is also complete and passes its standalone audit, but remains provisional
-until the original control and pair audit finish. The remaining three
+FortBO's five raw TuRBO-1 rows and two data-informed TuRBO-1 rows are now
+recorded and independently audited. The seed-2 data-informed row is the first
+one with a complete concurrent BoTorch oracle pair; the remaining three
 data-informed TuRBO-1 rows and five data-informed TuRBO-m rows remain pending,
 so the control set is complete but the FortBO campaign is not.
 At 16:02 CEST, the current `check_fortbo_b5.py` independently re-audited all
@@ -92,14 +91,21 @@ does share the transform digest and ConStellaration revision, but it was not
 launched by the concurrent pair runner and has no pair manifest; it remains a
 standalone comparator rather than a paired F3 oracle.
 
-The FortBO child of the active paired data-informed seed-2 run has since
-completed and passes `check_fortbo_b5.py`. Its provisional copy is retained at
-`/home/ert/data/simsopt-dfo-fortbo/b5-oracle-pairs/seed-2-retry3/fortbo.json`;
-it records 256 truth calls, eight failed evaluations, peak concurrency eight,
-and 5169.303276092 seconds wall time from FortBO
-`9197d89b736535dea905ae0d11d0a80515721149`. This is not yet a paired F3 row:
-the original BoTorch control is still running and the parent pair ledger does
-not exist.
+The concurrent data-informed seed-2 pair then completed on `faepkub4`. The
+pair and both child ledgers are archived under
+`/home/ert/data/simsopt-dfo-fortbo/b5-oracle-pairs/seed-2-retry3/`; the current
+transform-aware `check_oracle_pair.py` passes after deriving FortBO's aggregate
+best from its successful evaluation rows. The original control reached best
+value `5.602708596031043` with 11 failed evaluations in 9571.621494071005
+seconds; FortBO reached `7.252038876891312` with eight failed evaluations in
+5169.303276091989 seconds. The FortBO-minus-oracle delta is
+`1.6493302808602692`. Both child processes returned zero; the pair SHA-256 is
+`a9bc51e8acc41111d2ec24e653e4a85cf905b84debbe2c112c27c75c26118ac2`. The
+shared simsopt-dfo revision is
+`2a3ce7b71ea81f659e8910dbd38ea3e99ad9dff4`, FortBO is
+`9197d89b736535dea905ae0d11d0a80515721149`, and ConStellaration is
+`112b20ae07193910d467d26033fe51022e641b9f`. This is the first fully
+oracle-paired data-informed TuRBO-1 F3 row.
 
 The public-source provenance lane is now scripted but deliberately not run from
 this workstation. `configs/reproduction/source-downloads.json` pins the
@@ -151,16 +157,14 @@ aCluster/sCluster Slurm job for GPU work. No physics reproduction is to run on
 the workstation. The runner stops both children if the run filesystem falls
 below its disk reserve.
 
-The first valid paired data-informed seed-2 launch is now active on `faepkub4`
+The first valid paired data-informed seed-2 launch completed on `faepkub4`
 with the original BoTorch control and FortBO sharing the pinned ConStellaration
 evaluator. Earlier seed-2 launch attempts failed before a valid evaluator pair
 was started (remote `fo` path, missing BoTorch, and evaluator-environment
 selection); each failed pair document is retained and none is counted as F3.
-At the 16:02 CEST handoff snapshot, the active seed-2 pair had 222
-original-control requests/206 responses. The FortBO child ledger exists, but
-the original control and parent pair ledger are not finished. It remains in
-progress with 84 GB free on `/var/tmp/ert`. No new CPU campaign or GPU Slurm
-job was started, and the workstation was not used for physics work.
+The completed pair used 256 truth calls and eight workers on each side and left
+83 GB free on `/var/tmp/ert`. No next CPU campaign or GPU Slurm job has been
+started yet, and the workstation was not used for physics work.
 
 The Landreman exact-tool path is now portable: the manifest resolves
 `LANDREMAN_ARCHIVE`, `scripts/run_landreman_original.py` extracts only the
@@ -202,7 +206,7 @@ bridge yet.
 
 At `bf7c665`, a clean canonical checkout with clean sibling dependencies passes
 all 48 Fortran tests and all 40 Python tests. The current pushed checkout passes
-all 48 Fortran tests and all 61 Python tests. A raw 256-call attempt was stopped
+all 48 Fortran tests and all 63 Python tests. A raw 256-call attempt was stopped
 after 71 completed failures because several upstream evaluator subprocesses
 ran for multiple minutes; it produced no ledger and is not counted as an F3
 row. The external evaluator has an explicit 600-second worker timeout policy.
@@ -545,11 +549,10 @@ device identity and kernel-residency evidence.
   trust-state, and completion traces.
 - [ ] F3: run five paired seeds for raw/data-informed TuRBO-1 and
   data-informed TuRBO-m at 256 calls and eight workers; control ledgers are
-  audited, all five raw TuRBO-1 FortBO rows and one data-informed TuRBO-1
-  FortBO row are now recorded, and a second data-informed FortBO child passes
-  standalone audit. The remaining data-informed rows are pending; the
-  completed seed-1 row and the seed-2 child are not counted as paired until
-  their control/pair audits pass.
+  audited, all five raw TuRBO-1 FortBO rows and two data-informed TuRBO-1
+  FortBO rows are now recorded, and seed 2 is the first complete oracle-paired
+  data-informed row. The remaining data-informed rows are pending; seed 1 is
+  still a standalone comparator.
 - [ ] F4: run archived Landreman control and FortBO at the original allocation,
   then a labeled resource-matched GPU scaling row. The exact archive, source
   digest, portable preparation, contract checks, and FortBO MPI bridge pass;
