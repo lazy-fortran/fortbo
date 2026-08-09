@@ -7,7 +7,7 @@ and test suite.
 
 ## Current status
 
-As of 2026-08-09, 19:02 CEST:
+As of 2026-08-09, 19:03 CEST:
 
 | Area | Status |
 | --- | --- |
@@ -197,12 +197,12 @@ and eight workers. Its FortBO checkout is `59c6e35`; its fresh run root is
 and its pair output is
 `/var/tmp/ert/fortbo-cpu-59c6e35/runs/oracle-pairs/data-informed-seed-3-retry1.json`.
 The launcher was alive after startup with no ledger yet and 82 GB free on
-`/var/tmp/ert`. At the 19:02 CEST checkpoint, the parent and both child
-evaluator processes were still alive after 01:41:23. The oracle scratch root
-had 125 dispatched requests and 108 response files; the FortBO root had 131
-requests and 92 responses, with the pair ledger still absent. This is an
-in-progress attempt, not an F3 row. The workstation remains unused for
-physics.
+`/var/tmp/ert`. At the 19:03 CEST checkpoint, the parent and both child
+evaluator processes were still alive after 01:43:07, with 16 evaluator
+processes active. The oracle scratch root had 129 dispatched requests and 112
+response files; the FortBO root had 132 requests and 93 responses, with the
+pair ledger still absent. This is an in-progress attempt, not an F3 row. The
+workstation remains unused for physics.
 
 The Landreman exact-tool path is now portable: the manifest resolves
 `LANDREMAN_ARCHIVE`, `scripts/run_landreman_original.py` extracts only the
