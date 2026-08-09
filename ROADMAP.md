@@ -7,7 +7,7 @@ and test suite.
 
 ## Current status
 
-As of 2026-08-09, 18:42 CEST:
+As of 2026-08-09, 18:44 CEST:
 
 | Area | Status |
 | --- | --- |
@@ -227,6 +227,10 @@ the large archive remains on `faepkub4` rather than being copied to the
 workstation. The current `aCluster` and `sCluster` inventories expose one GPU
 per node, so no exact one-node/four-GPU allocation was submitted; the live
 control/FortBO trace remains open.
+The read-only 18:44 CEST Slurm inventory still reports one `gpu:tesla_t4:1`
+per visible aCluster node and one `gpu:nvidia_rtx_pro_6000...:1` on the idle
+sCluster node; no compatible four-GPU node was visible and no GPU job was
+submitted by this campaign.
 
 The missing FortBO side of F4 is now staged in
 `scripts/run_landreman_fortbo.py`: rank zero owns the completion-driven
