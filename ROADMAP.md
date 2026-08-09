@@ -71,8 +71,10 @@ At `bf7c665`, a clean canonical checkout with clean sibling dependencies passes
 all 48 Fortran tests and all 40 Python tests. A raw 256-call attempt was stopped
 after 71 completed failures because several upstream evaluator subprocesses
 ran for multiple minutes; it produced no ledger and is not counted as an F3
-row. The next full campaign needs an explicit evaluator-timeout policy before
-it can be treated as bounded evidence.
+row. The external evaluator now has the explicit 600-second worker timeout
+policy from simsopt-dfo commit `a9b6e2b`; timeout is recorded as the same
+structured expected truth failure as a solver failure, and the focused B5
+contract/campaign suite passes 24 tests. A new full row is still required.
 
 The FOCUS source was recovered from its public Git repository and pinned at
 `e4bb49b0632c650e326616912e274feb7781a60d`, with the stochastic source and
