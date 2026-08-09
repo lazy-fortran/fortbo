@@ -39,6 +39,16 @@ def resolve_fo_command(command: str) -> str:
     return str(resolved)
 
 
+def configure_fo_environment(
+    environment: Optional[Mapping[str, str]], cache_root: Path
+) -> dict[str, str]:
+    """Use a run-local fo cache unless the caller selected one explicitly."""
+
+    selected = dict(environment or os.environ)
+    selected.setdefault("FO_CACHE_DIR", str(cache_root.resolve()))
+    return selected
+
+
 def fortbo_path_dependencies(root: Path) -> tuple[Path, ...]:
     """Return every recursive relative path dependency in fpm manifests."""
 
@@ -139,6 +149,7 @@ def preflight_fo(
         "version": version.stdout.strip().splitlines()[0] if version.stdout.strip() else "",
         "source": str(root),
         "path_dependencies": [str(path) for path in dependencies],
+        "fo_cache_dir": selected_environment.get("FO_CACHE_DIR"),
         "tests_run": run_tests,
         "test_timeout": test_timeout if run_tests else None,
     }

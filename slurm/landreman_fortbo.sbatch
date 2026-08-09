@@ -21,6 +21,7 @@ SCRATCH=${LANDREMAN_FORTBO_SCRATCH:-${PREP_ROOT}/fortbo-scratch}
 OUTPUT=${LANDREMAN_FORTBO_OUTPUT:-${PREP_ROOT}/fortbo.json}
 METADATA_ROOT=${LANDREMAN_FORTBO_METADATA_ROOT:-${PREP_ROOT}.metadata}
 FORTBO_COMMAND=${FORTBO_COMMAND:-${HOME}/.local/bin/fo}
+FO_CACHE_DIR=${FORTBO_FO_CACHE:-${PREP_ROOT}/fo-cache}
 
 test -d "$FORTBO_ROOT"
 test -x "$PYTHON"
@@ -29,7 +30,7 @@ test "$(git -C "$FORTBO_ROOT" status --porcelain)" = ""
 test "$(git -C "$FORTBO_ROOT" rev-parse --is-inside-work-tree)" = true
 test ! -e "$OUTPUT"
 
-export LANDREMAN_ARCHIVE
+export LANDREMAN_ARCHIVE FO_CACHE_DIR
 mkdir -p "$SOURCE_ROOT" "$METADATA_ROOT"
 
 scontrol show job -dd "$SLURM_JOB_ID" > "$METADATA_ROOT/slurm-job.txt"

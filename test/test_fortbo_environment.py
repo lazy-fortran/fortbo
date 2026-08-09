@@ -8,6 +8,7 @@ from pathlib import Path
 
 from scripts.fortbo_environment import (
     FortBOEnvironmentError,
+    configure_fo_environment,
     fortbo_path_dependencies,
     preflight_fo,
 )
@@ -34,14 +35,37 @@ class FortBOEnvironmentTests(unittest.TestCase):
                 encoding="utf-8",
             )
             fo.chmod(fo.stat().st_mode | stat.S_IXUSR)
-            environment = dict(os.environ, FO_SENTINEL=str(sentinel))
+            environment = dict(
+                os.environ,
+                FO_SENTINEL=str(sentinel),
+                FO_CACHE_DIR=str(root / "fo-cache"),
+            )
 
             result = preflight_fo(str(fo), source, environment)
 
             self.assertEqual(result["command"], str(fo.resolve()))
             self.assertEqual(result["version"], "fo 0.3.2")
+            self.assertEqual(result["fo_cache_dir"], str((root / "fo-cache").resolve()))
             self.assertTrue(sentinel.is_file())
             self.assertFalse(result["tests_run"])
+
+    def test_fo_cache_configuration_preserves_explicit_cache(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            explicit = root / "explicit-cache"
+            selected = configure_fo_environment(
+                {"FO_CACHE_DIR": str(explicit)}, root / "default-cache"
+            )
+
+            self.assertEqual(selected["FO_CACHE_DIR"], str(explicit))
+
+    def test_fo_cache_configuration_defaults_to_run_root(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+
+            selected = configure_fo_environment({}, root / "run-cache")
+
+            self.assertEqual(selected["FO_CACHE_DIR"], str((root / "run-cache").resolve()))
 
     def test_recursive_path_dependency_inventory_is_complete(self):
         with tempfile.TemporaryDirectory() as temporary:

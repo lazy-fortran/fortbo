@@ -7,7 +7,7 @@ and test suite.
 
 ## Current status
 
-As of 2026-08-09, 20:31 CEST:
+As of 2026-08-09, 20:43 CEST:
 
 | Area | Status |
 | --- | --- |
@@ -212,9 +212,16 @@ worktrees: `fo 0.3.2`, all nine recursive path dependencies, `fo build`, and
 the full test suite with `FO_TEST_TIMEOUT=60` all passed. The 191 MB validation
 checkout was removed after the check; the active campaign scratch was not
 modified.
-The Landreman Slurm wrapper and standalone synthetic/posterior runners now
-resolve the same absolute `fo` executable; the Slurm wrapper records a full
-preflight before entering the MPI launch.
+At 20:41 CEST, the same gate passed again from the current detached checkout
+with a fresh run-local `FO_CACHE_DIR`: `fo 0.3.2`, `fo build`, and the full test
+suite completed with no stderr; the cache occupied 86 MB and `/var/tmp/ert`
+still had 81 GB free. The workstation's shared 261 MB cache contained a stale
+FortFront module, so its direct protocol test failed during rebuild before any
+physics process started. Paired launchers now default to a run-local `fo`
+cache, preserve an explicitly supplied `FO_CACHE_DIR`, and record the selected
+cache in the preflight manifest. The Landreman Slurm wrapper exports the same
+policy before its preflight and MPI launch. The workstation remains unused for
+physics.
 
 The Landreman exact-tool path is now portable: the manifest resolves
 `LANDREMAN_ARCHIVE`, `scripts/run_landreman_original.py` extracts only the
@@ -595,7 +602,9 @@ executable to an absolute path, runs `fo --version`, and completes `fo build`.
 With `--test`, it also runs the full suite using `FO_TEST_TIMEOUT=60`, which is
 the host setting required by the three slow tests. The B5 pair launcher invokes
 the same dependency and build preflight before either evaluator starts and
-records the resolved `fo` command and dependency paths in the pair document.
+records the resolved `fo` command, cache, and dependency paths in the pair
+document. Its default cache is under the external run root, so stale shared
+FortFront modules cannot be reused across source worktrees.
 
 ## Delivery plan
 

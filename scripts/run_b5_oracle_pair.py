@@ -31,10 +31,15 @@ from typing import Any, Iterable, Mapping, Optional
 try:
     from .fortbo_environment import (
         FortBOEnvironmentError,
+        configure_fo_environment,
         preflight_fo,
     )
 except ImportError:  # pragma: no cover - used when this file is run directly
-    from fortbo_environment import FortBOEnvironmentError, preflight_fo
+    from fortbo_environment import (
+        FortBOEnvironmentError,
+        configure_fo_environment,
+        preflight_fo,
+    )
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -234,7 +239,7 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
         args.run_root.mkdir(parents=True, exist_ok=True)
         args.output.parent.mkdir(parents=True, exist_ok=True)
         disk_before = _disk(args.run_root)
-        environment = os.environ.copy()
+        environment = configure_fo_environment(os.environ, args.run_root / "fo-cache")
         environment["SIMSOPT_DFO_SOURCE"] = str(args.dfo_root.resolve())
         dfo_source = str((args.dfo_root / "src").resolve())
         old_pythonpath = environment.get("PYTHONPATH")
