@@ -24,12 +24,13 @@ The physics campaign belongs in /mnt/storage/code/simsopt-dfo. Large inputs,
 environments, scratch directories, and result ledgers belong in
 /home/ert/data/simsopt-dfo-fortbo.
 
-The local ARD lane now automatically consumes complete derivative observations
-when a history contains them; `ignore_gradients` is the explicit value-only
-escape hatch. Replay adapters also accept frozen initial designs and
-region-partitioned candidate pools, with independent coordinate and trust-state
-gates. These are local parity prerequisites, not evidence that the archived
-Landreman runtime or published DTuRBO model has been reproduced.
+The local ARD lane now retains every usable value and automatically appends
+complete derivative observations when a history contains them;
+`ignore_gradients` is the explicit value-only escape hatch. Replay adapters
+also accept frozen initial designs and region-partitioned candidate pools, with
+independent coordinate and trust-state gates. These are local parity
+prerequisites, not evidence that the archived Landreman runtime or published
+DTuRBO model has been reproduced.
 
 The archived Landreman source contract now checks the trust-state update,
 minimum-length restart, Thompson candidate masking, no-replacement sampling,
