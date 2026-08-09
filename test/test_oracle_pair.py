@@ -217,6 +217,28 @@ class OraclePairTests(unittest.TestCase):
             ])
             self.assertEqual(result, 2)
 
+    def test_pair_runner_preflights_missing_fortbo_path_dependencies(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            dfo = root / "dfo"
+            (dfo / "scripts").mkdir(parents=True)
+            (dfo / "scripts/run_b5_async_turbo.py").write_text("# fixture\n",
+                                                                  encoding="utf-8")
+            fortbo = root / "fortbo"
+            fortbo.mkdir()
+            (fortbo / "fpm.toml").write_text(
+                '[dependencies]\nfortnum = { path = "../fortnum" }\n',
+                encoding="utf-8",
+            )
+            result = run_pair([
+                "--mode", "data-informed", "--seed", "1",
+                "--dfo-root", str(dfo), "--fortbo-root", str(fortbo),
+                "--original-python", sys.executable,
+                "--run-root", str(root / "run"),
+                "--output", str(root / "pair.json"),
+            ])
+            self.assertEqual(result, 2)
+
 
 if __name__ == "__main__":
     unittest.main()

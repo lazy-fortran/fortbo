@@ -7,7 +7,7 @@ and test suite.
 
 ## Current status
 
-As of 2026-08-09, 17:20 CEST:
+As of 2026-08-09, 17:27 CEST:
 
 | Area | Status |
 | --- | --- |
@@ -145,9 +145,10 @@ Both Python interpreters are explicit (`--original-python` and
 `--fortbo-python`) so the pair cannot silently mix the evaluator and FortBO
 environments. The launcher also refuses non-empty run roots and pre-existing
 pair outputs, preflights the simsopt-dfo/BoTorch and ConStellaration imports,
-and injects the selected simsopt-dfo source into `PYTHONPATH`, preventing a
-later seed from overwriting campaign evidence or failing after workers have
-already started.
+checks every recursive relative path dependency declared by FortBO's
+`fpm.toml` manifests, and injects the selected simsopt-dfo source into
+`PYTHONPATH`, preventing a later seed from overwriting campaign evidence or
+failing after workers have already started.
 The independent pair checker additionally requires matching B5 case, mode,
 dimension, transform file, and transform SHA-256 before reporting a comparison.
 The launcher now also marks a pair complete only when both child ledgers exist
@@ -237,7 +238,7 @@ bridge yet.
 
 At `bf7c665`, a clean canonical checkout with clean sibling dependencies passes
 all 48 Fortran tests and all 40 Python tests. The current pushed checkout passes
-all 48 Fortran tests and all 63 Python tests. A raw 256-call attempt was stopped
+all 48 Fortran tests and all 64 Python tests. A raw 256-call attempt was stopped
 after 71 completed failures because several upstream evaluator subprocesses
 ran for multiple minutes; it produced no ledger and is not counted as an F3
 row. The external evaluator has an explicit 600-second worker timeout policy.
