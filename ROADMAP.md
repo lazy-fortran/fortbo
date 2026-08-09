@@ -7,7 +7,7 @@ and test suite.
 
 ## Current status
 
-As of 2026-08-09, 15:59 CEST:
+As of 2026-08-09, 16:02 CEST:
 
 | Area | Status |
 | --- | --- |
@@ -56,6 +56,9 @@ pair is also complete and passes its standalone audit, but remains provisional
 until the original control and pair audit finish. The remaining three
 data-informed TuRBO-1 rows and five data-informed TuRBO-m rows remain pending,
 so the control set is complete but the FortBO campaign is not.
+At 16:02 CEST, the current `check_fortbo_b5.py` independently re-audited all
+five archived raw TuRBO-1 rows and the completed data-informed seed-1 row; all
+six passed and no ledger was modified.
 
 FortBO's TuRBO driver now accepts an explicit success mask: failed truth calls
 remain in the history and trust accounting as imputed worst cases, but are
@@ -153,8 +156,8 @@ with the original BoTorch control and FortBO sharing the pinned ConStellaration
 evaluator. Earlier seed-2 launch attempts failed before a valid evaluator pair
 was started (remote `fo` path, missing BoTorch, and evaluator-environment
 selection); each failed pair document is retained and none is counted as F3.
-At the 15:59 CEST handoff snapshot, the active seed-2 pair had 215
-original-control requests/199 responses. The FortBO child ledger exists, but
+At the 16:02 CEST handoff snapshot, the active seed-2 pair had 222
+original-control requests/206 responses. The FortBO child ledger exists, but
 the original control and parent pair ledger are not finished. It remains in
 progress with 84 GB free on `/var/tmp/ert`. No new CPU campaign or GPU Slurm
 job was started, and the workstation was not used for physics work.
