@@ -7,7 +7,7 @@ and test suite.
 
 ## Current status
 
-As of 2026-08-09, 20:43 CEST:
+As of 2026-08-09, 20:52 CEST:
 
 | Area | Status |
 | --- | --- |
@@ -50,16 +50,18 @@ model when configured.
 The external B5 control ledgers are now materialized from Git LFS and pass the
 FortBO-side audit: ten TuRBO-1 ledgers (raw and data-informed) plus ten
 data-informed four-region TuRBO-m ledgers, all at 256 calls and eight workers.
-FortBO's five raw TuRBO-1 rows and two data-informed TuRBO-1 rows are now
+FortBO's five raw TuRBO-1 rows and three data-informed TuRBO-1 rows are now
 recorded and independently audited. The seed-2 data-informed row is the first
-one with a complete concurrent BoTorch oracle pair; the remaining three
-data-informed TuRBO-1 rows and five data-informed TuRBO-m rows remain pending,
+one with a complete concurrent BoTorch oracle pair, and seed 3 is the second;
+the remaining two data-informed TuRBO-1 rows and five data-informed TuRBO-m rows remain pending,
 so the control set is complete but the FortBO campaign is not.
 At 16:02 CEST, the current `check_fortbo_b5.py` independently re-audited all
 five archived raw TuRBO-1 rows and the completed data-informed seed-1 row; all
 six passed and no ledger was modified.
 At 18:47 CEST, that six-row audit was repeated together with the archived
 seed-2 pair check; all checks passed and no ledger was modified.
+At 20:52 CEST, the archived seed-3 pair and its FortBO child were independently
+checked; both child ledgers passed, and no ledger was modified.
 
 FortBO's TuRBO driver now accepts an explicit success mask: failed truth calls
 remain in the history and trust accounting as imputed worst cases, but are
@@ -192,19 +194,31 @@ This was a software-only gate, and the workstation was not used.
 
 After that gate, the data-informed TuRBO-1 seed-3 retry-1 pair was launched on
 `faepkub4` with the pinned simsopt-dfo/ConStellaration environments, 256 calls,
-and eight workers. Its FortBO checkout is `59c6e35`; its fresh run root is
+and eight workers. Its FortBO checkout is `59c6e35`; its run root was
 `/var/tmp/ert/fortbo-cpu-59c6e35/runs/oracle-pair-data-informed-seed-3-retry1/`
 and its pair output is
 `/var/tmp/ert/fortbo-cpu-59c6e35/runs/oracle-pairs/data-informed-seed-3-retry1.json`.
-The launcher was alive after startup with no ledger yet and 82 GB free on
-`/var/tmp/ert`. At the 20:31 CEST checkpoint, the FortBO child had completed
-all 256 calls and written a passing child ledger with 34 failed upstream
-evaluations in 10492.175852232991 seconds; the original-control child had 228
-dispatched requests and 213 response files and was still active. The pair
-ledger and original child ledger were still absent. `/var/tmp/ert` had 81 GB
-free (81% used), and the pair run occupied 6.4 MB. This remains an
-in-progress attempt, not an F3 row, until the oracle completes and
-`check_oracle_pair.py` passes. The workstation remains unused for physics.
+The pair completed at 20:51 CEST with both child ledgers passing and 81 GB free
+(81% used) on `/var/tmp/ert`; the workstation remained unused for physics. The
+original control recorded 256 truth calls, 12 failed evaluations, best value
+`5.669217037021568`, and `12659.57376201899` seconds wall time. FortBO recorded
+256 truth calls, 34 failed evaluations retained under the failure mask, peak
+concurrency eight, and `10492.175852232991` seconds wall time; its aggregate
+best successful value is `7.75928267851814`. The FortBO-minus-oracle delta is
+`2.0900656414965724`. The pair checker passes after rebasing the archived
+paths, and `check_fortbo_b5.py` passes the FortBO child independently. The
+pair SHA-256 is
+`3712531e1f07b731ae8129341fb6461d897b52281db03d684edc1e5a9b6a43eb`; the
+child SHA-256 values are original
+`6719ad5efafd64187d866f7e2a88d0a7cf29fa314db4bd9df10aec1d7f219efb` and
+FortBO `e19e71fc92c5db2f4f46a52b7270339fb0259b7fe5aa36f08b5b4e7bf035e335`.
+The pinned sources are FortBO `59c6e35bbec47a9736da66cebe6a04362bfa9120`,
+simsopt-dfo `2a3ce7b71ea81f659e8910dbd38ea3e99ad9dff4`, and ConStellaration
+`112b20ae07193910d467d26033fe51022e641b9f`; the shared data-informed
+transform SHA-256 is
+`951c2b6f8e0f8dd1dee0297aca91645900ce4044f104e3f5132fbad523e68340`.
+The archived pair is
+`/home/ert/data/simsopt-dfo-fortbo/b5-oracle-pairs/seed-3-retry1/`.
 
 The pushed environment fix `a4e3e28` was independently validated on
 `faepkub4` in an isolated checkout with the existing clean sibling dependency
@@ -222,6 +236,8 @@ cache, preserve an explicitly supplied `FO_CACHE_DIR`, and record the selected
 cache in the preflight manifest. The Landreman Slurm wrapper exports the same
 policy before its preflight and MPI launch. The workstation remains unused for
 physics.
+At 20:47 CEST, the exact pushed commit `9c90d5f` passed the same clean-cache
+gate on `faepkub4`; the recorded cache was 86 MB and stderr was empty.
 
 The Landreman exact-tool path is now portable: the manifest resolves
 `LANDREMAN_ARCHIVE`, `scripts/run_landreman_original.py` extracts only the
@@ -622,9 +638,10 @@ FortFront modules cannot be reused across source worktrees.
 - [ ] F3: run five paired seeds for raw/data-informed TuRBO-1 and
   data-informed TuRBO-m at 256 calls and eight workers; control ledgers are
   audited, all five raw TuRBO-1 FortBO rows and two data-informed TuRBO-1
-  FortBO rows are now recorded, and seed 2 is the first complete oracle-paired
-  data-informed row. The remaining data-informed rows are pending; seed 1 is
-  still a standalone comparator.
+  FortBO rows are now recorded, and seeds 2 and 3 are complete oracle-paired
+  data-informed rows. The remaining two data-informed TuRBO-1 rows and five
+  data-informed TuRBO-m rows are pending; seed 1 is still a standalone
+  comparator.
 - [ ] F4: run archived Landreman control and FortBO at the original allocation,
   then a labeled resource-matched GPU scaling row. The exact archive, source
   digest, portable preparation, contract checks, and FortBO MPI bridge pass;
