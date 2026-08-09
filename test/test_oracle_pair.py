@@ -96,6 +96,18 @@ class OraclePairTests(unittest.TestCase):
             self.assertEqual(result.returncode, 1)
             self.assertIn("different ConStellaration commits", result.stderr)
 
+    def test_different_coordinate_transform_is_rejected(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            pair = self.make_pair(root)
+            fortbo = root / "fortbo.json"
+            document = json.loads(fortbo.read_text(encoding="utf-8"))
+            document["problem"]["transform_sha256"] = "changed-transform"
+            fortbo.write_text(json.dumps(document), encoding="utf-8")
+            result = self.run_checker(pair)
+            self.assertEqual(result.returncode, 1)
+            self.assertIn("transform digests differ", result.stderr)
+
     def test_checker_rebases_archived_remote_paths(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

@@ -107,8 +107,17 @@ def check(
     for key in ("mode", "regions", "seed", "budget", "workers"):
         _require(oracle["configuration"].get(key) == configuration.get(key), f"oracle {key} disagrees with pair")
         _require(fortbo["configuration"].get(key) == configuration.get(key), f"fortbo {key} disagrees with pair")
-    _require(oracle["problem"].get("case_id") == fortbo["problem"].get("case_id"), "case IDs differ")
-    _require(oracle["problem"].get("dimension") == fortbo["problem"].get("dimension"), "dimensions differ")
+    for key, label in (
+        ("case_id", "case IDs"),
+        ("mode", "coordinate modes"),
+        ("dimension", "dimensions"),
+        ("transform_file", "transform files"),
+        ("transform_sha256", "transform digests"),
+    ):
+        _require(
+            oracle["problem"].get(key) == fortbo["problem"].get(key),
+            f"{label} differ",
+        )
     _require(
         oracle["source"].get("constellaration_commit")
         == fortbo["source"].get("constellaration_commit"),
