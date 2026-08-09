@@ -7,7 +7,7 @@ and test suite.
 
 ## Current status
 
-As of 2026-08-09, 15:23 CEST:
+As of 2026-08-09, 15:39 CEST:
 
 | Area | Status |
 | --- | --- |
@@ -50,9 +50,10 @@ model when configured.
 The external B5 control ledgers are now materialized from Git LFS and pass the
 FortBO-side audit: ten TuRBO-1 ledgers (raw and data-informed) plus ten
 data-informed four-region TuRBO-m ledgers, all at 256 calls and eight workers.
-FortBO's five raw TuRBO-1 rows are now recorded and audited; the five
-data-informed TuRBO-1 rows and five data-informed TuRBO-m rows remain pending,
-so the control set is complete but the FortBO campaign is not.
+FortBO's five raw TuRBO-1 rows and the first data-informed TuRBO-1 row are now
+recorded and audited; the remaining four data-informed TuRBO-1 rows and five
+data-informed TuRBO-m rows remain pending, so the control set is complete but
+the FortBO campaign is not.
 
 FortBO's TuRBO driver now accepts an explicit success mask: failed truth calls
 remain in the history and trust accounting as imputed worst cases, but are
@@ -66,11 +67,20 @@ rows without inventing objective values. Clean eight-call smokes through the
 completion-driven bridge recorded eight raw truth failures and eight
 successful data-informed truth calls (272.1 seconds), both at peak concurrency
 eight with nontrivial completion order; both rows passed the FortBO-side
-audit. These are bridge checks, not F3 rows; the full 256-call campaign is now
-running on `faepkub4` in the data-informed seed-1 lane, with no duplicate
-physics run started here. The latest remote snapshot had 256 requests and 183
-responses, eight active physics workers, no final ledger yet, and 84 GB free on
-`/var/tmp/ert`; it remains an in-progress run rather than an F3 result.
+audit. These are bridge checks, not F3 rows. The first full 256-call
+data-informed TuRBO-1 FortBO row completed on `faepkub4` without starting a
+duplicate physics run here. Its final ledger is archived at
+`/home/ert/data/simsopt-dfo-fortbo/b5-completion-20260809/remote-faepkub4/`
+and passes `check_fortbo_b5.py` independently. Seed 1 records 256 truth calls,
+68 failed upstream evaluations retained under the failure mask, peak
+concurrency eight, and 14102.512474124 seconds wall time. Its pinned sources
+are FortBO `cd71e9b9f2f71d0966d3b5c8792f213d78eca1d4`, simsopt-dfo
+`2a3ce7b71ea81f659e8910dbd38ea3e99ad9dff4`, and ConStellaration
+`112b20ae07193910d467d26033fe51022e641b9f`; the ledger SHA-256 is
+`d4cf49c8cb8ac0cb4837c6e346aaff17de949edcf1edaba8219ee1219d7427e1`. This is
+one FortBO data-informed TuRBO-1 row, but it is not an oracle-paired row; the
+valid paired seed-2 run remains active. `/var/tmp/ert` had 84 GB free at the
+snapshot.
 
 The public-source provenance lane is now scripted but deliberately not run from
 this workstation. `configs/reproduction/source-downloads.json` pins the
@@ -90,6 +100,16 @@ checkout is clean at revision
 `f67ad973...1969a7f38`. They remain under
 `/var/tmp/ert/fortbo-reproduction-sources/` on the remote host; this is source
 acquisition evidence, not an F6 physics reproduction.
+
+The three pinned B5 dataset shards were subsequently staged on `faepkub4` and
+passed the manifest size/SHA-256 checks at 15:39 CEST. They remain remote at
+`/var/tmp/ert/fortbo-reproduction-sources/constellaration-data/`:
+
+| Shard | Bytes | SHA-256 |
+| --- | ---: | --- |
+| `train-00000-of-00003.parquet` | 251687471 | `e48dada8775f9c86820372cdfe34fd4b181635284bb254854bbd0f09514838c6` |
+| `train-00001-of-00003.parquet` | 203988362 | `c574dcbc02f29417a7f5cc088dde6d38f1f165280ab166089a2b1752f3579b9b` |
+| `train-00002-of-00003.parquet` | 154525812 | `92e816bdd9898fc7f481040279084dc71ae2130e974a49df0dc2336a693fc084` |
 
 `scripts/run_b5_oracle_pair.py` launches the pinned simsopt-dfo BoTorch control
 and `scripts/run_fortbo_b5.py` concurrently with the same B5 mode, seed, budget,
@@ -113,11 +133,10 @@ with the original BoTorch control and FortBO sharing the pinned ConStellaration
 evaluator. Earlier seed-2 launch attempts failed before a valid evaluator pair
 was started (remote `fo` path, missing BoTorch, and evaluator-environment
 selection); each failed pair document is retained and none is counted as F3.
-At the 15:23 CEST handoff snapshot, seed-1 had dispatched all 256 requests and
-had 183 responses; the active seed-2 pair had 137 original-control
-requests/122 responses and 177 FortBO requests/161 responses. Neither final
-ledger existed, and `/var/tmp/ert` had 84 GB free, so both remain in progress
-rather than F3 rows. No new CPU campaign or GPU Slurm job was started, and the
+At the 15:39 CEST handoff snapshot, the active seed-2 pair had 165
+original-control requests/149 responses and 237 FortBO requests/221 responses;
+neither final ledger existed. It remains in progress with 84 GB free on
+`/var/tmp/ert`. No new CPU campaign or GPU Slurm job was started, and the
 workstation was not used for physics work.
 
 The Landreman exact-tool path is now portable: the manifest resolves
@@ -503,8 +522,10 @@ device identity and kernel-residency evidence.
   trust-state, and completion traces.
 - [ ] F3: run five paired seeds for raw/data-informed TuRBO-1 and
   data-informed TuRBO-m at 256 calls and eight workers; control ledgers are
-  audited, all five raw TuRBO-1 FortBO rows are now recorded, and the
-  data-informed rows are pending.
+  audited, all five raw TuRBO-1 FortBO rows and one data-informed TuRBO-1
+  FortBO row are now recorded, and the remaining data-informed rows are
+  pending. The completed seed-1 data-informed row is not oracle-paired; the
+  valid seed-2 pair is active.
 - [ ] F4: run archived Landreman control and FortBO at the original allocation,
   then a labeled resource-matched GPU scaling row. The exact archive, source
   digest, portable preparation, contract checks, and FortBO MPI bridge pass;
