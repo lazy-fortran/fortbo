@@ -71,10 +71,12 @@ At `bf7c665`, a clean canonical checkout with clean sibling dependencies passes
 all 48 Fortran tests and all 40 Python tests. A raw 256-call attempt was stopped
 after 71 completed failures because several upstream evaluator subprocesses
 ran for multiple minutes; it produced no ledger and is not counted as an F3
-row. The external evaluator now has the explicit 600-second worker timeout
-policy from simsopt-dfo commit `a9b6e2b`; timeout is recorded as the same
-structured expected truth failure as a solver failure, and the focused B5
-contract/campaign suite passes 24 tests. A new full row is still required.
+row. The external evaluator has an explicit 600-second worker timeout policy.
+The latest simsopt-dfo commit `2a3ce7b` starts each worker in its own process
+group and kills that group on timeout, so descendant physics processes cannot
+keep a worker future or pipe alive. Its focused B5 contract suite passes 7
+tests and Ruff passes. The completed remote row below used the earlier
+`a9b6e2b` source; the process-group fix was not yet present.
 
 The first bounded local retry was stopped at 243 dispatched requests, before
 writing a ledger, to keep the workstation cool; its scratch is retained but is
@@ -95,6 +97,17 @@ eight failures in 43.52 seconds at peak concurrency eight and passed the same
 audit. The remote Fortran gate built successfully and passed the ARD and driver
 tests; two unrelated 10-second test-harness timeouts occurred in the full
 48-test host run.
+
+The first complete FortBO F3 row was then run on `faepkub4`, not the
+workstation: raw TuRBO-1, seed 1, 256 calls, eight workers, and completion-
+driven ask/tell. The ledger at
+`/home/ert/data/simsopt-dfo-fortbo/b5-completion-20260809/remote-faepkub4/`
+passes `check_fortbo_b5.py` and records 37 successful and 219 failed truth
+calls, including 46 structured 600-second timeouts, peak concurrency eight,
+nontrivial completion order, and 5449.87 seconds wall time. Its pinned source
+commits are FortBO `3c3bc26`, simsopt-dfo `a9b6e2b`, and ConStellaration
+`112b20a`. This is one of the five required raw TuRBO-1 rows; the remaining
+F3 FortBO rows are still open.
 
 The FOCUS source was recovered from its public Git repository and pinned at
 `e4bb49b0632c650e326616912e274feb7781a60d`, with the stochastic source and
@@ -360,7 +373,8 @@ device identity and kernel-residency evidence.
   trust-state, and completion traces.
 - [ ] F3: run five paired seeds for raw/data-informed TuRBO-1 and
   data-informed TuRBO-m at 256 calls and eight workers; control ledgers are
-  audited, while the FortBO rows remain pending.
+  audited, one raw TuRBO-1 FortBO row is now recorded, and the remaining rows
+  are pending.
 - [ ] F4: run archived Landreman control and FortBO at the original allocation,
   then a labeled resource-matched GPU scaling row.
 - [ ] F5: recover FOCUS artifacts and implement/check the inducing variational
