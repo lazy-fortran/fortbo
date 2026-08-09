@@ -38,6 +38,7 @@ program test_turbo_driver
     call check_driver_uses_variational_model(failures)
     call check_driver_records_failures(failures)
     call check_failed_rows_do_not_poison_surrogate(failures)
+    call check_completion_driven_workers(failures)
     call check_frozen_initial_design(failures)
     call check_frozen_candidate_pool(failures)
     call check_frozen_candidate_regions(failures)
@@ -556,6 +557,96 @@ contains
         call expect(failed%best_value == 0.25_dp, &
             "a failed row does not become the incumbent", failures)
     end subroutine check_failed_rows_do_not_poison_surrogate
+
+    !! Completion-driven mode keeps one-point ask/tell semantics while allowing
+    !! multiple evaluations in flight. Pending points are fantasized for the
+    !! next fit, excluded from candidate selection, and can be told in a
+    !! different order from ask. Failures still follow the same durable-history
+    !! and trust-accounting contract as batched mode.
+    subroutine check_completion_driven_workers(failures)
+        integer, intent(inout) :: failures
+        type(fortbo_turbo_config_t) :: config
+        type(fortbo_turbo_driver_t) :: driver
+        type(fortnum_status_t) :: status
+        real(dp) :: points(1, 2), first(1, 2), second(1, 2), values(1), pool(8, 2)
+        real(dp) :: initial(2, 2)
+        logical :: successful(1)
+        integer :: regions(1), first_region(1), second_region(1)
+
+        config%n_regions = 1
+        config%batch_size = 1
+        config%completion_driven = .true.
+        config%max_pending = 2
+        config%n_initial = 2
+        allocate (config%frozen_initial_design(2, 2), config%frozen_candidates(8, 2))
+        initial = reshape([0.5_dp, 0.52_dp, 0.5_dp, 0.52_dp], shape(initial))
+        config%frozen_initial_design = initial
+        pool = reshape([0.43_dp, 0.43_dp, 0.45_dp, 0.45_dp, &
+            0.47_dp, 0.47_dp, 0.49_dp, 0.49_dp, 0.51_dp, 0.51_dp, &
+            0.53_dp, 0.53_dp, 0.55_dp, 0.55_dp, 0.57_dp, 0.57_dp], &
+            shape(pool))
+        config%frozen_candidates = pool
+
+        call driver%initialize(2, config, 9090, status)
+        call expect(status%code == FORTNUM_OK, &
+            "completion-driven driver initializes", failures)
+        call driver%ask(points, regions, status)
+        call expect(status%code == FORTNUM_OK, &
+            "completion-driven driver dispatches its first point", failures)
+        first = points
+        first_region = regions
+        call driver%ask(second, second_region, status)
+        call expect(status%code == FORTNUM_OK .and. &
+            maxval(abs(points - second)) > 0.0_dp, &
+            "completion-driven driver fills a second worker", failures)
+        call driver%ask(points, regions, status)
+        call expect(status%code == FORTNUM_DOMAIN_ERROR, &
+            "completion-driven driver refuses an overfull pending pool", failures)
+
+        ! Initial-design completions may arrive in either order. The second
+        ! point is completed first, but no model is fitted until both are in.
+        values(1) = 0.2_dp
+        call driver%tell(second, second_region, values, status)
+        call expect(status%code == FORTNUM_OK, &
+            "out-of-order initial completion is accepted", failures)
+        values(1) = 0.1_dp
+        call driver%tell(first, first_region, values, status)
+        call expect(status%code == FORTNUM_OK, &
+            "the remaining initial completion is accepted", failures)
+
+        call driver%ask(points, regions, status)
+        call expect(status%code == FORTNUM_OK, &
+            "completion-driven driver proposes after initial design", failures)
+        first = points
+        first_region = regions
+        call driver%ask(second, second_region, status)
+        call expect(status%code == FORTNUM_OK .and. &
+            maxval(abs(points - second)) > 0.0_dp, &
+            "pending fantasy yields a distinct second proposal", failures)
+        call driver%ask(points, regions, status)
+        call expect(status%code == FORTNUM_DOMAIN_ERROR, &
+            "two active workers remain the pending limit", failures)
+
+        ! Complete the second proposal first, then fail the first. This checks
+        ! that completion order, not ask order, drives durable accounting.
+        values(1) = 0.05_dp
+        successful(1) = .true.
+        call driver%tell(second, second_region, values, status, &
+            successful=successful)
+        call expect(status%code == FORTNUM_OK, &
+            "out-of-order successful completion is accepted", failures)
+        values(1) = huge(1.0_dp)
+        successful(1) = .false.
+        call driver%tell(first, first_region, values, status, &
+            successful=successful)
+        call expect(status%code == FORTNUM_OK, &
+            "out-of-order failed completion is accepted", failures)
+        call expect(driver%pending_count == 0 .and. driver%evaluations == 4, &
+            "completion-driven pending and evaluation counts close", failures)
+        call expect(driver%histories(1)%count == 4 .and. &
+            driver%histories(1)%usable_count() == 3, &
+            "completion-driven failures remain excluded from fitting", failures)
+    end subroutine check_completion_driven_workers
 
     !! A caller-supplied initial design takes precedence over the local Sobol
     !! implementation. This is the exact-replay escape hatch for upstream

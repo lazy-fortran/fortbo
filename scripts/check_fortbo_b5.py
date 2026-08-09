@@ -62,6 +62,9 @@ def check_row(path: Path, *, budget: int = BUDGET) -> Mapping[str, Any]:
     scaled_dimension = 80
 
     configuration = document.get("configuration", {})
+    protocol = configuration.get("protocol")
+    _require(protocol in {"batched", "completion-driven"},
+             f"{label}: invalid protocol")
     regions = configuration.get("regions")
     _require(regions in {1, 4}, f"{label}: invalid region count")
     if regions == 4:
@@ -69,8 +72,20 @@ def check_row(path: Path, *, budget: int = BUDGET) -> Mapping[str, Any]:
     _require(configuration.get("budget") == budget, f"{label}: wrong budget")
     _require(configuration.get("workers") == WORKERS,
              f"{label}: worker count is not eight")
-    _require(configuration.get("batch_size") == WORKERS,
-             f"{label}: batch size is not eight")
+    expected_batch_size = 1 if protocol == "completion-driven" else WORKERS
+    _require(configuration.get("batch_size") == expected_batch_size,
+             f"{label}: wrong batch size for {protocol} protocol")
+    expected_method = (
+        "completion-driven FortBO TuRBO-m with Thompson sampling"
+        if protocol == "completion-driven" and regions == 4
+        else "completion-driven FortBO TuRBO-1 with Thompson sampling"
+        if protocol == "completion-driven"
+        else "batched FortBO TuRBO-m with Thompson sampling"
+        if regions == 4
+        else "batched FortBO TuRBO-1 with Thompson sampling"
+    )
+    _require(configuration.get("method") == expected_method,
+             f"{label}: method disagrees with protocol")
     _require(configuration.get("seed") in SEEDS, f"{label}: invalid seed")
 
     rows = document.get("evaluations")
@@ -111,6 +126,11 @@ def check_row(path: Path, *, budget: int = BUDGET) -> Mapping[str, Any]:
     _require(result.get("failed_evaluations") == sum(
         row["status"] == "failed" for row in rows),
              f"{label}: failure count disagrees with rows")
+    if protocol == "completion-driven":
+        order = result.get("completion_order")
+        _require(isinstance(order, list), f"{label}: completion order is not recorded")
+        _require(sorted(order) == list(range(budget)),
+                 f"{label}: completion order is not a row permutation")
     return document
 
 

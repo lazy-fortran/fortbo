@@ -60,6 +60,7 @@ module fortbo_turbo_driver
 
     integer, parameter, public :: FORTBO_TURBO_ACQUISITION_TS = 0
     integer, parameter, public :: FORTBO_TURBO_ACQUISITION_EI = 1
+    real(dp), parameter :: COMPLETION_PENDING_TOLERANCE = 1.0e-12_dp
 
     !! How the run is configured. Defaults describe TuRBO-1 with a batch of one.
     type :: fortbo_turbo_config_t
@@ -67,6 +68,12 @@ module fortbo_turbo_driver
         integer :: n_regions = 1
         !! `q`, the number of points returned by each `ask`.
         integer :: batch_size = 1
+        !! Switch to one-point completion-driven ask/tell. In this mode
+        !! `batch_size` must be one and `max_pending` bounds the in-flight
+        !! evaluations; pending points are fantasized and excluded from the
+        !! next candidate.
+        logical :: completion_driven = .false.
+        integer :: max_pending = 0
         !! Points drawn per region before its surrogate is trusted. Zero means
         !! `2*d`, the paper's rule.
         integer :: n_initial = 0
@@ -135,6 +142,8 @@ module fortbo_turbo_driver
         !! Which region each point of the last `ask` came from.
         integer, allocatable :: pending_region(:)
         real(dp), allocatable :: pending_points(:, :)
+        !! Number of points currently in flight in completion-driven mode.
+        integer :: pending_count = 0
     contains
         procedure, public :: initialize => driver_initialize
         procedure, public :: ask => driver_ask
@@ -161,6 +170,14 @@ contains
             call status_set(status, FORTNUM_DOMAIN_ERROR, &
                 "fortbo turbo driver: region and batch counts must be positive")
             return
+        end if
+        if (config%completion_driven) then
+            if (config%batch_size /= 1 .or. config%max_pending < 1) then
+                call status_set(status, FORTNUM_DOMAIN_ERROR, &
+                    "fortbo turbo driver: completion-driven mode requires "// &
+                    "batch_size=1 and max_pending>=1")
+                return
+            end if
         end if
         if (config%n_initial < 0) then
             call status_set(status, FORTNUM_DOMAIN_ERROR, &
@@ -246,6 +263,13 @@ contains
         allocate (self%regions(config%n_regions))
         allocate (self%histories(config%n_regions))
         allocate (self%best_point(n_inputs))
+        self%pending_count = 0
+        if (config%completion_driven) then
+            allocate (self%pending_points(config%max_pending, n_inputs), &
+                self%pending_region(config%max_pending))
+            self%pending_points = 0.0_dp
+            self%pending_region = 0
+        end if
         self%best_point = 0.5_dp
         do k = 1, config%n_regions
             call self%regions(k)%initialize(n_inputs, config%batch_size, status)
@@ -335,6 +359,12 @@ contains
                 "fortbo turbo driver: batch shape does not match the configuration")
             return
         end if
+        if (self%config%completion_driven .and. &
+                self%pending_count >= self%config%max_pending) then
+            call status_set(status, FORTNUM_DOMAIN_ERROR, &
+                "fortbo turbo driver: all completion-driven workers are busy")
+            return
+        end if
         required = self%config%n_initial
         if (required == 0) required = 2*self%n_inputs
 
@@ -348,7 +378,11 @@ contains
         allocate (assigned(size(self%regions)))
         assigned = 0
         do while (filled < self%config%batch_size)
-            k = next_region_needing_design(self, required, assigned)
+            if (self%config%completion_driven) then
+                k = next_completion_region_needing_design(self, required)
+            else
+                k = next_region_needing_design(self, required, assigned)
+            end if
             if (k == 0) exit
             if (allocated(self%config%frozen_initial_design)) then
                 if (self%initial_frozen_index >= &
@@ -376,7 +410,12 @@ contains
             assigned(k) = assigned(k) + 1
         end do
         if (filled == self%config%batch_size) then
-            call remember_pending(self, points, regions)
+            if (self%config%completion_driven) then
+                call register_completion_pending(self, points, regions, status)
+                if (status%code /= FORTNUM_OK) return
+            else
+                call remember_pending(self, points, regions)
+            end if
             call status_set(status, FORTNUM_OK, "")
             return
         end if
@@ -446,43 +485,15 @@ contains
             ! mapping back into the objective's own units.
             call standardized_copy(self%histories(k), scratch, shift, scale, status)
             if (status%code /= FORTNUM_OK) return
-            if (self%config%use_variational_derivative) then
-                if (self%config%use_gradients .or. self%config%ignore_gradients) then
-                    call fortbo_fit_from_history(scratch, posterior, status, &
-                        noise_variance=self%config%noise_variance, &
-                        use_gradients=self%config%use_gradients, &
-                        lengthscales=lengthscales, &
-                        inducing_points=self%config%inducing_points)
-                else
-                    call fortbo_fit_from_history(scratch, posterior, status, &
-                        noise_variance=self%config%noise_variance, &
-                        lengthscales=lengthscales, &
-                        inducing_points=self%config%inducing_points)
-                end if
-            else if (self%config%use_ard) then
-                if (self%config%use_gradients .or. self%config%ignore_gradients) then
-                    call fortbo_fit_from_history(scratch, posterior, status, &
-                        noise_variance=self%config%noise_variance, &
-                        use_gradients=self%config%use_gradients, &
-                        lengthscales=lengthscales)
-                else
-                    call fortbo_fit_from_history(scratch, posterior, status, &
-                        noise_variance=self%config%noise_variance, &
-                        lengthscales=lengthscales)
-                end if
-            else
-                if (self%config%use_gradients .or. self%config%ignore_gradients) then
-                    call fortbo_fit_from_history(scratch, posterior, status, &
-                        lengthscale=self%config%lengthscale, &
-                        noise_variance=self%config%noise_variance, &
-                        use_gradients=self%config%use_gradients)
-                else
-                    call fortbo_fit_from_history(scratch, posterior, status, &
-                        lengthscale=self%config%lengthscale, &
-                        noise_variance=self%config%noise_variance)
-                end if
-            end if
+            call fit_driver_posterior(self, scratch, lengthscales, posterior, status)
             if (status%code /= FORTNUM_OK) return
+            if (self%config%completion_driven .and. &
+                    completion_pending_count_for_region(self, k) > 0) then
+                call add_pending_fantasies(self, k, scratch, posterior, status)
+                if (status%code /= FORTNUM_OK) return
+                call fit_driver_posterior(self, scratch, lengthscales, posterior, status)
+                if (status%code /= FORTNUM_OK) return
+            end if
             call posterior%moments(candidates, mean, variance, status)
             if (status%code /= FORTNUM_OK) return
             mean = shift + scale*mean
@@ -501,6 +512,11 @@ contains
                 offset = offset + 1
                 pooled(offset, :) = candidates(i, :)
                 pooled_region(offset) = k
+                if (self%config%completion_driven .and. &
+                        is_completion_pending(self, k, candidates(i, :))) then
+                    realizations(offset, :) = huge(1.0_dp)
+                    cycle
+                end if
                 if (self%config%acquisition == FORTBO_TURBO_ACQUISITION_EI .and. &
                         self%config%batch_size == 1) then
                     ! Landreman's production q=1 path is analytic EI. The
@@ -550,7 +566,12 @@ contains
             points(filled, :) = pooled(chosen(i), :)
             regions(filled) = pooled_region(chosen(i))
         end do
-        call remember_pending(self, points, regions)
+        if (self%config%completion_driven) then
+            call register_completion_pending(self, points, regions, status)
+            if (status%code /= FORTNUM_OK) return
+        else
+            call remember_pending(self, points, regions)
+        end if
         call status_set(status, FORTNUM_OK, "")
     end subroutine driver_ask
 
@@ -607,6 +628,221 @@ contains
         end do
         call status_set(status, FORTNUM_OK, "")
     end subroutine standardized_copy
+
+    !! Fit the configured posterior adapter. Keeping this branch in one place
+    !! lets completion-driven mode refit after adding posterior-mean fantasies
+    !! without giving the two ask paths different derivative semantics.
+    subroutine fit_driver_posterior(self, history, lengthscales, posterior, status)
+        class(fortbo_turbo_driver_t), intent(in) :: self
+        type(fortbo_history_t), intent(in) :: history
+        real(dp), intent(in) :: lengthscales(:)
+        class(fortbo_posterior_t), allocatable, intent(out) :: posterior
+        type(fortnum_status_t), intent(out) :: status
+
+        if (self%config%use_variational_derivative) then
+            if (self%config%use_gradients .or. self%config%ignore_gradients) then
+                call fortbo_fit_from_history(history, posterior, status, &
+                    noise_variance=self%config%noise_variance, &
+                    use_gradients=self%config%use_gradients, &
+                    lengthscales=lengthscales, &
+                    inducing_points=self%config%inducing_points)
+            else
+                call fortbo_fit_from_history(history, posterior, status, &
+                    noise_variance=self%config%noise_variance, &
+                    lengthscales=lengthscales, &
+                    inducing_points=self%config%inducing_points)
+            end if
+        else if (self%config%use_ard) then
+            if (self%config%use_gradients .or. self%config%ignore_gradients) then
+                call fortbo_fit_from_history(history, posterior, status, &
+                    noise_variance=self%config%noise_variance, &
+                    use_gradients=self%config%use_gradients, &
+                    lengthscales=lengthscales)
+            else
+                call fortbo_fit_from_history(history, posterior, status, &
+                    noise_variance=self%config%noise_variance, &
+                    lengthscales=lengthscales)
+            end if
+        else
+            if (self%config%use_gradients .or. self%config%ignore_gradients) then
+                call fortbo_fit_from_history(history, posterior, status, &
+                    lengthscale=self%config%lengthscale, &
+                    noise_variance=self%config%noise_variance, &
+                    use_gradients=self%config%use_gradients)
+            else
+                call fortbo_fit_from_history(history, posterior, status, &
+                    lengthscale=self%config%lengthscale, &
+                    noise_variance=self%config%noise_variance)
+            end if
+        end if
+    end subroutine fit_driver_posterior
+
+    !! Add posterior-mean fantasies only to the temporary fitting history. A
+    !! pending evaluation remains absent from the durable history until tell;
+    !! the fantasy merely prevents an asynchronous ask from seeing full
+    !! uncertainty at a point already in flight.
+    subroutine add_pending_fantasies(self, region, history, posterior, status)
+        class(fortbo_turbo_driver_t), intent(in) :: self
+        integer, intent(in) :: region
+        type(fortbo_history_t), intent(inout) :: history
+        class(fortbo_posterior_t), allocatable, intent(inout) :: posterior
+        type(fortnum_status_t), intent(out) :: status
+        real(dp), allocatable :: points(:, :), mean(:), variance(:)
+        integer :: n_pending, n_found, i
+
+        n_pending = completion_pending_count_for_region(self, region)
+        if (n_pending < 1) then
+            call status_set(status, FORTNUM_OK, "")
+            return
+        end if
+        allocate (points(n_pending, self%n_inputs), mean(n_pending), &
+            variance(n_pending))
+        call completion_pending_points_for_region(self, region, points, n_found)
+        if (n_found /= n_pending) then
+            call status_set(status, FORTNUM_DOMAIN_ERROR, &
+                "fortbo turbo driver: pending-region count changed")
+            return
+        end if
+        call posterior%moments(points, mean, variance, status)
+        if (status%code /= FORTNUM_OK) return
+        do i = 1, n_pending
+            call history%add(points(i, :), status, objective=mean(i))
+            if (status%code /= FORTNUM_OK) return
+        end do
+        call status_set(status, FORTNUM_OK, "")
+    end subroutine add_pending_fantasies
+
+    pure integer function completion_pending_count_for_region(self, region) &
+            result(n)
+        class(fortbo_turbo_driver_t), intent(in) :: self
+        integer, intent(in) :: region
+        integer :: i
+
+        n = 0
+        if (.not. allocated(self%pending_region)) return
+        do i = 1, self%pending_count
+            if (self%pending_region(i) == region) n = n + 1
+        end do
+    end function completion_pending_count_for_region
+
+    subroutine completion_pending_points_for_region(self, region, points, n_found)
+        class(fortbo_turbo_driver_t), intent(in) :: self
+        integer, intent(in) :: region
+        real(dp), intent(out) :: points(:, :)
+        integer, intent(out) :: n_found
+        integer :: i
+
+        points = 0.0_dp
+        n_found = 0
+        do i = 1, self%pending_count
+            if (self%pending_region(i) /= region) cycle
+            n_found = n_found + 1
+            points(n_found, :) = self%pending_points(i, :)
+        end do
+    end subroutine completion_pending_points_for_region
+
+    pure logical function is_completion_pending(self, region, point) result(found)
+        class(fortbo_turbo_driver_t), intent(in) :: self
+        integer, intent(in) :: region
+        real(dp), intent(in) :: point(:)
+        integer :: i
+
+        found = .false.
+        if (.not. allocated(self%pending_region)) return
+        if (size(point) /= self%n_inputs) return
+        do i = 1, self%pending_count
+            if (self%pending_region(i) /= region) cycle
+            if (maxval(abs(self%pending_points(i, :) - point)) <= &
+                    COMPLETION_PENDING_TOLERANCE) then
+                found = .true.
+                return
+            end if
+        end do
+    end function is_completion_pending
+
+    subroutine register_completion_pending(self, points, regions, status)
+        class(fortbo_turbo_driver_t), intent(inout) :: self
+        real(dp), intent(in) :: points(:, :)
+        integer, intent(in) :: regions(:)
+        type(fortnum_status_t), intent(out) :: status
+        integer :: n, i
+
+        n = size(points, 1)
+        if (n /= 1 .or. size(points, 2) /= self%n_inputs .or. &
+                size(regions) /= n) then
+            call status_set(status, FORTNUM_DOMAIN_ERROR, &
+                "fortbo turbo driver: completion asks must contain one point")
+            return
+        end if
+        if (self%pending_count + n > self%config%max_pending) then
+            call status_set(status, FORTNUM_DOMAIN_ERROR, &
+                "fortbo turbo driver: completion pending capacity exceeded")
+            return
+        end if
+        do i = 1, n
+            self%pending_count = self%pending_count + 1
+            self%pending_points(self%pending_count, :) = points(i, :)
+            self%pending_region(self%pending_count) = regions(i)
+        end do
+        call status_set(status, FORTNUM_OK, "")
+    end subroutine register_completion_pending
+
+    subroutine complete_completion_pending(self, points, regions, status)
+        class(fortbo_turbo_driver_t), intent(inout) :: self
+        real(dp), intent(in) :: points(:, :)
+        integer, intent(in) :: regions(:)
+        type(fortnum_status_t), intent(out) :: status
+        integer :: i, j, match
+
+        if (size(points, 1) /= 1 .or. size(points, 2) /= self%n_inputs .or. &
+                size(regions) /= 1) then
+            call status_set(status, FORTNUM_DOMAIN_ERROR, &
+                "fortbo turbo driver: completion tells must contain one point")
+            return
+        end if
+        match = 0
+        do i = 1, self%pending_count
+            if (self%pending_region(i) /= regions(1)) cycle
+            if (maxval(abs(self%pending_points(i, :) - points(1, :))) <= &
+                    COMPLETION_PENDING_TOLERANCE) then
+                match = i
+                exit
+            end if
+        end do
+        if (match == 0) then
+            call status_set(status, FORTNUM_DOMAIN_ERROR, &
+                "fortbo turbo driver: completion does not match a pending point")
+            return
+        end if
+        do j = match, self%pending_count - 1
+            self%pending_points(j, :) = self%pending_points(j + 1, :)
+            self%pending_region(j) = self%pending_region(j + 1)
+        end do
+        self%pending_count = self%pending_count - 1
+        call status_set(status, FORTNUM_OK, "")
+    end subroutine complete_completion_pending
+
+    !! Completion-driven initial design counts points already in flight, so an
+    !! asynchronous caller cannot overfill one region before its peers have
+    !! received their initial observations.
+    integer function next_completion_region_needing_design(self, required) &
+            result(choice)
+        class(fortbo_turbo_driver_t), intent(in) :: self
+        integer, intent(in) :: required
+        integer :: k, have, fewest
+
+        choice = 0
+        fewest = huge(1)
+        do k = 1, size(self%regions)
+            have = self%histories(k)%count + &
+                completion_pending_count_for_region(self, k)
+            if (have >= required) cycle
+            if (have < fewest) then
+                fewest = have
+                choice = k
+            end if
+        end do
+    end function next_completion_region_needing_design
 
     !! The next region still short of its initial design, counting points
     !! already assigned in this batch. Returns zero when every design is
@@ -707,6 +943,10 @@ contains
                     "fortbo turbo driver: success mask does not match the batch")
                 return
             end if
+        end if
+        if (self%config%completion_driven) then
+            call complete_completion_pending(self, points, regions, status)
+            if (status%code /= FORTNUM_OK) return
         end if
 
         do i = 1, n

@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """Run one value-only FortBO B5 TuRBO row against the pinned evaluator.
 
-FortBO proposes a batch through a line-oriented ask/tell executable. The
-truth calls are owned by this Python process and run in eight independent
-worker threads. A failed truth call is sent back as ``FAIL`` rather than as a
-fabricated objective value.
+FortBO proposes either batches or one point at a time through a line-oriented
+ask/tell executable. The truth calls are owned by this Python process and run
+in eight independent worker threads. A failed truth call is sent back as
+``FAIL`` rather than as a fabricated objective value.
 """
 
 from __future__ import annotations
@@ -17,7 +17,7 @@ import subprocess
 import sys
 import threading
 import time
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, as_completed, wait
 from pathlib import Path
 from typing import Any
 
@@ -93,6 +93,11 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--budget", type=int, default=BUDGET)
     parser.add_argument("--workers", type=int, default=WORKERS)
     parser.add_argument("--fortbo-command", default="fo")
+    parser.add_argument(
+        "--completion-driven",
+        action="store_true",
+        help="use one-point asynchronous completion-driven ask/tell",
+    )
     return parser
 
 
@@ -126,6 +131,8 @@ def _mapper(mode: str):
 
 
 def _run(args: argparse.Namespace, mapper, dimension: int) -> dict[str, Any]:
+    if args.completion_driven:
+        return _run_completion_driven(args, mapper, dimension)
     if args.budget < 1 or args.budget % 8:
         raise ValueError("budget must be a positive multiple of FortBO batch size 8")
     if args.workers != WORKERS:
@@ -221,13 +228,141 @@ def _run(args: argparse.Namespace, mapper, dimension: int) -> dict[str, Any]:
     }
 
 
+def _run_completion_driven(
+    args: argparse.Namespace, mapper, dimension: int
+) -> dict[str, Any]:
+    """Run one-point asks while keeping up to eight evaluator futures active."""
+
+    if args.budget < 1:
+        raise ValueError("budget must be positive")
+    if args.workers != WORKERS:
+        raise ValueError("B5 parity requires eight workers")
+    initial = 160 if args.mode == "raw" else 40
+    if args.regions == 4:
+        initial = 40
+    command = [
+        args.fortbo_command,
+        "exec",
+        "fortbo_b5_completion_protocol",
+        str(dimension),
+        str(args.budget),
+        str(initial),
+        str(args.seed),
+        str(args.regions),
+        str(WORKERS),
+    ]
+    started = time.perf_counter()
+    process = subprocess.Popen(
+        command,
+        cwd=FORTBO_ROOT,
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        bufsize=1,
+    )
+    assert process.stdin is not None
+    assert process.stdout is not None
+    pending: dict[int, tuple[Any, np.ndarray, int]] = {}
+    records: dict[int, dict[str, Any]] = {}
+    completion_order: list[int] = []
+    best = float("inf")
+    peak_concurrency = 0
+    dispatched = 0
+
+    def complete_one() -> None:
+        nonlocal best
+        futures = [item[0] for item in pending.values()]
+        done, _ = wait(futures, return_when=FIRST_COMPLETED)
+        future = next(iter(done))
+        candidate_id = next(
+            item_id for item_id, item in pending.items() if item[0] is future
+        )
+        _, point, region = pending.pop(candidate_id)
+        outcome = future.result()
+        process.stdin.write(f"TELL {candidate_id}\n")
+        if isinstance(outcome, ExpectedEvaluationFailure):
+            process.stdin.write(f"FAIL {candidate_id}\n")
+            record = _record(candidate_id, point, region, None, outcome, best)
+        else:
+            process.stdin.write(f"VALUE {candidate_id} {outcome.objective:.17g}\n")
+            best = min(best, outcome.minimized_objective)
+            record = _record(candidate_id, point, region, outcome, None, best)
+        process.stdin.flush()
+        records[candidate_id] = record
+        completion_order.append(candidate_id)
+
+    try:
+        with ThreadPoolExecutor(max_workers=WORKERS) as executor:
+            while True:
+                if dispatched < args.budget and len(pending) < WORKERS:
+                    line = _next_protocol_line(process.stdout, "ASK")
+                    if line == "WAIT":
+                        if not pending:
+                            raise RuntimeError("FortBO requested a wait without pending work")
+                        complete_one()
+                        continue
+                    if line.startswith("DONE "):
+                        raise RuntimeError("FortBO completed before its budget")
+                    parts = line.split()
+                    if parts != ["ASK", "1"]:
+                        raise RuntimeError(f"malformed completion ASK: {line!r}")
+                    point_line = process.stdout.readline()
+                    if not point_line:
+                        raise RuntimeError("FortBO ended while reading a point")
+                    point_parts = point_line.split()
+                    if point_parts[0] != "POINT" or len(point_parts) != dimension + 3:
+                        raise RuntimeError(f"malformed completion point: {point_line!r}")
+                    candidate_id = int(point_parts[1])
+                    if candidate_id != dispatched:
+                        raise RuntimeError(
+                            f"FortBO candidate ids are not contiguous: {candidate_id}"
+                        )
+                    region = int(point_parts[2])
+                    point = np.asarray(point_parts[3:], dtype=np.float64)
+                    pending[candidate_id] = (
+                        executor.submit(
+                            _evaluate, mapper, point, args.scratch, candidate_id
+                        ),
+                        point,
+                        region,
+                    )
+                    dispatched += 1
+                    peak_concurrency = max(peak_concurrency, len(pending))
+                    continue
+                if pending:
+                    complete_one()
+                    continue
+                line = _next_protocol_line(process.stdout, "DONE")
+                if not line.startswith("DONE "):
+                    raise RuntimeError(f"malformed completion DONE: {line!r}")
+                break
+    finally:
+        if process.stdin is not None:
+            process.stdin.close()
+    stderr = process.stderr.read() if process.stderr is not None else ""
+    return_code = process.wait()
+    if return_code:
+        raise RuntimeError(f"FortBO completion protocol failed ({return_code}): {stderr[-2000:]}")
+    if dispatched != args.budget or len(records) != args.budget:
+        raise RuntimeError(
+            f"FortBO returned {len(records)} completions, expected {args.budget}"
+        )
+    return {
+        "evaluations": [records[index] for index in range(args.budget)],
+        "completion_order": completion_order,
+        "wall_seconds": time.perf_counter() - started,
+        "peak_concurrency": peak_concurrency,
+    }
+
+
 def _next_protocol_line(stream, expected: str) -> str:
     while True:
         line = stream.readline()
         if not line:
             raise RuntimeError(f"FortBO protocol ended before {expected}")
         stripped = line.strip()
-        if stripped.startswith(("ASK ", "DONE ")):
+        if stripped.startswith(("ASK ", "DONE ")) or stripped == "WAIT":
             return stripped
 
 
@@ -276,13 +411,20 @@ def _document(args, result, mapper, dimension, transform_digest, fortbo_commit, 
             "transform_sha256": transform_digest,
         },
         "configuration": {
-            "method": "batched FortBO TuRBO-1 with Thompson sampling"
-            if args.regions == 1
-            else "batched FortBO TuRBO-m with Thompson sampling",
+            "method": (
+                "completion-driven FortBO TuRBO-1 with Thompson sampling"
+                if args.completion_driven and args.regions == 1
+                else "completion-driven FortBO TuRBO-m with Thompson sampling"
+                if args.completion_driven
+                else "batched FortBO TuRBO-1 with Thompson sampling"
+                if args.regions == 1
+                else "batched FortBO TuRBO-m with Thompson sampling"
+            ),
+            "protocol": "completion-driven" if args.completion_driven else "batched",
             "seed": args.seed,
             "budget": args.budget,
             "workers": args.workers,
-            "batch_size": WORKERS,
+            "batch_size": 1 if args.completion_driven else WORKERS,
             "regions": args.regions,
             "initial_points_per_region": 40 if args.regions == 4 else None,
         },
@@ -292,6 +434,7 @@ def _document(args, result, mapper, dimension, transform_digest, fortbo_commit, 
             "peak_concurrency": result["peak_concurrency"],
             "failed_evaluations": sum(row["status"] != "ok" for row in rows),
             "wall_seconds": result["wall_seconds"],
+            "completion_order": result.get("completion_order"),
         },
         "passed": True,
     }
