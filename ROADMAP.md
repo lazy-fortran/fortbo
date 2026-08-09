@@ -76,6 +76,13 @@ policy from simsopt-dfo commit `a9b6e2b`; timeout is recorded as the same
 structured expected truth failure as a solver failure, and the focused B5
 contract/campaign suite passes 24 tests. A new full row is still required.
 
+The first bounded local retry was stopped at 243 dispatched requests, before
+writing a ledger, to keep the workstation cool; its scratch is retained but is
+not evidence. Future CPU campaigns are staged under `/var/tmp/ert` on
+`faepkub4`. GPU campaigns use Slurm on `aCluster` or `sCluster`, with the
+NVIDIA compiler/environment selected inside the allocation; no long physics
+campaign runs on the workstation.
+
 The bridge was refreshed against those current commits: the raw completion
 smoke recorded eight failures in 15.38 seconds, and the data-informed smoke
 recorded eight successes in 223.63 seconds. Both rows reached peak concurrency
