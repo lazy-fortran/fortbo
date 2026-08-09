@@ -76,6 +76,12 @@ policy from simsopt-dfo commit `a9b6e2b`; timeout is recorded as the same
 structured expected truth failure as a solver failure, and the focused B5
 contract/campaign suite passes 24 tests. A new full row is still required.
 
+The bridge was refreshed against those current commits: the raw completion
+smoke recorded eight failures in 15.38 seconds, and the data-informed smoke
+recorded eight successes in 223.63 seconds. Both rows reached peak concurrency
+eight, had nontrivial completion order, and passed `check_fortbo_b5.py`; they
+remain bridge evidence rather than 256-call F3 rows.
+
 The FOCUS source was recovered from its public Git repository and pinned at
 `e4bb49b0632c650e326616912e274feb7781a60d`, with the stochastic source and
 W7-X high-mirror example files present. An isolated GNU Fortran/OpenMPI/HDF5
