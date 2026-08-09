@@ -3,6 +3,7 @@
 
 import hashlib
 import json
+import os
 import subprocess
 import sys
 import tarfile
@@ -51,6 +52,36 @@ class ReproductionManifestTests(unittest.TestCase):
             result = self.run_checker(self.make_manifest(directory, expected))
             self.assertEqual(result.returncode, 0, result.stderr + result.stdout)
             self.assertIn("OK source", result.stdout)
+
+    def test_environment_path_pin_passes(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            directory = Path(temporary)
+            expected = digest(b"independent source bytes\n")
+            manifest = self.make_manifest(directory, expected)
+            data = json.loads(manifest.read_text(encoding="utf-8"))
+            data["source"][0]["path"] = "${FORTBO_MANIFEST_FIXTURE}"
+            manifest.write_text(json.dumps(data), encoding="utf-8")
+            previous = os.environ.get("FORTBO_MANIFEST_FIXTURE")
+            os.environ["FORTBO_MANIFEST_FIXTURE"] = str(directory / "source.bin")
+            try:
+                result = self.run_checker(manifest)
+            finally:
+                if previous is None:
+                    os.environ.pop("FORTBO_MANIFEST_FIXTURE", None)
+                else:
+                    os.environ["FORTBO_MANIFEST_FIXTURE"] = previous
+            self.assertEqual(result.returncode, 0, result.stderr + result.stdout)
+
+    def test_unset_environment_path_pin_fails(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            directory = Path(temporary)
+            manifest = self.make_manifest(directory, digest(b"independent source bytes\n"))
+            data = json.loads(manifest.read_text(encoding="utf-8"))
+            data["source"][0]["path"] = "${FORTBO_MISSING_MANIFEST_FIXTURE}"
+            manifest.write_text(json.dumps(data), encoding="utf-8")
+            result = self.run_checker(manifest)
+            self.assertEqual(result.returncode, 2)
+            self.assertIn("environment variable", result.stderr)
 
     def test_changed_file_pin_fails(self):
         with tempfile.TemporaryDirectory() as temporary:

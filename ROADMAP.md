@@ -87,6 +87,14 @@ aCluster/sCluster Slurm job for GPU work. No physics reproduction is to run on
 the workstation. The runner stops both children if the run filesystem falls
 below its disk reserve.
 
+The Landreman exact-tool path is now portable: the manifest resolves
+`LANDREMAN_ARCHIVE`, `scripts/run_landreman_original.py` extracts only the
+archived `software/alpha_opt` tree, verifies the archive and pinned member
+digests, records the one `/pscratch` PCA remap, and emits the historical
+5-rank/4-GPU `srun` command. Preparation is safe outside an allocation;
+`--execute` refuses to run without `SLURM_JOB_ID`. This is replay plumbing and
+source-level evidence, not yet a live Landreman control/FortBO result.
+
 At `bf7c665`, a clean canonical checkout with clean sibling dependencies passes
 all 48 Fortran tests and all 40 Python tests. A raw 256-call attempt was stopped
 after 71 completed failures because several upstream evaluator subprocesses
@@ -188,11 +196,10 @@ external FortAD `fortad_reverse.f90` with an nvfortran internal compiler error
 1. The Landreman archive and its historical Slurm job are now pinned in the
    manifest, including the 5-rank allocation (one manager plus four workers)
    and four GPUs. The archived driver still names an absolute `/pscratch` data
-   path, so a live exact replay requires a declared path remap and an allocated
-   equivalent environment; the deviation is recorded rather than hidden.
-   The exact-tool downloader and cluster-only launcher are present, but the
-   archived control/FortBO pair has not yet been launched on the Tu Graz
-   allocation.
+   path; `run_landreman_original.py` applies the declared remap in a generated
+   copy and refuses non-Slurm execution. The archived control/FortBO pair has
+   not yet been launched on the Tu Graz allocation, and the live MPI/physics
+   trace needed for F2 is still missing.
 2. The Glas et al. harvest contains manuscript and figures, but no paper-
    specific W7-X input, covariance/realization ledger, or optimizer ledger.
    FOCUS source is now pinned separately and builds in isolation; the
@@ -279,20 +286,16 @@ Preserve:
   exact marginal likelihood, and Cholesky inference.
 
 ~~~
-export LANDREMAN_ARCHIVE=/home/ert/data/landreman-data-informed-2026/20260514-01-zenodo_for_data_informed_spaces_paper.20260617.tar
-export LANDREMAN_RUN=/home/ert/data/landreman-reproduction/20260514-01
-mkdir -p $LANDREMAN_RUN
-tar -xf $LANDREMAN_ARCHIVE -C $LANDREMAN_RUN
-export LANDREMAN_ROOT=$LANDREMAN_RUN/20260514-01-zenodo_for_data_informed_spaces_paper/software/alpha_opt
-sed -n '1,760p' $LANDREMAN_ROOT/scripts/driver_turbo_PCA_unconstrained.py
+export LANDREMAN_ARCHIVE=/var/tmp/ert/reproduction-sources/landreman/20260514-01-zenodo_for_data_informed_spaces_paper.20260617.tar
+python scripts/fetch_reproduction_sources.py --artifact landreman_archive --check-only
+python scripts/run_landreman_original.py \
+  --run-root /var/tmp/ert/landreman-reproduction/20260809-exact
 ~~~
 
-After establishing the original MPI size:
-
-~~~
-cd $LANDREMAN_ROOT
-OMP_NUM_THREADS=12 mpiexec -n ORIGINAL_MPI_SIZE python scripts/driver_turbo_PCA_unconstrained.py
-~~~
+Inside the allocated 5-rank/4-GPU Slurm job, repeat the preparation command
+with `--execute`. The launcher performs the declared `/pscratch` PCA remap and
+uses the archived driver with `srun --ntasks=5 --cpus-per-task=13`; it does not
+silently substitute a different MPI size or a local workstation path.
 
 A path remapping or changed MPI size is a portability or scaling row, not an
 exact replay.

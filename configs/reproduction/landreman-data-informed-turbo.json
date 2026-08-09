@@ -8,7 +8,7 @@
     {
       "id": "landreman_archive",
       "kind": "file",
-      "path": "/home/ert/data/landreman-data-informed-2026/20260514-01-zenodo_for_data_informed_spaces_paper.20260617.tar",
+      "path": "${LANDREMAN_ARCHIVE}",
       "sha256": "7037bb0abbaaa7ccc4bc7b9f5434e41b18ecdf97af04cf8ae244ea2ae20c428f"
     },
     {

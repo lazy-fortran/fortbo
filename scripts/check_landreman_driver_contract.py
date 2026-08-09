@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import re
 import sys
 import tarfile
@@ -15,6 +16,13 @@ from typing import Any, Mapping, Optional
 
 class DriverContractError(ValueError):
     """The archived driver does not implement the recorded replay contract."""
+
+
+def _path(text: str) -> Path:
+    expanded = os.path.expandvars(text)
+    if re.search(r"\$(?:[A-Za-z_][A-Za-z0-9_]*|\{[^}]+\})", expanded):
+        raise DriverContractError(f"an environment variable in source path is unset: {text}")
+    return Path(expanded).expanduser()
 
 
 def _source(manifest: Mapping[str, Any], artifact_id: str) -> Mapping[str, Any]:
@@ -135,7 +143,7 @@ def check(manifest_path: Path) -> None:
     if environment_pin.get("archive") != archive_pin.get("id"):
         raise DriverContractError("Landreman environment does not point to the archive")
 
-    archive_path = Path(archive_pin["path"])
+    archive_path = _path(archive_pin["path"])
     if not archive_path.is_file():
         raise DriverContractError(f"archive is missing: {archive_path}")
     try:

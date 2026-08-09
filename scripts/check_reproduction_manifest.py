@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import re
 import subprocess
 import sys
@@ -109,7 +110,10 @@ def load_manifest(path: Path) -> Mapping[str, Any]:
 
 
 def _resolve(path_text: str, root: Optional[Path]) -> Path:
-    path = Path(path_text)
+    expanded = os.path.expandvars(path_text)
+    if re.search(r"\$(?:[A-Za-z_][A-Za-z0-9_]*|\{[^}]+\})", expanded):
+        raise ManifestError(f"an environment variable in source path is unset: {path_text}")
+    path = Path(expanded).expanduser()
     return path if path.is_absolute() or root is None else root / path
 
 

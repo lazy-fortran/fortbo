@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import sys
 import tarfile
@@ -14,6 +15,13 @@ from typing import Any, Mapping, Optional
 
 class ExecutionManifestError(ValueError):
     """The archived job/source and the manifest disagree."""
+
+
+def _path(text: str) -> Path:
+    expanded = os.path.expandvars(text)
+    if re.search(r"\$(?:[A-Za-z_][A-Za-z0-9_]*|\{[^}]+\})", expanded):
+        raise ExecutionManifestError(f"an environment variable in source path is unset: {text}")
+    return Path(expanded).expanduser()
 
 
 def _source(manifest: Mapping[str, Any], artifact_id: str) -> Mapping[str, Any]:
@@ -51,7 +59,7 @@ def check(manifest_path: Path) -> None:
     run = parameters.get("run", {})
     mpi = run.get("mpi", {})
     remapping = run.get("path_remapping", {})
-    archive_path = Path(archive_pin["path"])
+    archive_path = _path(archive_pin["path"])
     if not archive_path.is_file():
         raise ExecutionManifestError(f"archive is missing: {archive_path}")
     if job_pin.get("archive") != archive_pin.get("id"):
