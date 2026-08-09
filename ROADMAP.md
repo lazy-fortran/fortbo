@@ -7,7 +7,7 @@ and test suite.
 
 ## Current status
 
-As of 2026-08-09, 15:10 CEST:
+As of 2026-08-09, 15:16 CEST:
 
 | Area | Status |
 | --- | --- |
@@ -68,8 +68,8 @@ successful data-informed truth calls (272.1 seconds), both at peak concurrency
 eight with nontrivial completion order; both rows passed the FortBO-side
 audit. These are bridge checks, not F3 rows; the full 256-call campaign is now
 running on `faepkub4` in the data-informed seed-1 lane, with no duplicate
-physics run started here. The latest remote snapshot had 244 requests and 177
-responses, eight active physics workers, no final ledger yet, and 85 GB free on
+physics run started here. The latest remote snapshot had 250 requests and 180
+responses, eight active physics workers, no final ledger yet, and 84 GB free on
 `/var/tmp/ert`; it remains an in-progress run rather than an F3 result.
 
 The public-source provenance lane is now scripted but deliberately not run from
@@ -104,10 +104,10 @@ with the original BoTorch control and FortBO sharing the pinned ConStellaration
 evaluator. Earlier seed-2 launch attempts failed before a valid evaluator pair
 was started (remote `fo` path, missing BoTorch, and evaluator-environment
 selection); each failed pair document is retained and none is counted as F3.
-At the 15:10 CEST handoff snapshot, seed-1 had 244 requests and 177
-responses; the active seed-2 pair had 112 original-control requests/97
-responses and 125 FortBO requests/109 responses. Neither final ledger existed,
-and `/var/tmp/ert` had 85 GB free, so both remain in progress rather than F3
+At the 15:16 CEST handoff snapshot, seed-1 had 250 requests and 180
+responses; the active seed-2 pair had 123 original-control requests/107
+responses and 148 FortBO requests/132 responses. Neither final ledger existed,
+and `/var/tmp/ert` had 84 GB free, so both remain in progress rather than F3
 rows. No new CPU campaign or GPU Slurm job was started, and the workstation
 was not used for physics work.
 
@@ -142,13 +142,16 @@ The missing FortBO side of F4 is now staged in
 ask/tell protocol and four MPI worker ranks each own an independent archived
 VMEC/PCA objective. `slurm/landreman_fortbo.sbatch` preserves the historical
 one-node/four-GPU shape, captures runtime metadata, refuses an existing output,
-and performs source preparation/check-only gates before launching. Its unit
-and wrapper checks pass (11 focused tests, Ruff, and shell syntax); no physics
-run has been claimed for this bridge yet.
+and performs source preparation/check-only gates before launching.
+`scripts/check_landreman_fortbo.py` independently audits candidate IDs, unit
+box bounds, statuses, completion order, counts, pinned revisions, and the
+best-value reduction. The bridge/checker and wrapper checks pass (13 focused
+tests, Ruff, and shell syntax); no physics run has been claimed for this
+bridge yet.
 
 At `bf7c665`, a clean canonical checkout with clean sibling dependencies passes
 all 48 Fortran tests and all 40 Python tests. The current pushed checkout passes
-all 48 Fortran tests and all 59 Python tests. A raw 256-call attempt was stopped
+all 48 Fortran tests and all 61 Python tests. A raw 256-call attempt was stopped
 after 71 completed failures because several upstream evaluator subprocesses
 ran for multiple minutes; it produced no ledger and is not counted as an F3
 row. The external evaluator has an explicit 600-second worker timeout policy.
