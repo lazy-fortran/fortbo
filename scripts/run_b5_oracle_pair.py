@@ -24,10 +24,17 @@ import subprocess
 import sys
 import threading
 import time
-import tomllib
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Any, Iterable, Mapping, Optional
+
+try:
+    from .fortbo_environment import (
+        FortBOEnvironmentError,
+        preflight_fo,
+    )
+except ImportError:  # pragma: no cover - used when this file is run directly
+    from fortbo_environment import FortBOEnvironmentError, preflight_fo
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -67,43 +74,6 @@ def _ensure_external(path: Path, roots: Iterable[Path], label: str) -> None:
 def _ensure_new(path: Path, label: str) -> None:
     if path.exists() and (path.is_file() or any(path.iterdir())):
         raise PairError(f"{label} already contains artifacts: {path}")
-
-
-def _preflight_fortbo_dependencies(root: Path) -> None:
-    """Reject a source checkout whose relative fpm dependencies are absent."""
-    pending = [root.resolve()]
-    visited: set[Path] = set()
-    missing: list[str] = []
-    while pending:
-        package = pending.pop()
-        if package in visited:
-            continue
-        visited.add(package)
-        manifest = package / "fpm.toml"
-        if not manifest.is_file():
-            missing.append(f"{package}/fpm.toml")
-            continue
-        try:
-            document = tomllib.loads(manifest.read_text(encoding="utf-8"))
-        except (OSError, tomllib.TOMLDecodeError) as error:
-            raise PairError(f"cannot read FortBO dependency manifest {manifest}: {error}") from error
-        dependencies = document.get("dependencies", {})
-        if not isinstance(dependencies, dict):
-            continue
-        for name, specification in dependencies.items():
-            if not isinstance(specification, dict) or "path" not in specification:
-                continue
-            dependency_path = (package / specification["path"]).resolve()
-            if not dependency_path.is_dir():
-                missing.append(f"{name}={dependency_path}")
-            else:
-                pending.append(dependency_path)
-    if missing:
-        details = ", ".join(sorted(missing))
-        raise PairError(
-            "FortBO path dependencies are missing; prepare clean sibling "
-            f"checkouts before launching: {details}"
-        )
 
 
 def _preflight_python(
@@ -257,7 +227,6 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
             raise PairError("exact B5 oracle pairing requires budget 256 and eight workers")
         if not args.dfo_root.is_dir() or not (args.dfo_root / "scripts/run_b5_async_turbo.py").is_file():
             raise PairError(f"simsopt-dfo control checkout is missing: {args.dfo_root}")
-        _preflight_fortbo_dependencies(args.fortbo_root)
         _ensure_external(args.run_root, (args.dfo_root, args.fortbo_root), "run-root")
         _ensure_external(args.output, (args.dfo_root, args.fortbo_root), "output")
         _ensure_new(args.run_root, "run-root")
@@ -290,6 +259,12 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
                 "ConStellaration evaluator",
                 environment,
             )
+        fo_environment = preflight_fo(
+            args.fortbo_command,
+            args.fortbo_root,
+            environment,
+        )
+        fortbo_fo_command = str(fo_environment["command"])
         reserve_bytes = int(args.disk_reserve_gib * 1024**3)
         original_output = args.run_root / "original.json"
         fortbo_output = args.run_root / "fortbo.json"
@@ -328,7 +303,7 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
             str(args.workers),
             "--completion-driven",
             "--fortbo-command",
-            args.fortbo_command,
+            fortbo_fo_command,
         ]
         abort = threading.Event()
         with ThreadPoolExecutor(max_workers=2) as executor:
@@ -392,6 +367,7 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
                 "sha256": _sha256(fortbo_output) if fortbo_output.is_file() else None,
                 "summary": _document_summary(fortbo_document) if fortbo_document else None,
             },
+            "fortbo_environment": fo_environment,
             "processes": process_records,
             "disk": {
                 "path": str(args.run_root),
@@ -407,7 +383,7 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
         args.output.write_text(json.dumps(pair, indent=2, sort_keys=True) + "\n", encoding="utf-8")
         print(f"wrote {args.output}")
         return 0 if pair["status"] == "complete" else 1
-    except (OSError, PairError, ValueError) as error:
+    except (OSError, PairError, FortBOEnvironmentError, ValueError) as error:
         print(f"ERROR: {error}", file=sys.stderr)
         return 2
 

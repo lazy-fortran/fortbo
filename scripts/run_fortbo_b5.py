@@ -15,13 +15,17 @@ import json
 import os
 import subprocess
 import sys
-import threading
 import time
 from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, as_completed, wait
 from pathlib import Path
 from typing import Any
 
 import numpy as np
+
+try:
+    from .fortbo_environment import resolve_fo_command
+except ImportError:  # pragma: no cover - used when this file is run directly
+    from fortbo_environment import resolve_fo_command
 
 
 FORTBO_ROOT = Path(__file__).resolve().parents[1]
@@ -49,6 +53,7 @@ TRANSFORM = Path("results/constellaration/b5-data-transform.json")
 
 def main() -> int:
     args = _parser().parse_args()
+    args.fortbo_command = resolve_fo_command(args.fortbo_command)
     if args.output.resolve().is_relative_to(FORTBO_ROOT.resolve()):
         raise ValueError("B5 output must be outside the FortBO source tree")
     if args.scratch.resolve().is_relative_to(FORTBO_ROOT.resolve()):

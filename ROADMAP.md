@@ -576,6 +576,14 @@ Start with a CPU smoke. Use sCluster only after a GPU allocation is confirmed.
 Never request more physics workers than allocated GPUs. A GPU result requires
 device identity and kernel-residency evidence.
 
+Before a cluster campaign, `scripts/fortbo_environment.py` now recursively
+checks every relative `fpm.toml` dependency, resolves the selected `fo`
+executable to an absolute path, runs `fo --version`, and completes `fo build`.
+With `--test`, it also runs the full suite using `FO_TEST_TIMEOUT=60`, which is
+the host setting required by the three slow tests. The B5 pair launcher invokes
+the same dependency and build preflight before either evaluator starts and
+records the resolved `fo` command and dependency paths in the pair document.
+
 ## Delivery plan
 
 - [x] F0: add versioned Landreman and Glas JSON configs, source digests, and
