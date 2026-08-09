@@ -109,6 +109,14 @@ commits are FortBO `3c3bc26`, simsopt-dfo `a9b6e2b`, and ConStellaration
 `112b20a`. This is one of the five required raw TuRBO-1 rows; the remaining
 F3 FortBO rows are still open.
 
+The second complete raw TuRBO-1 row used the current pushed sources on the
+same host: seed 2, 256 calls, eight workers, and FortBO `8a51512` with
+simsopt-dfo `2a3ce7b`. Its ledger also passes `check_fortbo_b5.py` and records
+30 successful and 226 failed truth calls, including 39 structured worker
+timeouts, peak concurrency eight, all 256 unique completion IDs, and
+4580.55 seconds wall time. Two of the five raw TuRBO-1 FortBO rows are now
+recorded; the other F3 policy/seed rows remain open.
+
 The FOCUS source was recovered from its public Git repository and pinned at
 `e4bb49b0632c650e326616912e274feb7781a60d`, with the stochastic source and
 W7-X high-mirror example files present. An isolated GNU Fortran/OpenMPI/HDF5
@@ -373,8 +381,8 @@ device identity and kernel-residency evidence.
   trust-state, and completion traces.
 - [ ] F3: run five paired seeds for raw/data-informed TuRBO-1 and
   data-informed TuRBO-m at 256 calls and eight workers; control ledgers are
-  audited, one raw TuRBO-1 FortBO row is now recorded, and the remaining rows
-  are pending.
+  audited, two raw TuRBO-1 FortBO rows are now recorded, and the remaining
+  rows are pending.
 - [ ] F4: run archived Landreman control and FortBO at the original allocation,
   then a labeled resource-matched GPU scaling row.
 - [ ] F5: recover FOCUS artifacts and implement/check the inducing variational
