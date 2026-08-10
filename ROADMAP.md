@@ -279,6 +279,13 @@ was still active, so the pair manifest and original ledger remained pending;
 `/var/tmp/ert` had 74 GiB free. This remains an in-progress, non-F3
 checkpoint; no TuRBO-m physics workload has been started.
 
+At the latest live check, the original oracle had advanced to 198 responses
+from 209 requests while FortBO remained finalized at 255 responses from 256
+requests with its independent audit passing. The original evaluator was still
+active, so the pair manifest and original ledger remained pending;
+`/var/tmp/ert` had 74 GiB free. This remains an in-progress, non-F3
+checkpoint; no TuRBO-m physics workload has been started.
+
 FortBO's TuRBO driver now accepts an explicit success mask: failed truth calls
 remain in the history and trust accounting as imputed worst cases, but are
 excluded from surrogate training and cannot become incumbents. The
