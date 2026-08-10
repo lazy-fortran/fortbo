@@ -362,6 +362,11 @@ FortBO responses arrived in the preceding five minutes; both stderr files
 remained empty and `/var/tmp/ert` still had 74 GiB free. Seeds 2--5 remain
 stopped.
 
+At 04:31 CEST, the pair had advanced to 44 original requests with 33
+responses and 39 FortBO requests with 30 responses. Twelve response files
+arrived in the preceding five minutes; both stderr files remained empty and
+`/var/tmp/ert` still had 74 GiB free. Seeds 2--5 remain stopped.
+
 FortBO's TuRBO driver now accepts an explicit success mask: failed truth calls
 remain in the history and trust accounting as imputed worst cases, but are
 excluded from surrogate training and cannot become incumbents. The
