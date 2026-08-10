@@ -128,7 +128,8 @@ program fortbo_b5_completion_protocol
         call driver%tell(tell_point, tell_region, value, status, &
             successful=successful)
         if (status%code /= FORTNUM_OK) then
-            error stop "fortbo_completion_protocol: driver tell failed"
+            error stop "fortbo_completion_protocol: driver tell failed: "// &
+                trim(status%msg)
         end if
         pending_used(slot) = .false.
         pending_id(slot) = -1
