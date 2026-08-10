@@ -7,7 +7,7 @@ and test suite.
 
 ## Current status
 
-As of 2026-08-10, 04:06 CEST:
+As of 2026-08-10, 06:09 CEST:
 
 | Area | Status |
 | --- | --- |
@@ -56,6 +56,14 @@ one with a complete concurrent BoTorch oracle pair, seed 3 is the second, seed
 4 is the third, and seed 5 is the fourth; seed 1 remains a standalone
 comparator. Five data-informed TuRBO-m rows remain pending, so the control set
 is complete but the FortBO campaign is not.
+At 06:09 CEST, the sole live data-informed TuRBO-m seed-1 oracle pair on
+`faepkub4` had 232 original responses from 256 requests and 204 FortBO
+responses from 233 requests. The parent and both children remained alive,
+both terminal summaries were absent, both stderr files were zero-byte, and
+the remote `/var/tmp/ert` filesystem had 73 GiB free. Seeds 2--5 remain
+stopped; this is still an in-progress, non-F3 row. The workstation
+`/var/tmp/ert` filesystem had only 812 MiB free, so no local physics,
+build, or archive operation is authorized until space is recovered.
 At 16:02 CEST, the current `check_fortbo_b5.py` independently re-audited all
 five archived raw TuRBO-1 rows and the completed data-informed seed-1 row; all
 six passed and no ledger was modified.
