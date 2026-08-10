@@ -7,7 +7,7 @@ and test suite.
 
 ## Current status
 
-As of 2026-08-10, 02:06 CEST:
+As of 2026-08-10, 04:06 CEST:
 
 | Area | Status |
 | --- | --- |
@@ -50,12 +50,12 @@ model when configured.
 The external B5 control ledgers are now materialized from Git LFS and pass the
 FortBO-side audit: ten TuRBO-1 ledgers (raw and data-informed) plus ten
 data-informed four-region TuRBO-m ledgers, all at 256 calls and eight workers.
-FortBO's five raw TuRBO-1 rows and four data-informed TuRBO-1 rows are now
+FortBO's five raw TuRBO-1 rows and five data-informed TuRBO-1 rows are now
 recorded and independently audited. The seed-2 data-informed row is the first
-one with a complete concurrent BoTorch oracle pair, seed 3 is the second, and
-seed 4 is the third; seed 1 remains a standalone comparator. One data-informed
-TuRBO-1 row and five data-informed TuRBO-m rows remain pending, so the control
-set is complete but the FortBO campaign is not.
+one with a complete concurrent BoTorch oracle pair, seed 3 is the second, seed
+4 is the third, and seed 5 is the fourth; seed 1 remains a standalone
+comparator. Five data-informed TuRBO-m rows remain pending, so the control set
+is complete but the FortBO campaign is not.
 At 16:02 CEST, the current `check_fortbo_b5.py` independently re-audited all
 five archived raw TuRBO-1 rows and the completed data-informed seed-1 row; all
 six passed and no ledger was modified.
@@ -299,6 +299,28 @@ requests with its independent audit passing. The original evaluator was still
 active, so the pair manifest and original ledger remained pending;
 `/var/tmp/ert` had 74 GiB free. This remains an in-progress, non-F3
 checkpoint; no TuRBO-m physics workload has been started.
+
+At 04:06 CEST, the seed-5 retry-2 pair completed on `faepkub4` after
+5814.0820587250055 seconds for the original control and 4271.386631568021
+seconds for FortBO. Both ledgers contain 256 truth calls and peak concurrency
+eight; the original recorded four failed evaluations and best value
+`5.6568679877669865`, while FortBO retained one failed evaluation and its
+aggregate best successful value is `7.686016308846444`. The FortBO-minus-oracle
+delta is `2.0291483210794574`. The remote pair checker and
+`check_fortbo_b5.py` pass, as does the rebased checker over the archived copy.
+The pair SHA-256 is
+`d61008c6f76d62f01d3ecfb7688c46feda0ce1c7cd42432f5609986e61f516eb`; the
+child SHA-256 values are original
+`0519d8814cf9db15e57e1810543ff6ffedd7ed8df71d11fde1b532327079acb8` and
+FortBO `cac9a8e6a7c056589b918d650aec901f11d3874c803414dcf203f0e198efe280`.
+The pinned sources are FortBO `a42a840970134f002cc28cf0721835bc11fb78c8`,
+simsopt-dfo `2a3ce7b71ea81f659e8910dbd38ea3e99ad9dff4`, and ConStellaration
+`112b20ae07193910d467d26033fe51022e641b9`; the shared data-informed
+transform SHA-256 remains
+`951c2b6f8e0f8dd1dee0297aca91645900ce4044f104e3f5132fbad523e68340`.
+The complete pair and stderr artifacts are archived under
+`/home/ert/data/simsopt-dfo-fortbo/b5-oracle-pairs/seed-5-retry2/`.
+No TuRBO-m physics workload has been started.
 
 FortBO's TuRBO driver now accepts an explicit success mask: failed truth calls
 remain in the history and trust accounting as imputed worst cases, but are
@@ -899,11 +921,10 @@ FortFront modules cannot be reused across source worktrees.
   trust-state, and completion traces.
 - [ ] F3: run five paired seeds for raw/data-informed TuRBO-1 and
   data-informed TuRBO-m at 256 calls and eight workers; control ledgers are
-  audited, all five raw TuRBO-1 FortBO rows and four data-informed TuRBO-1
-  FortBO rows are now recorded. Seeds 2, 3, and 4 are complete oracle-paired
-  data-informed rows; seed 1 is still a standalone comparator. One
-  data-informed TuRBO-1 row and five data-informed TuRBO-m rows remain
-  pending.
+  audited, all five raw TuRBO-1 and all five data-informed TuRBO-1 FortBO rows
+  are now recorded. Seeds 2, 3, 4, and 5 are complete oracle-paired
+  data-informed rows; seed 1 is still a standalone comparator. Five
+  data-informed TuRBO-m rows remain pending.
 - [ ] F4: run archived Landreman control and FortBO at the original allocation,
   then a labeled resource-matched GPU scaling row. The exact archive, source
   digest, portable preparation, contract checks, and FortBO MPI bridge pass;
