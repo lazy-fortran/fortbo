@@ -151,6 +151,12 @@ and 68 successful FortBO responses from 76 requests; neither child had
 finalized. The retry remains a non-F3 row until its pair and child-ledger
 checks pass.
 
+At the subsequent live check, the same isolated retry had advanced to 59
+successful original responses from 69 requests and 74 successful FortBO
+responses from 83 requests. Both parent processes remained alive, no final
+ledger existed, and `/var/tmp/ert` still had 74 GiB free. This remains an
+in-progress, non-F3 checkpoint.
+
 FortBO's TuRBO driver now accepts an explicit success mask: failed truth calls
 remain in the history and trust accounting as imputed worst cases, but are
 excluded from surrogate training and cannot become incumbents. The
