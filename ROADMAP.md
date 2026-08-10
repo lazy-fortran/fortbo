@@ -135,6 +135,14 @@ alive, no child ledger had finalized, and `/var/tmp/ert` had 74 GiB free. This
 remains an in-progress, non-F3 checkpoint. The independent environment and
 oracle launcher suite passed 19 tests locally at this checkpoint.
 
+At 02:55 CEST, the retry-2 pair had advanced to 51 successful responses from
+62 original requests and 61 successful responses from 70 FortBO requests;
+neither side had reported a failed evaluation. Both parent processes remained
+alive, no child ledger had finalized, and `/var/tmp/ert` had 74 GiB free. This
+remains an in-progress, non-F3 checkpoint. A fresh read-only Slurm inventory
+still showed one GPU per visible aCluster and sCluster node, with no compatible
+one-node/four-GPU allocation for the exact Landreman replay.
+
 FortBO's TuRBO driver now accepts an explicit success mask: failed truth calls
 remain in the history and trust accounting as imputed worst cases, but are
 excluded from surrogate training and cannot become incumbents. The
