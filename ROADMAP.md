@@ -143,6 +143,14 @@ remains an in-progress, non-F3 checkpoint. A fresh read-only Slurm inventory
 still showed one GPU per visible aCluster and sCluster node, with no compatible
 one-node/four-GPU allocation for the exact Landreman replay.
 
+The independent B5 control audit was rerun against the pinned campaign
+checkout after that checkpoint and passed again for all ten TuRBO-1 and ten
+TuRBO-m ledgers (256 calls and eight workers each). At the same live-run
+check, seed-5 retry-2 had 56 successful original responses from 67 requests
+and 68 successful FortBO responses from 76 requests; neither child had
+finalized. The retry remains a non-F3 row until its pair and child-ledger
+checks pass.
+
 FortBO's TuRBO driver now accepts an explicit success mask: failed truth calls
 remain in the history and trust accounting as imputed worst cases, but are
 excluded from surrogate training and cannot become incumbents. The
