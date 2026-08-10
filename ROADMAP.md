@@ -87,7 +87,7 @@ The archived pair is
 The data-informed TuRBO-1 seed-5 retry-1 pair is now running as the sole
 physics workload on `faepkub4` under
 `/var/tmp/ert/fortbo-cpu-f5d4d81/runs/oracle-pair-data-informed-seed-5-retry1/`.
-At the latest checkpoint the original side had 131 responses from 144 dispatched
+At the latest checkpoint the original side had 133 responses from 145 dispatched
 requests and FortBO had 237 responses from 242; both child runners and the
 parent remained healthy, no ledgers had finalized, and `/var/tmp/ert` had
 75 GB free. It is not counted as an F3 row until both ledgers and the rebased
