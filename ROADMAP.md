@@ -210,6 +210,12 @@ original responses from 115 requests and 139 successful FortBO responses from
 and `/var/tmp/ert` had 75 GiB free. This remains an in-progress, non-F3
 checkpoint.
 
+At the following live check, the retry had advanced to 111 successful original
+responses from 120 requests and 147 successful FortBO responses from 156
+requests. Both parent processes remained alive, no final ledger existed, and
+`/var/tmp/ert` had 75 GiB free. This remains an in-progress, non-F3
+checkpoint.
+
 FortBO's TuRBO driver now accepts an explicit success mask: failed truth calls
 remain in the history and trust accounting as imputed worst cases, but are
 excluded from surrogate training and cannot become incumbents. The
