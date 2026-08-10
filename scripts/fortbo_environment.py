@@ -44,7 +44,7 @@ def configure_fo_environment(
 ) -> dict[str, str]:
     """Use a run-local fo cache unless the caller selected one explicitly."""
 
-    selected = dict(environment or os.environ)
+    selected = dict(os.environ if environment is None else environment)
     selected.setdefault("FO_CACHE_DIR", str(cache_root.resolve()))
     return selected
 

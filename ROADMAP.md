@@ -639,6 +639,16 @@ does share the transform digest and ConStellaration revision, but it was not
 launched by the concurrent pair runner and has no pair manifest; it remains a
 standalone comparator rather than a paired F3 oracle.
 
+At 05:52 CEST, the local environment gate was repaired and rerun without any
+physics workload. `fo build` passed from a fresh run-local cache after the
+pending FortAD generic-dispatch patch imported `query_procedure_signature` from
+its defining `frontend_compiler_queries` module rather than the `fortfront`
+facade. With `FO_CACHE_DIR` explicitly set to a temporary run-local directory,
+the independent ARD, derivative-ARD, B5 protocol/campaign, environment, and
+oracle tests passed: `27 passed in 45.35s`. The environment helper now also
+distinguishes an explicitly supplied empty environment from an omitted one, so
+the caller's cache selection cannot leak from the parent process.
+
 The concurrent data-informed seed-2 pair then completed on `faepkub4`. The
 pair and both child ledgers are archived under
 `/home/ert/data/simsopt-dfo-fortbo/b5-oracle-pairs/seed-2-retry3/`; the current
