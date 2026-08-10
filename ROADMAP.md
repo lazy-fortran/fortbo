@@ -265,6 +265,13 @@ both parents remained alive, no final ledger existed, and `/var/tmp/ert` had
 74 GiB free. This remains an in-progress, non-F3 checkpoint; no TuRBO-m
 physics workload has been started.
 
+At the latest live check, FortBO had produced its near-complete ledger with
+255 responses from 256 requests; the independent `check_fortbo_b5.py` audit
+passed. The original oracle was still running at 182 responses from 193
+requests with active CPU work, so neither the pair manifest nor the original
+ledger was terminal. `/var/tmp/ert` had 74 GiB free. This remains an
+in-progress, non-F3 checkpoint; no TuRBO-m physics workload has been started.
+
 FortBO's TuRBO driver now accepts an explicit success mask: failed truth calls
 remain in the history and trust accounting as imputed worst cases, but are
 excluded from surrogate training and cannot become incumbents. The
