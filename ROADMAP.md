@@ -7,7 +7,7 @@ and test suite.
 
 ## Current status
 
-As of 2026-08-10, 01:15 CEST:
+As of 2026-08-10, 02:06 CEST:
 
 | Area | Status |
 | --- | --- |
@@ -84,14 +84,24 @@ transform SHA-256 remains
 The archived pair is
 `/home/ert/data/simsopt-dfo-fortbo/b5-oracle-pairs/seed-4-retry2/`.
 
-The data-informed TuRBO-1 seed-5 retry-1 pair is now running as the sole
-physics workload on `faepkub4` under
+The data-informed TuRBO-1 seed-5 retry-1 pair was run as the sole physics
+workload on `faepkub4` under
 `/var/tmp/ert/fortbo-cpu-f5d4d81/runs/oracle-pair-data-informed-seed-5-retry1/`.
-At the latest checkpoint the original side had 136 responses from 148 dispatched
-requests and FortBO had 238 responses from 242; both child runners and the
-parent remained healthy, no ledgers had finalized, and `/var/tmp/ert` had
-75 GB free. It is not counted as an F3 row until both ledgers and the rebased
-pair checker pass. No TuRBO-m workload has been started concurrently.
+The pair failed at 02:06 CEST after the FortBO completion-driven driver
+reported `driver tell failed`; FortBO exited with return code 1 before its next
+`ASK`, so the launcher stopped the original control and produced no child
+ledger. The final scratch counts were 136 original responses from 148 requests
+and 238 FortBO responses from 242 requests. The failed pair manifest
+and stderr are archived under
+`/home/ert/data/simsopt-dfo-fortbo/b5-oracle-pairs/seed-5-retry1-failed/`;
+the archived SHA-256 values are pair
+`0f5b7837b5e1a39cc0d49aaa06362d9eaaed4b03d3b025e4bf94d71dc8bd07ea`, FortBO
+stderr `3e09290b43c066d686d98853515b3f5e7c6982ea9861e2955481ff45604c111f`, and
+empty original stderr
+`e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855`.
+The orphaned evaluator processes were terminated after the launcher exited;
+no TuRBO-m workload was started concurrently. Seed 5 is not counted as an F3
+row and remains pending a fresh retry after the protocol failure is fixed.
 
 FortBO's TuRBO driver now accepts an explicit success mask: failed truth calls
 remain in the history and trust accounting as imputed worst cases, but are
