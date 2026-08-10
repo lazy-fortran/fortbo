@@ -19,6 +19,31 @@ As of 2026-08-10, 06:09 CEST:
 | Published Glas/Bindel DTuRBO reproduction with FortBO | blocked on upstream inputs and model parity |
 | Public performance claim against BoTorch and DTuRBO | open |
 
+### Latest run checkpoint
+
+At 10:00 CEST on 2026-08-10, the FortBO checkout was clean. No FortBO process
+was running on the workstation or `faepkub4`. The latest CPU oracle launch
+wrote `/var/tmp/ert/fortbo-cpu-f5d4d81/runs/oracle-pairs/data-informed-turbo-m-seed-1.json`.
+The recent NEO-RT smoke build passed 103 tests. POTATO and iterative
+preflights still report resonance-root and topology failures, so those results
+remain diagnostic and are not completed reproduction rows.
+
+Four aCluster GPU optimizations remain running: jobs `20920556`, `20921593`,
+`20922931`, and `20922932`. Their outputs continue to produce new trials and
+objective evaluations. The old `simple-sympl-accuracy` job `20922926` was
+canceled after five tracebacks from using `assert objective is not None` for
+an expected numerical-failure result. Commit `1ac0c77` on
+`fix/quiet-openacc-numerical-failure` replaces that assertion with explicit
+exit-code handling and a diagnostic. Replacement job `20933220` is queued
+with the same output root, so completed cases can be reused.
+
+On sCluster, jobs `1097684` and `1097685` remain active. The ITER chains are
+blocked because parent jobs `1124599`, `1124603`, and `1124620` failed, so
+their dependent torque, finalization, plotting, and promotion stages cannot
+start. Fourteen stale linked worktrees were removed after a read-only audit,
+recovering approximately 1.4 GiB. No research or GPU oracle worktrees were
+removed.
+
 Completed generic evidence is in /mnt/storage/code/lazy-fortran/fortbo-bench.
 The physics campaign belongs in /mnt/storage/code/simsopt-dfo. Large inputs,
 environments, scratch directories, and result ledgers belong in
