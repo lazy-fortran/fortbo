@@ -322,6 +322,14 @@ The complete pair and stderr artifacts are archived under
 `/home/ert/data/simsopt-dfo-fortbo/b5-oracle-pairs/seed-5-retry2/`.
 No TuRBO-m physics workload has been started.
 
+At 04:10 CEST, the first data-informed four-region TuRBO-m pair (seed 1) was
+started on `faepkub4` under
+`/var/tmp/ert/fortbo-cpu-f5d4d81/runs/oracle-pair-data-informed-turbo-m-seed-1/`.
+The run-local `fo` preflight completed and both children had issued their
+initial eight requests; no responses had completed yet. `/var/tmp/ert` had
+74 GiB free. This is the sole active physics workload; seeds 2--5 remain
+unstarted until this pair is archived and independently checked.
+
 FortBO's TuRBO driver now accepts an explicit success mask: failed truth calls
 remain in the history and trust accounting as imputed worst cases, but are
 excluded from surrogate training and cannot become incumbents. The
