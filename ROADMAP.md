@@ -103,6 +103,16 @@ The orphaned evaluator processes were terminated after the launcher exited;
 no TuRBO-m workload was started concurrently. Seed 5 is not counted as an F3
 row and remains pending a fresh retry after the protocol failure is fixed.
 
+At 02:35 CEST, a fresh data-informed TuRBO-1 seed-5 retry-2 oracle pair was
+started on `faepkub4` under
+`/var/tmp/ert/fortbo-cpu-f5d4d81/runs/oracle-pair-data-informed-seed-5-retry2/`
+with the pinned BoTorch control, the pinned ConStellaration evaluator, and
+FortBO revision `a42a840` carrying the completion-`tell` diagnostic. At this
+checkpoint the original side had 15 responses from 23 requests and FortBO had
+16 responses from 24 requests; both children remained alive and
+`/var/tmp/ert` had 74 GiB free. The pair is still in progress and is not an F3
+row until both ledgers and the independent pair checker pass.
+
 FortBO's TuRBO driver now accepts an explicit success mask: failed truth calls
 remain in the history and trust accounting as imputed worst cases, but are
 excluded from surrogate training and cannot become incumbents. The
