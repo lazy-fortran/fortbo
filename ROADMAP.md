@@ -128,6 +128,13 @@ requests and 51 responses from 60 FortBO requests. Both parent processes
 remained alive, no child ledger had finalized, and `/var/tmp/ert` had 74 GiB
 free. This remains an in-progress, non-F3 checkpoint.
 
+At 02:53 CEST, the retry-2 pair had advanced to 48 successful responses from
+58 original requests and 55 successful responses from 64 FortBO requests;
+neither side had reported a failed evaluation. Both parent processes remained
+alive, no child ledger had finalized, and `/var/tmp/ert` had 74 GiB free. This
+remains an in-progress, non-F3 checkpoint. The independent environment and
+oracle launcher suite passed 19 tests locally at this checkpoint.
+
 FortBO's TuRBO driver now accepts an explicit success mask: failed truth calls
 remain in the history and trust accounting as imputed worst cases, but are
 excluded from surrogate training and cannot become incumbents. The
