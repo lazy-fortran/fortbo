@@ -473,6 +473,12 @@ FortBO responses arrived during the preceding five minutes; both terminal
 summaries were still pending, no stderr had been written, the parent remained
 alive, and `/var/tmp/ert` still had 73 GiB free. Seeds 2--5 remain stopped.
 
+At 05:30 CEST, the pair had advanced to 155 original requests with 130
+responses and 160 FortBO requests with 139 responses. Seven original and ten
+FortBO responses arrived during the preceding five minutes; both terminal
+summaries were still pending, no stderr had been written, the parent remained
+alive, and `/var/tmp/ert` still had 73 GiB free. Seeds 2--5 remain stopped.
+
 At 04:59 CEST, the pair had advanced to 97 original requests with 79
 responses and 101 FortBO requests with 86 responses. Both sides continued to
 produce response files, no stderr had been written, and `/var/tmp/ert` had
