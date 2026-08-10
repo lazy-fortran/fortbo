@@ -515,6 +515,12 @@ the parent remained alive, terminal summaries were still pending, no stderr had
 been written, and `/var/tmp/ert` still had 73 GiB free. Seeds 2--5 remain
 stopped.
 
+At 05:44 CEST, the pair had advanced to 193 original requests with 164
+responses and 197 FortBO requests with 172 responses. Both child processes and
+the parent remained alive, terminal summaries were still pending, both stderr
+files were zero-byte, and `/var/tmp/ert` still had 73 GiB free. Seeds 2--5
+remain stopped.
+
 At 04:59 CEST, the pair had advanced to 97 original requests with 79
 responses and 101 FortBO requests with 86 responses. Both sides continued to
 produce response files, no stderr had been written, and `/var/tmp/ert` had
