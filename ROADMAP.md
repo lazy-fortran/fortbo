@@ -330,6 +330,12 @@ initial eight requests; no responses had completed yet. `/var/tmp/ert` had
 74 GiB free. This is the sole active physics workload; seeds 2--5 remain
 unstarted until this pair is archived and independently checked.
 
+At 04:13 CEST, the same isolated pair had advanced to 14 original requests
+with six responses and 15 FortBO requests with seven responses. Both parent
+processes remained alive, stderr files were empty, and `/var/tmp/ert` still
+had 74 GiB free. Seeds 2--5 remain stopped pending this pair's terminal
+ledgers and independent audits.
+
 FortBO's TuRBO driver now accepts an explicit success mask: failed truth calls
 remain in the history and trust accounting as imputed worst cases, but are
 excluded from surrogate training and cannot become incumbents. The
