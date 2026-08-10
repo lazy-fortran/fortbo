@@ -258,6 +258,13 @@ existed, and 36 response files had been written during the preceding five
 minutes. `/var/tmp/ert` had 74 GiB free. This remains an in-progress, non-F3
 checkpoint; no TuRBO-m physics workload has been started.
 
+At the subsequent live check, the original side had 168 successful responses
+from 179 requests and FortBO had 241 successful responses from 249 requests.
+Thirty-six response files had been written during the preceding five minutes;
+both parents remained alive, no final ledger existed, and `/var/tmp/ert` had
+74 GiB free. This remains an in-progress, non-F3 checkpoint; no TuRBO-m
+physics workload has been started.
+
 FortBO's TuRBO driver now accepts an explicit success mask: failed truth calls
 remain in the history and trust accounting as imputed worst cases, but are
 excluded from surrogate training and cannot become incumbents. The
